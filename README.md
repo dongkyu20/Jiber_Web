@@ -1,0 +1,66 @@
+# Jiber Web
+
+지도 기반 부동산 탐색, 실거래 데이터 분석, 아파트 적정가 추정, SHAP 기반 가격 설명을 제공하는 부동산 거래 정보 웹 플랫폼입니다.
+
+이 프로젝트는 사용자가 실거래 정보와 가격 설명을 이해하도록 돕는 데이터 서비스입니다. 투자 조언, 매수/매도 판단, 수익률 보장, 특정 부동산 추천은 범위 밖입니다.
+
+## 제품 언어 원칙
+
+- 사용자에게 보이는 웹 UI 문구는 자연스러운 한국어로 작성합니다.
+- 화면 문구, 메뉴, 버튼, 라벨, 안내문, 에러 메시지, 빈 상태 문구는 한국어를 기본으로 합니다.
+- 기술 식별자, 코드, API 경로, 설정 키는 영어를 유지할 수 있습니다.
+
+## 기술 스택
+
+- Frontend: Vue 3, Vite, Vue Router, Pinia, Axios, Kakao Maps API, ECharts
+- Backend: Spring Boot, MySQL, MyBatis, Spring Security, OAuth2 Login, JWT, Springdoc OpenAPI, Bean Validation
+- AI: FastAPI, Hedonic Price Model, SHAP 기반 XAI
+- Data: MySQL schema, seed/import scripts, model feature mapping
+
+## 디렉터리 구조
+
+```text
+backend/        Spring Boot API 서버
+frontend/       Vue 3 SPA
+model-server/   FastAPI 모델 서버
+db/             MySQL 스키마, seed, migration 예정 영역
+docs/
+  architecture/ 시스템 설계 문서
+  contracts/    서비스 간 계약 문서
+  api/          API 문서와 예시
+  model/        모델/데이터 문서
+  security/     인증/인가 문서
+  qa/           검증 계획과 리뷰 문서
+.agents/        프로젝트 로컬 Codex 에이전트 정의
+```
+
+## 로컬 실행 예정 방식
+
+아직 코드 스캐폴딩 전이므로 실행 명령은 확정되지 않았습니다. Phase 1 이후 다음 흐름을 목표로 합니다.
+
+1. MySQL을 로컬 또는 Docker Compose로 실행합니다.
+2. `backend/`에서 Spring Boot API 서버를 실행합니다.
+3. `model-server/`에서 FastAPI 모델 서버를 실행합니다.
+4. `frontend/`에서 Vite 개발 서버를 실행합니다.
+5. 프론트엔드는 Spring Boot API의 `/api/v1/**`만 호출하고, Spring Boot가 내부적으로 모델 서버를 호출합니다.
+
+실제 API 키, OAuth client secret, JWT secret, DB 비밀번호는 저장소에 커밋하지 않습니다. 필요한 환경 변수 이름은 루트 `.env.example`에만 정의합니다.
+
+## MVP 범위
+
+- 랜딩페이지
+- 지도 기반 부동산 검색
+- 필터 검색
+- 부동산 상세 기본 정보와 최근 실거래 정보
+- 소셜 로그인
+- 즐겨찾기
+- 공지사항과 관리자 권한
+- 아파트 적정가 추정
+- SHAP 기반 가격 설명 시각화
+
+MVP에서 제외하는 범위:
+
+- 투자 조언, 매수/매도 판단, 수익률 보장
+- 실시간 매물 중개 또는 계약 기능
+- 아파트 외 부동산의 AI 가격 추정
+- 실제 secret, API key, OAuth client secret의 저장 또는 추정
