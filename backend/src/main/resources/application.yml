@@ -23,8 +23,25 @@ springdoc:
     path: /swagger-ui.html
 
 jiber:
+  app-env: ${APP_ENV:local}
   cors:
     allowed-origins: ${BACKEND_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  frontend:
+    public-base-url: ${FRONTEND_PUBLIC_BASE_URL:http://localhost:5173}
+  auth:
+    jwt:
+      issuer: ${JWT_ISSUER:jiber-local}
+      secret: ${JWT_SECRET:}
+      access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:900}
+      app-env: ${APP_ENV:local}
+    refresh-token:
+      ttl-seconds: ${JWT_REFRESH_TOKEN_TTL_SECONDS:1209600}
+      app-env: ${APP_ENV:local}
+      cookie:
+        name: ${AUTH_REFRESH_TOKEN_COOKIE_NAME:JIBER_REFRESH_TOKEN}
+        path: ${AUTH_REFRESH_TOKEN_COOKIE_PATH:/api/v1/auth}
+        same-site: ${AUTH_REFRESH_TOKEN_COOKIE_SAME_SITE:Lax}
+        secure: ${AUTH_REFRESH_TOKEN_COOKIE_SECURE:false}
   model-server:
     base-url: ${MODEL_SERVER_BASE_URL:http://localhost:8000}
     internal-token: ${MODEL_SERVER_INTERNAL_TOKEN:}

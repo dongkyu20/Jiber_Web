@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiber.backend.auth.RefreshSessionMapper">
+    <resultMap id="RefreshSessionRecordMap" type="com.jiber.backend.auth.RefreshSessionRecord">
+        <id property="refreshSessionId" column="refresh_session_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="refreshTokenHash" column="refresh_token_hash"/>
+        <result property="rotatedFromSessionId" column="rotated_from_session_id"/>
+        <result property="userAgent" column="user_agent"/>
+        <result property="ipAddress" column="ip_address"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="revokedAt" column="revoked_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.jiber.backend.auth.RefreshSessionInsertCommand">
+        INSERT INTO refresh_sessions (
+            user_id,
+            refresh_token_hash,
+            rotated_from_session_id,
+            user_agent,
+            ip_address,
+            expires_at
+        ) VALUES (
+            #{userId},
+            #{refreshTokenHash},
+            #{rotatedFromSessionId},
+            #{userAgent},
+            #{ipAddress},
+            #{expiresAt}
+        )
+    </insert>
+
+    <select id="findByTokenHash" resultMap="RefreshSessionRecordMap">
+        SELECT
+            refresh_session_id,
+            user_id,
+            refresh_token_hash,
+            rotated_from_session_id,
+            user_agent,
+            ip_address,
+            expires_at,
+            revoked_at,
+            created_at,
+            updated_at
+        FROM refresh_sessions
+        WHERE refresh_token_hash = #{refreshTokenHash}
+    </select>
+
+    <select id="findActiveByTokenHash" resultMap="RefreshSessionRecordMap">
+        SELECT
+            refresh_session_id,
+            user_id,
+            refresh_token_hash,
+            rotated_from_session_id,
+            user_agent,
+            ip_address,
+            expires_at,
+            revoked_at,
+            created_at,
+            updated_at
+        FROM refresh_sessions
+        WHERE refresh_token_hash = #{refreshTokenHash}
+          AND revoked_at IS NULL
+          AND expires_at &gt; #{now}
+    </select>
+
+    <update id="revokeBySessionId">
+        UPDATE refresh_sessions
+        SET revoked_at = COALESCE(revoked_at, #{revokedAt}),
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE refresh_session_id = #{refreshSessionId}
+    </update>
+
+    <update id="revokeByTokenHash">
+        UPDATE refresh_sessions
+        SET revoked_at = COALESCE(revoked_at, #{revokedAt}),
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE refresh_token_hash = #{refreshTokenHash}
+    </update>
+
+    <update id="revokeSessionFamily">
+        WITH RECURSIVE session_family AS (
+            SELECT refresh_session_id
+            FROM refresh_sessions
+            WHERE refresh_session_id = #{refreshSessionId}
+            UNION ALL
+            SELECT child.refresh_session_id
+            FROM refresh_sessions child
+            INNER JOIN session_family parent
+                ON child.rotated_from_session_id = parent.refresh_session_id
+        )
+        UPDATE refresh_sessions
+        SET revoked_at = COALESCE(revoked_at, #{revokedAt}),
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE refresh_session_id IN (
+            SELECT refresh_session_id
+            FROM session_family
+        )
+    </update>
+</mapper>

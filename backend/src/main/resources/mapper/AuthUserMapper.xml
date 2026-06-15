@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiber.backend.auth.AuthUserMapper">
+    <resultMap id="AuthUserRecordMap" type="com.jiber.backend.auth.AuthUserRecord">
+        <id property="userId" column="user_id"/>
+        <result property="oauthProvider" column="oauth_provider"/>
+        <result property="providerUserId" column="provider_user_id"/>
+        <result property="email" column="email"/>
+        <result property="displayName" column="display_name"/>
+        <result property="role" column="role"/>
+        <result property="enabled" column="enabled"/>
+        <result property="lastLoginAt" column="last_login_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findById" resultMap="AuthUserRecordMap">
+        SELECT
+            user_id,
+            oauth_provider,
+            provider_user_id,
+            email,
+            display_name,
+            role,
+            enabled,
+            last_login_at,
+            created_at,
+            updated_at
+        FROM users
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="findByProvider" resultMap="AuthUserRecordMap">
+        SELECT
+            user_id,
+            oauth_provider,
+            provider_user_id,
+            email,
+            display_name,
+            role,
+            enabled,
+            last_login_at,
+            created_at,
+            updated_at
+        FROM users
+        WHERE oauth_provider = #{oauthProvider}
+          AND provider_user_id = #{providerUserId}
+    </select>
+
+    <insert id="upsertOAuthUser">
+        INSERT INTO users (
+            oauth_provider,
+            provider_user_id,
+            email,
+            display_name,
+            role,
+            enabled,
+            last_login_at
+        ) VALUES (
+            #{oauthProvider},
+            #{providerUserId},
+            #{email},
+            #{displayName},
+            'USER',
+            TRUE,
+            #{lastLoginAt}
+        )
+        ON DUPLICATE KEY UPDATE
+            email = VALUES(email),
+            display_name = VALUES(display_name),
+            last_login_at = VALUES(last_login_at),
+            updated_at = CURRENT_TIMESTAMP(6)
+    </insert>
+</mapper>

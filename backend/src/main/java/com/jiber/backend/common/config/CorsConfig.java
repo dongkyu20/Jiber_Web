@@ -13,11 +13,14 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class CorsConfig {
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource(
+    public CorsConfigurationSource corsConfigurationSource(
             @Value("${jiber.cors.allowed-origins:http://localhost:5173}") String allowedOrigins
     ) {
+        var parsedOrigins = parseCsv(allowedOrigins);
+        validateCredentialedOrigins(parsedOrigins);
+
         var configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(parseCsv(allowedOrigins));
+        configuration.setAllowedOrigins(parsedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setAllowCredentials(true);
@@ -32,5 +35,11 @@ public class CorsConfig {
                 .map(String::trim)
                 .filter(origin -> !origin.isBlank())
                 .toList();
+    }
+
+    private void validateCredentialedOrigins(List<String> origins) {
+        if (origins.contains("*")) {
+            throw new IllegalStateException("Credentialed CORS must not allow wildcard origins. Configure BACKEND_CORS_ALLOWED_ORIGINS with explicit origins.");
+        }
     }
 }
