@@ -211,7 +211,7 @@ Draft response:
 
 `POST /api/v1/properties/{propertyId}/valuation`
 
-This public backend API performs eligibility checks and calls the internal model server only for supported apartment properties.
+This externally exposed Spring backend API requires `USER` or `ADMIN` in the MVP. It performs eligibility checks and calls the internal model server only for supported apartment properties.
 
 Draft request:
 
@@ -248,7 +248,7 @@ Unsupported non-apartment properties return `VALUATION_UNSUPPORTED_PROPERTY_TYPE
 
 `POST /api/v1/properties/{propertyId}/shap`
 
-This public backend API returns chart-ready explanation data for the frontend. It must not expose internal file paths, raw model objects, or debugging traces.
+This externally exposed Spring backend API requires `USER` or `ADMIN` in the MVP. It returns chart-ready explanation data for the frontend and must not expose internal file paths, raw model objects, or debugging traces.
 
 Draft request:
 

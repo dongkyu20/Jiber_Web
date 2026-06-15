@@ -24,12 +24,13 @@ These notes summarize how the current contract changes affect Phase 1 backend, f
 
 ## Auth / Security Agent Impact
 
-- Resolve the required open decisions in `docs/contracts/auth-flow.md` before implementation:
-  - refresh token storage 방식
-  - access token 전달 방식
-  - logout 처리 방식
-  - 최초 ADMIN 부여 방식
+- Follow the confirmed token policy in `docs/contracts/auth-flow.md`:
+  - refresh token is an HttpOnly cookie with server-side revocation state
+  - access token is short-lived, returned in JSON, and stored in frontend memory only
+  - logout revokes the current refresh session and clears the refresh cookie
+  - first `ADMIN` is granted only by seed, migration, or controlled operational script
 - Protect all `/api/v1/favorites/**` endpoints with `USER` or `ADMIN`.
+- Protect `/api/v1/properties/{propertyId}/valuation` and `/api/v1/properties/{propertyId}/shap` with `USER` or `ADMIN`.
 - Protect all `/api/v1/admin/notices/**` endpoints with `ADMIN`.
 - Ensure permission failures use `AUTH_REQUIRED` or `ACCESS_DENIED`.
 
@@ -51,8 +52,9 @@ These notes summarize how the current contract changes affect Phase 1 backend, f
 
 ## Blockers To Track
 
-- Auth token/session decisions are unresolved.
-- First `ADMIN` provisioning is unresolved.
+- Actual OAuth credentials and JWT secret values are unresolved.
+- Actual first `ADMIN` account identity is unresolved, though the provisioning method is decided.
 - Kakao Maps API key and allowed domains are unresolved.
+- Refresh session persistence schema is unresolved.
 - MySQL schema and indexes for bounds search, favorite uniqueness, and notices are unresolved.
 - Model feature set and model artifact availability are unresolved.

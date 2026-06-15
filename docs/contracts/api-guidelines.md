@@ -44,12 +44,12 @@ This document defines the initial cross-service API rules for the Jiber Web MVP.
 ## Auth Rules
 
 - Public read endpoints are allowed for landing, map search, property detail, and notice read.
-- Favorites, user profile, community write actions, notice mutation, and admin endpoints require authentication.
+- Favorites, valuation, SHAP, user profile, community write actions, notice mutation, and admin endpoints require authentication.
 - Admin endpoints require the `ADMIN` role.
 
 ## Valuation / SHAP Rules
 
-- Public valuation and SHAP endpoints live under Spring Boot `/api/v1/properties/{propertyId}/...`.
+- Externally exposed valuation and SHAP endpoints live under Spring Boot `/api/v1/properties/{propertyId}/...` and require `USER` or `ADMIN` for the MVP.
 - Internal model inference endpoints live under FastAPI `/internal/v1/...`.
 - The frontend must not call the model server directly.
 - Non-apartment valuation and SHAP are unsupported in the MVP.
