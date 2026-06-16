@@ -28,7 +28,7 @@ class PropertyServiceTest {
                 throw new AssertionError("model-server must not be called for non-apartment properties");
             }
         };
-        var service = new PropertyService(
+        var service = PropertyService.forTesting(
                 new PropertyAiEligibilityService(),
                 modelClient,
                 propertyId -> PropertyType.OFFICETEL

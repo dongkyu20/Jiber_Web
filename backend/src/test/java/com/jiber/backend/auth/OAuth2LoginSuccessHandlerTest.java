@@ -29,8 +29,8 @@ class OAuth2LoginSuccessHandlerTest {
         );
         var handler = new OAuth2LoginSuccessHandler(
                 new OAuth2ProviderUserResolver(),
-                new LocalOAuth2UserProvisioningService(new RecordingAuthUserMapper(), FIXED_CLOCK),
-                new RefreshTokenService(refreshProperties, new RecordingRefreshSessionMapper(), new SecureRandom(new byte[]{9, 10, 11, 12}), FIXED_CLOCK),
+                LocalOAuth2UserProvisioningService.forTesting(new RecordingAuthUserMapper(), FIXED_CLOCK),
+                RefreshTokenService.forTesting(refreshProperties, new RecordingRefreshSessionMapper(), new SecureRandom(new byte[]{9, 10, 11, 12}), FIXED_CLOCK),
                 new RefreshTokenCookieService(refreshProperties),
                 new FrontendProperties("http://localhost:5173")
         );

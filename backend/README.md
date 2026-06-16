@@ -37,6 +37,14 @@ mvn test
 - `DB_NAME`
 - `DB_USER`
 - `DB_PASSWORD`
+- `PUBLIC_DATA_SERVICE_KEY`
+- `KAKAO_REST_API_KEY`
+- `PUBLIC_DATA_IMPORT_MONTHS`
+- `PUBLIC_DATA_TARGET_REGIONS`
+- `PUBLIC_DATA_IMPORT_ENABLED`
+- `PUBLIC_DATA_IMPORT_DRY_RUN`
+- `PUBLIC_DATA_IMPORT_LIMIT`
+- `PUBLIC_DATA_IMPORT_PAGE_SIZE`
 - `FRONTEND_PUBLIC_BASE_URL`
 - `JWT_ISSUER`
 - `JWT_SECRET`
@@ -75,6 +83,8 @@ mvn test
 - property, favorite, notice controller/DTO/service skeleton
 - Springdoc OpenAPI 설정
 - MyBatis mapper 위치 설정
+- 공공데이터포털 아파트 실거래 import batch skeleton
+- Kakao Local jibun 주소 geocoding client skeleton
 
 아직 mock/skeleton인 부분:
 
@@ -83,6 +93,7 @@ mvn test
 - refresh token reuse 감지 시 session family revocation SQL의 실제 MySQL 통합 검증
 - 현재 로그인 사용자 주입과 favorite ownership 검증
 - model-server feature mapping의 실제 DB/거래 데이터 기반 보강
+- 공공데이터 canonical upsert의 DB-backed matching rule
 - 공지사항 작성자/수정자 기록
 
 ## Auth / Security Handoff
@@ -173,3 +184,71 @@ schema 초안은 `../db/001_phase1_schema.sql`입니다.
 - `apartment_shap_values`
 
 지도 bounds 검색을 위해 `properties(latitude, longitude)`와 `properties(property_type, latitude, longitude)` 인덱스를 포함했습니다. favorite 중복 방지를 위해 `favorite_apartments(user_id, property_id)`와 `favorite_areas(user_id, normalized_key)` unique key를 포함했습니다.
+
+추가 public data import schema 초안은 `../db/002_public_data_import.sql`입니다.
+
+- `public_data_import_runs`: batch 실행 로그와 count.
+- `public_data_import_errors`: 월/지역/API 단위 실패 기록.
+- `public_data_raw_apartment_transactions`: 공공데이터 원천 거래 staging. `source_key` unique key로 중복 저장을 방지합니다.
+- `public_data_geocoding_cache`: `sido + sigungu + legalDong + jibun` 주소 조합별 Kakao geocoding 상태와 좌표 cache.
+
+로컬 개발에서는 Docker MySQL 또는 로컬 MySQL 중 편한 방식을 사용할 수 있습니다. 운영에서는 Docker MySQL 고정이 아니라 managed DB 또는 운영 표준 MySQL 중 선택해야 합니다.
+
+## Public Data Import Batch
+
+Phase 1 batch 범위:
+
+- 기간: 최근 12개월. 기본값은 `PUBLIC_DATA_IMPORT_MONTHS=12`.
+- 지역: `SEOUL,BUSAN`, 즉 서울특별시와 부산광역시 시군구 `LAWD_CD`.
+- 거래 유형: 아파트 매매, 전세, 월세.
+- API: 공공데이터포털 아파트 매매 endpoint와 아파트 전월세 endpoint.
+- 지오코딩: Kakao Local address search.
+
+환경 변수:
+
+- `PUBLIC_DATA_SERVICE_KEY`: 공공데이터포털 service key. 실제 값은 `.env`에만 둡니다.
+- `KAKAO_REST_API_KEY`: Kakao REST API key. 실제 값은 `.env`에만 둡니다.
+- `PUBLIC_DATA_IMPORT_MONTHS`: 조회 개월 수. 기본값 `12`.
+- `PUBLIC_DATA_TARGET_REGIONS`: `SEOUL,BUSAN` 형식.
+- `PUBLIC_DATA_IMPORT_DRY_RUN`: 기본 `true`.
+- `PUBLIC_DATA_IMPORT_LIMIT`: 기본 `100`.
+- `PUBLIC_DATA_IMPORT_PAGE_SIZE`: 기본 `100`.
+
+실행:
+
+```bash
+scripts/import-public-data.sh --dry-run --limit 20
+scripts/import-public-data.sh --live --limit 100
+```
+
+`scripts/import-public-data.sh`는 `.env`를 읽고 Spring Boot runner를 1회 실행한 뒤 종료합니다. 기본은 dry-run입니다. dry-run은 대상 범위 확인용이며 공공데이터 API, Kakao API, DB mapper write를 호출하지 않습니다.
+
+live 모드에서는 script와 Spring service 시작선에서 `PUBLIC_DATA_SERVICE_KEY`, `KAKAO_REST_API_KEY`를 모두 검증합니다. 누락되면 import run row 생성이나 외부 호출 전에 중단하며, key 값은 출력하지 않습니다.
+
+### LAWD Code List
+
+서울/부산 시군구 코드는 `backend/src/main/resources/publicdata/lawd-codes-seoul-busan.csv`에 둡니다. 이 목록은 Phase 1 skeleton용 정적 resource이며, 실제 운영 전에는 행정표준코드관리시스템 또는 공공데이터포털 기준으로 최신 여부를 재검증해야 합니다.
+
+### Jibun Geocoding
+
+주소 조합은 다음 순서입니다.
+
+```text
+sido + sigungu + legalDong + jibun
+```
+
+예: `서울특별시 강남구 역삼동 12-3`
+
+정규화된 key는 `서울특별시|강남구|역삼동|12-3` 형태로 저장합니다. Kakao geocoding 성공 시 `latitude`, `longitude`를 `public_data_geocoding_cache`에 저장합니다. 실패 시 `ZERO_RESULT` 또는 `ERROR`와 실패 reason을 저장합니다. 좌표가 없는 거래는 canonical `properties` / `property_transactions` 반영 대상에서 제외할 수 있게 `geocoding_status`를 분리했습니다.
+
+### Canonical Upsert Policy
+
+Phase 1 Java 코드는 raw staging 저장과 geocoding cache 저장까지 구현합니다. 좌표가 확보된 거래만 canonical 반영 후보가 되며, 실제 `properties` / `property_transactions` upsert는 `CanonicalApartmentUpsertService` skeleton으로 분리했습니다.
+
+다음 Backend/Data 작업에서 확인할 내용:
+
+- 같은 단지 판별 기준: `sido`, `sigungu`, `legalDong`, `jibun`, `apartmentName`, 좌표 반경.
+- 공공데이터 거래별 source id 안정성.
+- 전세/월세 금액 단위 검증.
+- canonical upsert transaction boundary와 idempotency.
+- 오피스텔/연립다세대 endpoint와 DTO 확장.

@@ -6,6 +6,7 @@ import com.jiber.backend.common.error.ErrorDetail;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -26,6 +27,7 @@ public class ModelServerPropertyValuationClient implements PropertyValuationClie
     private final String internalToken;
     private final ModelServerApartmentFeatureMapper featureMapper;
 
+    @Autowired
     public ModelServerPropertyValuationClient(
             RestClient.Builder restClientBuilder,
             ModelServerApartmentFeatureMapper featureMapper,
@@ -44,7 +46,15 @@ public class ModelServerPropertyValuationClient implements PropertyValuationClie
         );
     }
 
-    ModelServerPropertyValuationClient(
+    static ModelServerPropertyValuationClient forTesting(
+            RestClient restClient,
+            String internalToken,
+            ModelServerApartmentFeatureMapper featureMapper
+    ) {
+        return new ModelServerPropertyValuationClient(restClient, internalToken, featureMapper);
+    }
+
+    private ModelServerPropertyValuationClient(
             RestClient restClient,
             String internalToken,
             ModelServerApartmentFeatureMapper featureMapper

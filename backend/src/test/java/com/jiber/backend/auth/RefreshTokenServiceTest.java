@@ -24,7 +24,7 @@ class RefreshTokenServiceTest {
     @Test
     void rotatesRefreshTokenByRevokingCurrentSessionAndStoringOnlyNewTokenHash() {
         var mapper = new RecordingRefreshSessionMapper();
-        var service = new RefreshTokenService(PROPERTIES, mapper, deterministicSecureRandom(), FIXED_CLOCK);
+        var service = RefreshTokenService.forTesting(PROPERTIES, mapper, deterministicSecureRandom(), FIXED_CLOCK);
         var rawRefreshToken = "raw-refresh-token";
         var activeSession = session(10L, 1L, service.hash(rawRefreshToken), null);
         mapper.byTokenHash = activeSession;
@@ -42,7 +42,7 @@ class RefreshTokenServiceTest {
     @Test
     void reusedRotatedRefreshTokenRevokesSessionFamilyAndReturnsAuthRequired() {
         var mapper = new RecordingRefreshSessionMapper();
-        var service = new RefreshTokenService(PROPERTIES, mapper, deterministicSecureRandom(), FIXED_CLOCK);
+        var service = RefreshTokenService.forTesting(PROPERTIES, mapper, deterministicSecureRandom(), FIXED_CLOCK);
         var rawRefreshToken = "already-rotated-refresh-token";
         var revokedSession = session(20L, 1L, service.hash(rawRefreshToken), OffsetDateTime.parse("2026-06-15T06:59:00Z"));
         mapper.byTokenHash = revokedSession;

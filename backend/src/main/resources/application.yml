@@ -50,3 +50,15 @@ jiber:
     model-version: ${MODEL_VERSION:hedonic-v1}
     baseline-date: ${MODEL_BASELINE_DATE:2026-06-12}
     feature-set-version: ${MODEL_FEATURE_SET_VERSION:apartment-basic-v1}
+  public-data:
+    service-key: ${PUBLIC_DATA_SERVICE_KEY:}
+    import-months: ${PUBLIC_DATA_IMPORT_MONTHS:12}
+    target-regions: ${PUBLIC_DATA_TARGET_REGIONS:SEOUL,BUSAN}
+    enabled: ${PUBLIC_DATA_IMPORT_ENABLED:false}
+    dry-run: ${PUBLIC_DATA_IMPORT_DRY_RUN:true}
+    limit: ${PUBLIC_DATA_IMPORT_LIMIT:100}
+    page-size: ${PUBLIC_DATA_IMPORT_PAGE_SIZE:100}
+    base-url: ${PUBLIC_DATA_BASE_URL:https://apis.data.go.kr}
+    kakao:
+      rest-api-key: ${KAKAO_REST_API_KEY:}
+      base-url: ${KAKAO_LOCAL_BASE_URL:https://dapi.kakao.com}

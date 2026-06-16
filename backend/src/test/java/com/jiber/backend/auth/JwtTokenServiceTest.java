@@ -22,7 +22,7 @@ class JwtTokenServiceTest {
                 900,
                 "test"
         );
-        var service = new JwtTokenService(properties, new ObjectMapper(), FIXED_CLOCK);
+        var service = JwtTokenService.forTesting(properties, new ObjectMapper(), FIXED_CLOCK);
         var principal = new AuthUserPrincipal(1L, "user@example.com", "tester", Set.of("USER"));
 
         var issuedToken = service.issueAccessToken(principal);
@@ -42,7 +42,7 @@ class JwtTokenServiceTest {
     void rejectsBlankJwtSecretOutsideLocalLikeEnvironments() {
         var properties = new JwtTokenProperties("jiber-prod", "", 900, "prod");
 
-        assertThatThrownBy(() -> new JwtTokenService(properties, new ObjectMapper(), FIXED_CLOCK))
+        assertThatThrownBy(() -> JwtTokenService.forTesting(properties, new ObjectMapper(), FIXED_CLOCK))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("JWT_SECRET");
     }

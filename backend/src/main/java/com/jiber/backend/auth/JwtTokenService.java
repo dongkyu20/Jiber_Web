@@ -19,6 +19,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -33,11 +34,16 @@ public class JwtTokenService {
     private final Clock clock;
     private final byte[] signingKey;
 
+    @Autowired
     public JwtTokenService(JwtTokenProperties properties, ObjectMapper objectMapper) {
         this(properties, objectMapper, Clock.systemUTC());
     }
 
-    JwtTokenService(JwtTokenProperties properties, ObjectMapper objectMapper, Clock clock) {
+    static JwtTokenService forTesting(JwtTokenProperties properties, ObjectMapper objectMapper, Clock clock) {
+        return new JwtTokenService(properties, objectMapper, clock);
+    }
+
+    private JwtTokenService(JwtTokenProperties properties, ObjectMapper objectMapper, Clock clock) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.clock = clock;

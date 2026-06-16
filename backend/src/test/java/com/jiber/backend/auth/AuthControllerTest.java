@@ -65,7 +65,7 @@ class AuthControllerTest {
                 new RefreshTokenProperties.Cookie("JIBER_REFRESH_TOKEN", "/api/v1/auth", "Lax", false)
         );
         private final RecordingRefreshSessionMapper refreshSessionMapper = new RecordingRefreshSessionMapper();
-        private final RefreshTokenService refreshTokenService = new RefreshTokenService(
+        private final RefreshTokenService refreshTokenService = RefreshTokenService.forTesting(
                 refreshProperties,
                 refreshSessionMapper,
                 new SecureRandom(new byte[]{5, 6, 7, 8}),
@@ -73,7 +73,7 @@ class AuthControllerTest {
         );
 
         private AuthController controller() {
-            var jwtTokenService = new JwtTokenService(
+            var jwtTokenService = JwtTokenService.forTesting(
                     new JwtTokenProperties("jiber-test", "test-secret-with-enough-entropy-for-hmac", 900, "test"),
                     new ObjectMapper(),
                     FIXED_CLOCK

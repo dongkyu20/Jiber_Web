@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header>
+    <resultCode>00</resultCode>
+    <resultMsg>NORMAL SERVICE.</resultMsg>
+  </header>
+  <body>
+    <items>
+      <item>
+        <sggCd>11680</sggCd>
+        <umdNm>역삼동</umdNm>
+        <jibun>12-3</jibun>
+        <aptNm>예시아파트</aptNm>
+        <excluUseAr>84.95</excluUseAr>
+        <floor>15</floor>
+        <buildYear>2010</buildYear>
+        <dealYear>2026</dealYear>
+        <dealMonth>5</dealMonth>
+        <dealDay>20</dealDay>
+        <dealAmount>125,000</dealAmount>
+      </item>
+    </items>
+    <numOfRows>10</numOfRows>
+    <pageNo>1</pageNo>
+    <totalCount>1</totalCount>
+  </body>
+</response>

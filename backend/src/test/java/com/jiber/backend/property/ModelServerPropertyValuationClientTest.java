@@ -185,7 +185,7 @@ class ModelServerPropertyValuationClientTest {
     private ModelServerPropertyValuationClient newClient(String internalToken) {
         var builder = RestClient.builder().baseUrl("http://model.test");
         server = MockRestServiceServer.bindTo(builder).build();
-        return new ModelServerPropertyValuationClient(builder.build(), internalToken, featureMapper);
+        return ModelServerPropertyValuationClient.forTesting(builder.build(), internalToken, featureMapper);
     }
 
     private ValuationRequest valuationRequest() {

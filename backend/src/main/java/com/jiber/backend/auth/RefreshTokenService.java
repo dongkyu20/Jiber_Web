@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -20,11 +21,21 @@ public class RefreshTokenService {
     private final SecureRandom secureRandom;
     private final Clock clock;
 
+    @Autowired
     public RefreshTokenService(RefreshTokenProperties properties, RefreshSessionMapper refreshSessionMapper) {
         this(properties, refreshSessionMapper, new SecureRandom(), Clock.systemUTC());
     }
 
-    RefreshTokenService(
+    static RefreshTokenService forTesting(
+            RefreshTokenProperties properties,
+            RefreshSessionMapper refreshSessionMapper,
+            SecureRandom secureRandom,
+            Clock clock
+    ) {
+        return new RefreshTokenService(properties, refreshSessionMapper, secureRandom, clock);
+    }
+
+    private RefreshTokenService(
             RefreshTokenProperties properties,
             RefreshSessionMapper refreshSessionMapper,
             SecureRandom secureRandom,

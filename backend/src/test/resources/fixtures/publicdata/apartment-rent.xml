@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header>
+    <resultCode>00</resultCode>
+    <resultMsg>NORMAL SERVICE.</resultMsg>
+  </header>
+  <body>
+    <items>
+      <item>
+        <sggCd>11680</sggCd>
+        <umdNm>역삼동</umdNm>
+        <jibun>12-3</jibun>
+        <aptNm>예시아파트</aptNm>
+        <excluUseAr>84.95</excluUseAr>
+        <floor>15</floor>
+        <buildYear>2010</buildYear>
+        <dealYear>2026</dealYear>
+        <dealMonth>5</dealMonth>
+        <dealDay>20</dealDay>
+        <deposit>60,000</deposit>
+        <monthlyRent>0</monthlyRent>
+      </item>
+      <item>
+        <sggCd>11680</sggCd>
+        <umdNm>역삼동</umdNm>
+        <jibun>12-4</jibun>
+        <aptNm>예시월세아파트</aptNm>
+        <excluUseAr>59.90</excluUseAr>
+        <floor>8</floor>
+        <buildYear>2015</buildYear>
+        <dealYear>2026</dealYear>
+        <dealMonth>5</dealMonth>
+        <dealDay>21</dealDay>
+        <deposit>5,000</deposit>
+        <monthlyRent>120</monthlyRent>
+      </item>
+    </items>
+    <numOfRows>10</numOfRows>
+    <pageNo>1</pageNo>
+    <totalCount>2</totalCount>
+  </body>
+</response>

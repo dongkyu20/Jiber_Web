@@ -4,6 +4,7 @@ import com.jiber.backend.common.PageMetadata;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Function;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -13,11 +14,20 @@ public class PropertyService {
     private final PropertyValuationClient valuationClient;
     private final Function<Long, PropertyType> propertyTypeResolver;
 
+    @Autowired
     public PropertyService(PropertyAiEligibilityService eligibilityService, PropertyValuationClient valuationClient) {
         this(eligibilityService, valuationClient, propertyId -> PropertyType.APARTMENT);
     }
 
-    PropertyService(
+    static PropertyService forTesting(
+            PropertyAiEligibilityService eligibilityService,
+            PropertyValuationClient valuationClient,
+            Function<Long, PropertyType> propertyTypeResolver
+    ) {
+        return new PropertyService(eligibilityService, valuationClient, propertyTypeResolver);
+    }
+
+    private PropertyService(
             PropertyAiEligibilityService eligibilityService,
             PropertyValuationClient valuationClient,
             Function<Long, PropertyType> propertyTypeResolver

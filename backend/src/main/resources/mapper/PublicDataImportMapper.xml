@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiber.backend.publicdata.PublicDataImportMapper">
+    <insert id="insertImportRun" useGeneratedKeys="true" keyProperty="importRunId">
+        INSERT INTO public_data_import_runs (
+            status,
+            target_months,
+            target_regions,
+            dry_run,
+            fetched_count,
+            staged_count,
+            geocoded_count,
+            failed_count,
+            started_at,
+            failure_reason
+        ) VALUES (
+            #{status},
+            #{targetMonths},
+            #{targetRegions},
+            #{dryRun},
+            #{fetchedCount},
+            #{stagedCount},
+            #{geocodedCount},
+            #{failedCount},
+            #{startedAt},
+            #{failureReason}
+        )
+    </insert>
+
+    <update id="markImportRunSucceeded">
+        UPDATE public_data_import_runs
+        SET status = #{status},
+            fetched_count = #{fetchedCount},
+            staged_count = #{stagedCount},
+            geocoded_count = #{geocodedCount},
+            failed_count = #{failedCount},
+            finished_at = #{finishedAt},
+            failure_reason = #{failureReason}
+        WHERE import_run_id = #{importRunId}
+    </update>
+
+    <update id="markImportRunFailed">
+        UPDATE public_data_import_runs
+        SET status = #{status},
+            fetched_count = #{fetchedCount},
+            staged_count = #{stagedCount},
+            geocoded_count = #{geocodedCount},
+            failed_count = #{failedCount},
+            finished_at = #{finishedAt},
+            failure_reason = #{failureReason}
+        WHERE import_run_id = #{importRunId}
+    </update>
+
+    <insert id="insertImportError">
+        INSERT INTO public_data_import_errors (
+            import_run_id,
+            lawd_cd,
+            deal_ymd,
+            api_type,
+            error_code,
+            message
+        ) VALUES (
+            #{importRunId},
+            #{lawdCd},
+            #{dealYmd},
+            #{apiType},
+            #{errorCode},
+            #{message}
+        )
+    </insert>
+
+    <insert id="upsertRawTransaction">
+        INSERT INTO public_data_raw_apartment_transactions (
+            import_run_id,
+            source_key,
+            transaction_type,
+            lawd_cd,
+            sido,
+            sigungu,
+            legal_dong,
+            jibun,
+            address_key,
+            full_address,
+            apartment_name,
+            exclusive_area_m2,
+            floor,
+            built_year,
+            deal_date,
+            deal_amount_krw,
+            deposit_amount_krw,
+            monthly_rent_krw,
+            geocoding_status
+        ) VALUES (
+            #{importRunId},
+            #{sourceKey},
+            #{transactionType},
+            #{lawdCd},
+            #{sido},
+            #{sigungu},
+            #{legalDong},
+            #{jibun},
+            #{addressKey},
+            #{fullAddress},
+            #{apartmentName},
+            #{exclusiveAreaM2},
+            #{floor},
+            #{builtYear},
+            #{dealDate},
+            #{dealAmountKrw},
+            #{depositAmountKrw},
+            #{monthlyRentKrw},
+            #{geocodingStatus}
+        )
+        ON DUPLICATE KEY UPDATE
+            import_run_id = VALUES(import_run_id),
+            geocoding_status = VALUES(geocoding_status),
+            updated_at = CURRENT_TIMESTAMP(6)
+    </insert>
+
+    <select id="findGeocodingByAddressKey" resultType="com.jiber.backend.publicdata.GeocodingCacheRecord">
+        SELECT
+            address_key AS addressKey,
+            full_address AS fullAddress,
+            status,
+            latitude,
+            longitude,
+            failure_reason AS failureReason
+        FROM public_data_geocoding_cache
+        WHERE address_key = #{addressKey}
+    </select>
+
+    <update id="updateRawGeocodingStatus">
+        UPDATE public_data_raw_apartment_transactions
+        SET geocoding_status = #{geocodingStatus},
+            canonical_status = CASE
+                WHEN #{geocodingStatus} = 'SUCCESS' THEN 'ELIGIBLE'
+                ELSE 'SKIPPED'
+            END,
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE source_key = #{sourceKey}
+    </update>
+
+    <insert id="upsertGeocodingCache">
+        INSERT INTO public_data_geocoding_cache (
+            address_key,
+            full_address,
+            status,
+            latitude,
+            longitude,
+            failure_reason
+        ) VALUES (
+            #{addressKey},
+            #{fullAddress},
+            #{status},
+            #{latitude},
+            #{longitude},
+            #{failureReason}
+        )
+        ON DUPLICATE KEY UPDATE
+            full_address = VALUES(full_address),
+            status = VALUES(status),
+            latitude = VALUES(latitude),
+            longitude = VALUES(longitude),
+            failure_reason = VALUES(failure_reason),
+            updated_at = CURRENT_TIMESTAMP(6)
+    </insert>
+</mapper>

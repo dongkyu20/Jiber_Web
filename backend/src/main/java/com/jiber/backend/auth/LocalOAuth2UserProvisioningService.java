@@ -5,6 +5,7 @@ import com.jiber.backend.common.error.ErrorCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -14,11 +15,16 @@ public class LocalOAuth2UserProvisioningService {
     private final AuthUserMapper authUserMapper;
     private final Clock clock;
 
+    @Autowired
     public LocalOAuth2UserProvisioningService(AuthUserMapper authUserMapper) {
         this(authUserMapper, Clock.systemUTC());
     }
 
-    LocalOAuth2UserProvisioningService(AuthUserMapper authUserMapper, Clock clock) {
+    static LocalOAuth2UserProvisioningService forTesting(AuthUserMapper authUserMapper, Clock clock) {
+        return new LocalOAuth2UserProvisioningService(authUserMapper, clock);
+    }
+
+    private LocalOAuth2UserProvisioningService(AuthUserMapper authUserMapper, Clock clock) {
         this.authUserMapper = authUserMapper;
         this.clock = clock;
     }
