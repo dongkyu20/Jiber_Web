@@ -113,11 +113,18 @@ a {
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+  min-width: 0;
+}
+
+.auth-actions .text-button {
+  flex: 0 1 auto;
 }
 
 .user-label {
+  min-width: 0;
   color: var(--text-muted);
   font-size: 0.92rem;
+  overflow-wrap: anywhere;
 }
 
 .app-main {
@@ -603,6 +610,16 @@ input[type="range"] {
   .primary-button,
   .secondary-button {
     white-space: normal;
+  }
+
+  .auth-actions {
+    width: 100%;
+  }
+
+  .auth-actions .text-button {
+    flex: 1 1 96px;
+    min-width: 0;
+    padding-inline: 10px;
   }
 
   .button-row,

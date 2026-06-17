@@ -8,6 +8,12 @@ import { useAuthStore } from '@/stores/auth'
 const authStore = useAuthStore()
 const router = useRouter()
 
+const loginProviders: { provider: OAuthProvider; label: string; secondary?: boolean }[] = [
+  { provider: 'kakao', label: '카카오 로그인' },
+  { provider: 'google', label: '구글 로그인', secondary: true },
+  { provider: 'naver', label: '네이버 로그인', secondary: true }
+]
+
 const displayName = computed(() => authStore.user?.displayName ?? '방문자')
 
 function startLogin(provider: OAuthProvider) {
@@ -36,12 +42,18 @@ async function logout() {
 
     <div class="auth-actions">
       <span v-if="authStore.isAuthenticated" class="user-label">{{ displayName }}님</span>
-      <button v-if="!authStore.isAuthenticated" class="text-button" type="button" @click="startLogin('kakao')">
-        카카오 로그인
-      </button>
-      <button v-if="!authStore.isAuthenticated" class="text-button secondary" type="button" @click="startLogin('google')">
-        구글 로그인
-      </button>
+      <template v-else>
+        <button
+          v-for="loginProvider in loginProviders"
+          :key="loginProvider.provider"
+          class="text-button"
+          :class="{ secondary: loginProvider.secondary }"
+          type="button"
+          @click="startLogin(loginProvider.provider)"
+        >
+          {{ loginProvider.label }}
+        </button>
+      </template>
       <button v-if="authStore.isAuthenticated" class="text-button secondary" type="button" @click="logout">
         로그아웃
       </button>
