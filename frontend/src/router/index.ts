@@ -22,8 +22,7 @@ export const router = createRouter({
       path: '/properties/:propertyId',
       name: 'property-detail',
       component: () => import('@/views/PropertyDetailView.vue'),
-      meta: { requiresAuth: false },
-      props: true
+      meta: { requiresAuth: false }
     },
     {
       path: '/favorites',

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { canAccessRoute } from '@/router/guards'
+import { router } from '@/router'
 import type { UserRole } from '@/api/types'
 
 describe('canAccessRoute', () => {
@@ -26,5 +27,11 @@ describe('canAccessRoute', () => {
       reason: 'ACCESS_DENIED',
       message: '관리자 권한이 필요합니다.'
     })
+  })
+
+  it('does not pass propertyId as a prop to the detail view', () => {
+    const propertyDetailRoute = router.getRoutes().find((route) => route.name === 'property-detail')
+
+    expect(propertyDetailRoute?.props.default).toBe(false)
   })
 })
