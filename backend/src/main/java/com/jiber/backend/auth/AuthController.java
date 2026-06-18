@@ -2,6 +2,7 @@ package com.jiber.backend.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.CookieValue;
@@ -26,6 +27,28 @@ public class AuthController {
     @GetMapping("/me")
     public AuthMeResponse me(Authentication authentication) {
         return authService.currentUser(authentication);
+    }
+
+    @PostMapping("/signup")
+    public AuthTokenResponse signup(
+            @Valid @RequestBody EmailSignupRequest signupRequest,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        var result = authService.signup(signupRequest, RefreshRequestContext.from(request));
+        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookieService.createRefreshCookie(result.refreshToken()).toString());
+        return result.response();
+    }
+
+    @PostMapping("/login")
+    public AuthTokenResponse login(
+            @RequestBody EmailLoginRequest loginRequest,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        var result = authService.login(loginRequest, RefreshRequestContext.from(request));
+        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookieService.createRefreshCookie(result.refreshToken()).toString());
+        return result.response();
     }
 
     @PostMapping("/refresh")
