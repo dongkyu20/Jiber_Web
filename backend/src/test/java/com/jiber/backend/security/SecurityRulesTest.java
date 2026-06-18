@@ -18,12 +18,21 @@ import com.jiber.backend.auth.JwtAuthenticationFilter;
 import com.jiber.backend.auth.JwtTokenProperties;
 import com.jiber.backend.auth.JwtTokenService;
 import com.jiber.backend.auth.PasswordPolicy;
+import com.jiber.backend.auth.PendingSocialCookieService;
+import com.jiber.backend.auth.PendingSocialProperties;
+import com.jiber.backend.auth.PendingSocialSessionInsertCommand;
+import com.jiber.backend.auth.PendingSocialSessionMapper;
+import com.jiber.backend.auth.PendingSocialSessionRecord;
 import com.jiber.backend.auth.RefreshSessionInsertCommand;
 import com.jiber.backend.auth.RefreshSessionMapper;
 import com.jiber.backend.auth.RefreshSessionRecord;
 import com.jiber.backend.auth.RefreshTokenCookieService;
 import com.jiber.backend.auth.RefreshTokenProperties;
 import com.jiber.backend.auth.RefreshTokenService;
+import com.jiber.backend.auth.SocialAccountInsertCommand;
+import com.jiber.backend.auth.SocialAccountMapper;
+import com.jiber.backend.auth.SocialAccountRecord;
+import com.jiber.backend.auth.SocialLoginService;
 import com.jiber.backend.favorite.FavoriteController;
 import com.jiber.backend.favorite.FavoriteService;
 import com.jiber.backend.notice.AdminNoticeController;
@@ -174,6 +183,27 @@ class SecurityRulesTest {
     }
 
     @Test
+    void socialPendingAndSocialSignupAllowAnonymousButRequirePendingCookie() throws Exception {
+        var body = """
+                {
+                  "email": "social@example.com",
+                  "password": "valid-credential-1",
+                  "displayName": "소셜 가입자"
+                }
+                """;
+
+        mockMvc.perform(get("/api/v1/auth/social/pending"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SOCIAL_PENDING_NOT_FOUND"));
+
+        mockMvc.perform(post("/api/v1/auth/social/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SOCIAL_PENDING_NOT_FOUND"));
+    }
+
+    @Test
     void favoritesRequireAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/favorites/apartments"))
                 .andExpect(status().isUnauthorized())
@@ -249,6 +279,17 @@ class SecurityRulesTest {
         }
 
         @Bean
+        PendingSocialCookieService pendingSocialCookieService() {
+            return new PendingSocialCookieService(
+                    new PendingSocialProperties(
+                            600,
+                            "local",
+                            new PendingSocialProperties.Cookie("JIBER_PENDING_SOCIAL", "/api/v1/auth", "Lax", false)
+                    )
+            );
+        }
+
+        @Bean
         AuthService authService(JwtTokenService jwtTokenService, AuthUserMapper authUserMapper) {
             var refreshProperties = new RefreshTokenProperties(
                     1209600,
@@ -266,6 +307,35 @@ class SecurityRulesTest {
                     new EmailNormalizer(),
                     new PasswordPolicy(),
                     Clock.fixed(Instant.parse("2026-06-15T07:00:00Z"), ZoneOffset.UTC)
+            );
+        }
+
+        @Bean
+        SocialLoginService socialLoginService(JwtTokenService jwtTokenService, AuthUserMapper authUserMapper) {
+            var refreshProperties = new RefreshTokenProperties(
+                    1209600,
+                    "local",
+                    new RefreshTokenProperties.Cookie("JIBER_REFRESH_TOKEN", "/api/v1/auth", "Lax", false)
+            );
+            var pendingProperties = new PendingSocialProperties(
+                    600,
+                    "local",
+                    new PendingSocialProperties.Cookie("JIBER_PENDING_SOCIAL", "/api/v1/auth", "Lax", false)
+            );
+            var emailNormalizer = new EmailNormalizer();
+            return new SocialLoginService(
+                    jwtTokenService,
+                    new RefreshTokenService(
+                            refreshProperties,
+                            new SecurityRefreshSessionMapper()
+                    ),
+                    authUserMapper,
+                    new SecuritySocialAccountMapper(),
+                    new com.jiber.backend.auth.PendingSocialSessionService(
+                            pendingProperties,
+                            new SecurityPendingSocialSessionMapper(),
+                            emailNormalizer
+                    )
             );
         }
 
@@ -360,6 +430,57 @@ class SecurityRulesTest {
 
             @Override
             public int revokeSessionFamily(Long refreshSessionId, OffsetDateTime revokedAt) {
+                return 0;
+            }
+        }
+
+        private static class SecuritySocialAccountMapper implements SocialAccountMapper {
+
+            @Override
+            public int insert(SocialAccountInsertCommand command) {
+                return 1;
+            }
+
+            @Override
+            public SocialAccountRecord findByProvider(String oauthProvider, String providerUserId) {
+                return null;
+            }
+
+            @Override
+            public AuthUserRecord findLinkedUserByProvider(String oauthProvider, String providerUserId) {
+                return null;
+            }
+
+            @Override
+            public java.util.List<SocialAccountRecord> findByUserId(Long userId) {
+                return java.util.List.of();
+            }
+
+            @Override
+            public int updateLastLoginAt(String oauthProvider, String providerUserId, OffsetDateTime lastLoginAt) {
+                return 0;
+            }
+        }
+
+        private static class SecurityPendingSocialSessionMapper implements PendingSocialSessionMapper {
+
+            @Override
+            public int insert(PendingSocialSessionInsertCommand command) {
+                return 1;
+            }
+
+            @Override
+            public PendingSocialSessionRecord findByTokenHash(String pendingTokenHash) {
+                return null;
+            }
+
+            @Override
+            public PendingSocialSessionRecord findActiveByTokenHash(String pendingTokenHash, OffsetDateTime now) {
+                return null;
+            }
+
+            @Override
+            public int consume(String pendingTokenHash, OffsetDateTime consumedAt) {
                 return 0;
             }
         }

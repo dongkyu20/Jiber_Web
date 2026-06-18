@@ -165,6 +165,66 @@ class AuthControllerTest {
         assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
     }
 
+    @Test
+    void socialPendingReturnsSafePreviewFromPendingCookie() {
+        var fixture = new Fixture();
+        fixture.authUserMapper.insertExistingUser(
+                20L,
+                "social@example.com",
+                fixture.passwordEncoder.encode(CREDENTIAL),
+                "기존 사용자",
+                true
+        );
+        var issued = fixture.pendingSocialSessionService.issue(
+                new OAuth2ProviderUser(OAuth2Provider.NAVER, "naver-user-1", " Social@Example.COM ", "네이버 사용자")
+        );
+
+        var body = fixture.controller().socialPending(issued.token());
+
+        assertThat(body.provider()).isEqualTo("NAVER");
+        assertThat(body.email()).isEqualTo("social@example.com");
+        assertThat(body.displayName()).isEqualTo("네이버 사용자");
+        assertThat(body.matchingEmailAccountExists()).isTrue();
+    }
+
+    @Test
+    void socialPendingMissingCookieReturnsSocialPendingNotFound() {
+        var fixture = new Fixture();
+
+        var failure = catchApiException(() -> fixture.controller().socialPending(null));
+
+        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.SOCIAL_PENDING_NOT_FOUND);
+    }
+
+    @Test
+    void socialSignupSetsRefreshCookieClearsPendingCookieAndReturnsAccessToken() {
+        var fixture = new Fixture();
+        var issued = fixture.pendingSocialSessionService.issue(
+                new OAuth2ProviderUser(OAuth2Provider.NAVER, "naver-user-2", "provider@example.com", "제공자 이름")
+        );
+        var request = new MockHttpServletRequest();
+        request.setRemoteAddr("127.0.0.1");
+        request.addHeader("User-Agent", "JUnit");
+        var response = new MockHttpServletResponse();
+
+        var body = fixture.controller().socialSignup(
+                issued.token(),
+                new SocialSignupRequest(" USER@Example.COM ", CREDENTIAL, " 소셜 가입자 "),
+                request,
+                response
+        );
+
+        assertThat(body.accessToken()).isNotBlank();
+        assertThat(body.user().email()).isEqualTo("user@example.com");
+        assertThat(body.user().roles()).containsExactly("USER");
+        assertThat(body.user().roles()).doesNotContain("ADMIN");
+        assertThat(response.getHeaders("Set-Cookie"))
+                .anySatisfy(cookie -> assertThat(cookie).contains("JIBER_REFRESH_TOKEN=").contains("HttpOnly"))
+                .anySatisfy(cookie -> assertThat(cookie).contains("JIBER_PENDING_SOCIAL=").contains("Max-Age=0").contains("HttpOnly"));
+        assertThat(fixture.socialAccountMapper.findByProvider("NAVER", "naver-user-2")).isNotNull();
+        assertThat(fixture.pendingSocialSessionMapper.consumedTokenHash).isEqualTo(fixture.pendingSocialSessionService.hash(issued.token()));
+    }
+
     private ApiException catchApiException(ThrowingRunnable runnable) {
         try {
             runnable.run();
@@ -185,14 +245,28 @@ class AuthControllerTest {
                 "local",
                 new RefreshTokenProperties.Cookie("JIBER_REFRESH_TOKEN", "/api/v1/auth", "Lax", false)
         );
+        private final PendingSocialProperties pendingProperties = new PendingSocialProperties(
+                600,
+                "local",
+                new PendingSocialProperties.Cookie("JIBER_PENDING_SOCIAL", "/api/v1/auth", "Lax", false)
+        );
         private final RecordingRefreshSessionMapper refreshSessionMapper = new RecordingRefreshSessionMapper();
         private final RecordingAuthUserMapper authUserMapper = new RecordingAuthUserMapper();
+        private final RecordingSocialAccountMapper socialAccountMapper = new RecordingSocialAccountMapper();
+        private final RecordingPendingSocialSessionMapper pendingSocialSessionMapper = new RecordingPendingSocialSessionMapper();
         private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
         private final RefreshTokenService refreshTokenService = RefreshTokenService.forTesting(
                 refreshProperties,
                 refreshSessionMapper,
                 new SecureRandom(new byte[]{5, 6, 7, 8}),
                 FIXED_CLOCK
+        );
+        private final PendingSocialSessionService pendingSocialSessionService = PendingSocialSessionService.forTesting(
+                pendingProperties,
+                pendingSocialSessionMapper,
+                new SecureRandom(new byte[]{1, 2, 3, 4}),
+                FIXED_CLOCK,
+                new EmailNormalizer()
         );
 
         private Fixture() {
@@ -220,7 +294,23 @@ class AuthControllerTest {
                     new PasswordPolicy(),
                     FIXED_CLOCK
             );
-            return new AuthController(authService, new RefreshTokenCookieService(refreshProperties));
+            var socialLoginService = SocialLoginService.forTesting(
+                    jwtTokenService,
+                    refreshTokenService,
+                    authUserMapper,
+                    socialAccountMapper,
+                    pendingSocialSessionService,
+                    passwordEncoder,
+                    new EmailNormalizer(),
+                    new PasswordPolicy(),
+                    FIXED_CLOCK
+            );
+            return new AuthController(
+                    authService,
+                    socialLoginService,
+                    new RefreshTokenCookieService(refreshProperties),
+                    new PendingSocialCookieService(pendingProperties)
+            );
         }
 
         private RefreshSessionRecord session(Long sessionId, String tokenHash) {
@@ -339,6 +429,115 @@ class AuthControllerTest {
 
         @Override
         public int revokeSessionFamily(Long refreshSessionId, OffsetDateTime revokedAt) {
+            return 1;
+        }
+    }
+
+    private static class RecordingSocialAccountMapper implements SocialAccountMapper {
+
+        private final Map<String, SocialAccountRecord> accountsByProvider = new LinkedHashMap<>();
+
+        @Override
+        public int insert(SocialAccountInsertCommand command) {
+            accountsByProvider.put(
+                    key(command.oauthProvider(), command.providerUserId()),
+                    new SocialAccountRecord(
+                            (long) accountsByProvider.size() + 1,
+                            command.userId(),
+                            command.oauthProvider(),
+                            command.providerUserId(),
+                            command.providerEmail(),
+                            command.providerDisplayName(),
+                            command.linkedAt(),
+                            command.lastLoginAt(),
+                            command.linkedAt(),
+                            command.linkedAt()
+                    )
+            );
+            return 1;
+        }
+
+        @Override
+        public SocialAccountRecord findByProvider(String oauthProvider, String providerUserId) {
+            return accountsByProvider.get(key(oauthProvider, providerUserId));
+        }
+
+        @Override
+        public AuthUserRecord findLinkedUserByProvider(String oauthProvider, String providerUserId) {
+            return null;
+        }
+
+        @Override
+        public java.util.List<SocialAccountRecord> findByUserId(Long userId) {
+            return accountsByProvider.values().stream()
+                    .filter(account -> account.userId().equals(userId))
+                    .toList();
+        }
+
+        @Override
+        public int updateLastLoginAt(String oauthProvider, String providerUserId, OffsetDateTime lastLoginAt) {
+            return accountsByProvider.containsKey(key(oauthProvider, providerUserId)) ? 1 : 0;
+        }
+
+        private String key(String oauthProvider, String providerUserId) {
+            return oauthProvider + ":" + providerUserId;
+        }
+    }
+
+    private static class RecordingPendingSocialSessionMapper implements PendingSocialSessionMapper {
+
+        private final Map<String, PendingSocialSessionRecord> sessionsByHash = new LinkedHashMap<>();
+        private String consumedTokenHash;
+
+        @Override
+        public int insert(PendingSocialSessionInsertCommand command) {
+            sessionsByHash.put(command.pendingTokenHash(), new PendingSocialSessionRecord(
+                    (long) sessionsByHash.size() + 1,
+                    command.pendingTokenHash(),
+                    command.oauthProvider(),
+                    command.providerUserId(),
+                    command.providerEmail(),
+                    command.providerDisplayName(),
+                    command.suggestedEmail(),
+                    command.expiresAt(),
+                    null,
+                    OffsetDateTime.now(FIXED_CLOCK),
+                    OffsetDateTime.now(FIXED_CLOCK)
+            ));
+            return 1;
+        }
+
+        @Override
+        public PendingSocialSessionRecord findByTokenHash(String pendingTokenHash) {
+            return sessionsByHash.get(pendingTokenHash);
+        }
+
+        @Override
+        public PendingSocialSessionRecord findActiveByTokenHash(String pendingTokenHash, OffsetDateTime now) {
+            var session = sessionsByHash.get(pendingTokenHash);
+            return session != null && session.activeAt(now) ? session : null;
+        }
+
+        @Override
+        public int consume(String pendingTokenHash, OffsetDateTime consumedAt) {
+            var session = sessionsByHash.get(pendingTokenHash);
+            if (session == null || session.consumedAt() != null) {
+                return 0;
+            }
+            consumedTokenHash = pendingTokenHash;
+            sessionsByHash.put(pendingTokenHash, new PendingSocialSessionRecord(
+                    session.pendingSocialSessionId(),
+                    session.pendingTokenHash(),
+                    session.oauthProvider(),
+                    session.providerUserId(),
+                    session.providerEmail(),
+                    session.providerDisplayName(),
+                    session.suggestedEmail(),
+                    session.expiresAt(),
+                    consumedAt,
+                    session.createdAt(),
+                    consumedAt
+            ));
             return 1;
         }
     }

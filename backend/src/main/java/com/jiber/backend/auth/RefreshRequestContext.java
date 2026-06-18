@@ -9,6 +9,10 @@ public record RefreshRequestContext(
         String userAgent,
         String remoteAddress
 ) {
+    public static RefreshRequestContext empty() {
+        return new RefreshRequestContext(null, null);
+    }
+
     public static RefreshRequestContext from(HttpServletRequest request) {
         return new RefreshRequestContext(request.getHeader("User-Agent"), request.getRemoteAddr());
     }

@@ -42,6 +42,14 @@ jiber:
         path: ${AUTH_REFRESH_TOKEN_COOKIE_PATH:/api/v1/auth}
         same-site: ${AUTH_REFRESH_TOKEN_COOKIE_SAME_SITE:Lax}
         secure: ${AUTH_REFRESH_TOKEN_COOKIE_SECURE:false}
+    pending-social:
+      ttl-seconds: ${OAUTH_PENDING_SOCIAL_TTL_SECONDS:600}
+      app-env: ${APP_ENV:local}
+      cookie:
+        name: ${AUTH_PENDING_SOCIAL_COOKIE_NAME:JIBER_PENDING_SOCIAL}
+        path: ${AUTH_PENDING_SOCIAL_COOKIE_PATH:/api/v1/auth}
+        same-site: ${AUTH_PENDING_SOCIAL_COOKIE_SAME_SITE:Lax}
+        secure: ${AUTH_PENDING_SOCIAL_COOKIE_SECURE:false}
     oauth2:
       google:
         client-id: ${OAUTH_GOOGLE_CLIENT_ID:}

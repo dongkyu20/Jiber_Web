@@ -17,11 +17,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final SocialLoginService socialLoginService;
     private final RefreshTokenCookieService refreshTokenCookieService;
+    private final PendingSocialCookieService pendingSocialCookieService;
 
-    public AuthController(AuthService authService, RefreshTokenCookieService refreshTokenCookieService) {
+    public AuthController(
+            AuthService authService,
+            SocialLoginService socialLoginService,
+            RefreshTokenCookieService refreshTokenCookieService,
+            PendingSocialCookieService pendingSocialCookieService
+    ) {
         this.authService = authService;
+        this.socialLoginService = socialLoginService;
         this.refreshTokenCookieService = refreshTokenCookieService;
+        this.pendingSocialCookieService = pendingSocialCookieService;
     }
 
     @GetMapping("/me")
@@ -48,6 +57,26 @@ public class AuthController {
     ) {
         var result = authService.login(loginRequest, RefreshRequestContext.from(request));
         response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookieService.createRefreshCookie(result.refreshToken()).toString());
+        return result.response();
+    }
+
+    @GetMapping("/social/pending")
+    public SocialPendingResponse socialPending(
+            @CookieValue(name = "${jiber.auth.pending-social.cookie.name:JIBER_PENDING_SOCIAL}", required = false) String pendingToken
+    ) {
+        return socialLoginService.pending(pendingToken);
+    }
+
+    @PostMapping("/social/signup")
+    public AuthTokenResponse socialSignup(
+            @CookieValue(name = "${jiber.auth.pending-social.cookie.name:JIBER_PENDING_SOCIAL}", required = false) String pendingToken,
+            @Valid @RequestBody SocialSignupRequest signupRequest,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        var result = socialLoginService.socialSignup(pendingToken, signupRequest, RefreshRequestContext.from(request));
+        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookieService.createRefreshCookie(result.refreshToken()).toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, pendingSocialCookieService.clearPendingCookie().toString());
         return result.response();
     }
 

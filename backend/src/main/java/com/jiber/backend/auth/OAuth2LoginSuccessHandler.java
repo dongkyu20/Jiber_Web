@@ -15,22 +15,22 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final OAuth2ProviderUserResolver providerUserResolver;
-    private final LocalOAuth2UserProvisioningService userProvisioningService;
-    private final RefreshTokenService refreshTokenService;
+    private final SocialLoginService socialLoginService;
     private final RefreshTokenCookieService refreshTokenCookieService;
+    private final PendingSocialCookieService pendingSocialCookieService;
     private final FrontendProperties frontendProperties;
 
     public OAuth2LoginSuccessHandler(
             OAuth2ProviderUserResolver providerUserResolver,
-            LocalOAuth2UserProvisioningService userProvisioningService,
-            RefreshTokenService refreshTokenService,
+            SocialLoginService socialLoginService,
             RefreshTokenCookieService refreshTokenCookieService,
+            PendingSocialCookieService pendingSocialCookieService,
             FrontendProperties frontendProperties
     ) {
         this.providerUserResolver = providerUserResolver;
-        this.userProvisioningService = userProvisioningService;
-        this.refreshTokenService = refreshTokenService;
+        this.socialLoginService = socialLoginService;
         this.refreshTokenCookieService = refreshTokenCookieService;
+        this.pendingSocialCookieService = pendingSocialCookieService;
         this.frontendProperties = frontendProperties;
     }
 
@@ -49,16 +49,28 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
                 oauth2Authentication.getAuthorizedClientRegistrationId(),
                 oauth2Authentication.getPrincipal()
         );
-        var localPrincipal = userProvisioningService.provision(providerUser);
-        var refreshToken = refreshTokenService.issue(localPrincipal.userId(), RefreshRequestContext.from(request));
+        var result = socialLoginService.handleOAuthSuccess(providerUser, RefreshRequestContext.from(request));
 
-        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookieService.createRefreshCookie(refreshToken.token()).toString());
-        response.sendRedirect(frontendCallbackUrl());
+        if (result.type() == SocialLoginResult.Type.LINKED) {
+            response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookieService.createRefreshCookie(result.authResult().refreshToken()).toString());
+            response.sendRedirect(frontendCallbackUrl());
+            return;
+        }
+
+        response.addHeader(HttpHeaders.SET_COOKIE, pendingSocialCookieService.createPendingCookie(result.pendingToken().token()).toString());
+        response.sendRedirect(frontendSocialSignupUrl());
     }
 
     private String frontendCallbackUrl() {
         return UriComponentsBuilder.fromUriString(frontendProperties.publicBaseUrl())
                 .path("/login/callback")
+                .build()
+                .toUriString();
+    }
+
+    private String frontendSocialSignupUrl() {
+        return UriComponentsBuilder.fromUriString(frontendProperties.publicBaseUrl())
+                .path("/signup/social")
                 .build()
                 .toUriString();
     }
