@@ -1,18 +1,68 @@
 package com.jiber.backend.publicdata;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CanonicalApartmentUpsertService {
 
-    public CanonicalApartmentUpsertDecision decide(
-            ImportedApartmentTransaction transaction,
-            NormalizedAddress address,
-            GeocodingResult geocoding
-    ) {
-        if (geocoding.status() != GeocodingStatus.SUCCESS) {
-            return new CanonicalApartmentUpsertDecision(false, "좌표가 없는 거래는 지도 노출 canonical 테이블에 반영하지 않습니다.");
+    static final String SOURCE_SYSTEM = "PUBLIC_DATA_PORTAL";
+
+    private final PublicDataImportMapper importMapper;
+
+    public CanonicalApartmentUpsertService(PublicDataImportMapper importMapper) {
+        this.importMapper = importMapper;
+    }
+
+    @Transactional
+    public CanonicalApartmentUpsertSummary upsertEligibleRawRows(Long importRunId) {
+        var summary = CanonicalApartmentUpsertSummary.empty();
+        for (var row : importMapper.findCanonicalUpsertCandidates(importRunId)) {
+            summary = summary.addProcessed();
+            try {
+                if (!row.hasSuccessfulGeocoding()) {
+                    importMapper.markRawCanonicalSkipped(row.rawTransactionId());
+                    summary = summary.addSkipped();
+                    continue;
+                }
+                var propertyResolution = resolveProperty(row);
+                if (propertyResolution.created()) {
+                    summary = summary.addPropertyCreated();
+                }
+                var existingTransaction = importMapper.findCanonicalTransactionIdBySourceKey(row.sourceKey());
+                if (existingTransaction.isPresent()) {
+                    importMapper.markRawCanonicalApplied(row.rawTransactionId());
+                    summary = summary.addTransactionSkipped();
+                    continue;
+                }
+                var inserted = importMapper.insertCanonicalApartmentTransaction(
+                        CanonicalApartmentTransactionCommand.from(propertyResolution.propertyId(), row)
+                );
+                importMapper.markRawCanonicalApplied(row.rawTransactionId());
+                summary = inserted > 0 ? summary.addTransactionCreated() : summary.addTransactionSkipped();
+            } catch (RuntimeException exception) {
+                importMapper.markRawCanonicalFailed(row.rawTransactionId());
+                summary = summary.addFailed();
+            }
         }
-        return new CanonicalApartmentUpsertDecision(false, "Phase 1은 raw staging과 geocoding cache 저장까지 구현하고 canonical upsert는 분리합니다.");
+        return summary;
+    }
+
+    private PropertyResolution resolveProperty(CanonicalApartmentRawRow row) {
+        return importMapper.findCanonicalApartmentPropertyId(row)
+                .map(propertyId -> new PropertyResolution(propertyId, false))
+                .orElseGet(() -> insertProperty(row));
+    }
+
+    private PropertyResolution insertProperty(CanonicalApartmentRawRow row) {
+        var command = CanonicalApartmentPropertyCommand.from(row);
+        importMapper.insertCanonicalApartmentProperty(command);
+        if (command.getPropertyId() == null) {
+            throw new IllegalStateException("Canonical apartment property insert did not return propertyId");
+        }
+        return new PropertyResolution(command.getPropertyId(), true);
+    }
+
+    private record PropertyResolution(Long propertyId, boolean created) {
     }
 }

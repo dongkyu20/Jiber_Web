@@ -117,6 +117,27 @@ class PropertyServiceTest {
         });
     }
 
+    @Test
+    void propertyDetailReturnsCanonicalLatestSummaryAndRecentTransactions() {
+        var mapper = new FakePropertyMapper();
+        mapper.detailRow = sampleDetailRow();
+        mapper.transactionRows.add(sampleTransactionRow(5001L, TransactionType.SALE, 1_250_000_000L, null, 0L, LocalDate.of(2026, 5, 20)));
+        mapper.transactionRows.add(sampleTransactionRow(5002L, TransactionType.JEONSE, null, 780_000_000L, 0L, LocalDate.of(2026, 3, 15)));
+        var service = service(mapper, new RecordingValuationClient());
+
+        var response = service.getPropertyDetail(1001L);
+
+        assertThat(response.propertyId()).isEqualTo(1001L);
+        assertThat(response.summary().latestDealAmount()).isEqualTo(1_250_000_000L);
+        assertThat(response.summary().latestDealDate()).isEqualTo(LocalDate.of(2026, 5, 20));
+        assertThat(response.transactions()).hasSize(2);
+        assertThat(response.transactions().get(0).transactionType()).isEqualTo(TransactionType.SALE);
+        assertThat(response.transactions().get(0).dealAmount()).isEqualTo(1_250_000_000L);
+        assertThat(response.transactions().get(1).transactionType()).isEqualTo(TransactionType.JEONSE);
+        assertThat(response.transactions().get(1).depositAmount()).isEqualTo(780_000_000L);
+        assertThat(response.ai().valuationAvailable()).isTrue();
+    }
+
     private PropertyService service(PropertyMapper mapper, PropertyValuationClient valuationClient) {
         return new PropertyService(mapper, new PropertyAiEligibilityService(), valuationClient);
     }
@@ -142,6 +163,45 @@ class PropertyServiceTest {
         row.setLatestDealAmount(1_250_000_000L);
         row.setLatestDealDate(LocalDate.of(2026, 5, 20));
         row.setDealCount(2);
+        return row;
+    }
+
+    private PropertyDetailRow sampleDetailRow() {
+        var row = new PropertyDetailRow();
+        row.setPropertyId(1001L);
+        row.setPropertyType(PropertyType.APARTMENT);
+        row.setName("샘플 역삼아파트");
+        row.setSido("서울특별시");
+        row.setSigungu("강남구");
+        row.setLegalDong("역삼동");
+        row.setRoadAddress("서울특별시 강남구 테헤란로 123");
+        row.setJibunAddress("서울특별시 강남구 역삼동 12-3");
+        row.setLatitude(new BigDecimal("37.5001000"));
+        row.setLongitude(new BigDecimal("127.0364000"));
+        row.setBuiltYear(2010);
+        row.setHouseholdCount(500);
+        row.setLatestDealAmount(1_250_000_000L);
+        row.setLatestDealDate(LocalDate.of(2026, 5, 20));
+        return row;
+    }
+
+    private PropertyTransactionRow sampleTransactionRow(
+            Long transactionId,
+            TransactionType transactionType,
+            Long dealAmount,
+            Long depositAmount,
+            Long monthlyRent,
+            LocalDate dealDate
+    ) {
+        var row = new PropertyTransactionRow();
+        row.setTransactionId(transactionId);
+        row.setTransactionType(transactionType);
+        row.setExclusiveAreaM2(new BigDecimal("84.9500"));
+        row.setFloor(15);
+        row.setDealAmount(dealAmount);
+        row.setDepositAmount(depositAmount);
+        row.setMonthlyRent(monthlyRent);
+        row.setDealDate(dealDate);
         return row;
     }
 

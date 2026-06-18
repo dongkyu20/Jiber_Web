@@ -40,7 +40,7 @@ Phase 1 로컬 개발 흐름은 다음 순서입니다.
 
 1. `.env.example`을 `.env`로 복사하고 `DB_PASSWORD`, `DB_ROOT_PASSWORD`를 로컬 값으로 채웁니다.
 2. `docker compose up -d mysql`로 MySQL 8을 실행합니다.
-3. 처음 생성되는 Docker volume에는 `db/001_phase1_schema.sql`, `db/002_public_data_import.sql`, `db/003_seed_sample_properties.sql`, `db/004_auth_account_social_link.sql`이 순서대로 적용됩니다.
+3. 처음 생성되는 Docker volume에는 `db/001_phase1_schema.sql`, `db/002_public_data_import.sql`, `db/003_seed_sample_properties.sql`, `db/004_auth_account_social_link.sql`, `db/005_property_transaction_source_unique.sql`이 순서대로 적용됩니다.
 4. auth UX smoke 전에는 `scripts/check-auth-schema.sh`를 실행해 오래된 local DB volume에 004 auth migration이 빠져 있지 않은지 확인합니다. 이 preflight는 schema만 읽고 secret 값을 출력하지 않습니다.
 5. `backend/`에서 Spring Boot API 서버를 실행합니다.
 6. `model-server/`에서 FastAPI 모델 서버를 실행합니다.

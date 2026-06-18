@@ -123,7 +123,7 @@ class PublicDataImportServiceTest {
         verify(publicDataApiClient, never()).fetchApartmentPage(eq(PublicDataApiType.RENT), anyString(), any(YearMonth.class), anyInt(), anyInt());
         verify(importMapper, times(1)).upsertRawTransaction(any(PublicDataRawTransactionRecord.class));
         verify(kakaoGeocodingClient, times(1)).geocode(address);
-        verify(canonicalUpsertService, times(1)).decide(eq(transaction), eq(address), any(GeocodingResult.class));
+        verify(canonicalUpsertService, times(1)).upsertEligibleRawRows(any());
         verify(importMapper, times(1)).markImportRunSucceeded(any(PublicDataImportRunRecord.class));
     }
 

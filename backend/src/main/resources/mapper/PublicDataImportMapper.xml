@@ -166,4 +166,145 @@
             failure_reason = VALUES(failure_reason),
             updated_at = CURRENT_TIMESTAMP(6)
     </insert>
+
+    <select id="findCanonicalUpsertCandidates" resultType="com.jiber.backend.publicdata.CanonicalApartmentRawRow">
+        SELECT
+            r.raw_transaction_id AS rawTransactionId,
+            r.source_key AS sourceKey,
+            r.transaction_type AS transactionType,
+            r.sido,
+            r.sigungu,
+            r.legal_dong AS legalDong,
+            r.jibun,
+            r.full_address AS fullAddress,
+            r.apartment_name AS apartmentName,
+            r.exclusive_area_m2 AS exclusiveAreaM2,
+            r.floor,
+            r.built_year AS builtYear,
+            r.deal_date AS dealDate,
+            r.deal_amount_krw AS dealAmountKrw,
+            r.deposit_amount_krw AS depositAmountKrw,
+            r.monthly_rent_krw AS monthlyRentKrw,
+            r.geocoding_status AS geocodingStatus,
+            g.status AS geocodingCacheStatus,
+            g.latitude,
+            g.longitude
+        FROM public_data_raw_apartment_transactions r
+        INNER JOIN public_data_geocoding_cache g
+            ON g.address_key = r.address_key
+        WHERE r.geocoding_status = 'SUCCESS'
+          AND g.status = 'SUCCESS'
+          AND g.latitude IS NOT NULL
+          AND g.longitude IS NOT NULL
+          AND r.canonical_status IN ('NOT_READY', 'ELIGIBLE', 'FAILED')
+        <if test="importRunId != null">
+          AND r.import_run_id = #{importRunId}
+        </if>
+        ORDER BY r.raw_transaction_id ASC
+    </select>
+
+    <select id="findCanonicalApartmentPropertyId" resultType="long">
+        SELECT p.property_id
+        FROM properties p
+        WHERE p.property_type = 'APARTMENT'
+          AND p.sido = #{sido}
+          AND p.sigungu = #{sigungu}
+          AND p.legal_dong = #{legalDong}
+          AND p.jibun_address = #{fullAddress}
+          AND p.name = #{apartmentName}
+        ORDER BY p.property_id ASC
+        LIMIT 1
+    </select>
+
+    <insert id="insertCanonicalApartmentProperty" useGeneratedKeys="true" keyProperty="propertyId">
+        INSERT INTO properties (
+            property_type,
+            name,
+            sido,
+            sigungu,
+            legal_dong,
+            road_address,
+            jibun_address,
+            latitude,
+            longitude,
+            built_year,
+            household_count,
+            source_system
+        ) VALUES (
+            #{propertyType},
+            #{name},
+            #{sido},
+            #{sigungu},
+            #{legalDong},
+            NULL,
+            #{jibunAddress},
+            #{latitude},
+            #{longitude},
+            #{builtYear},
+            NULL,
+            #{sourceSystem}
+        )
+    </insert>
+
+    <select id="findCanonicalTransactionIdBySourceKey" resultType="long">
+        SELECT transaction_id
+        FROM property_transactions
+        WHERE source_system = 'PUBLIC_DATA_PORTAL'
+          AND source_transaction_id = #{sourceKey}
+        ORDER BY transaction_id ASC
+        LIMIT 1
+    </select>
+
+    <insert id="insertCanonicalApartmentTransaction">
+        INSERT INTO property_transactions (
+            property_id,
+            transaction_type,
+            exclusive_area_m2,
+            floor,
+            deal_amount_krw,
+            deposit_amount_krw,
+            monthly_rent_krw,
+            deal_date,
+            source_system,
+            source_transaction_id
+        )
+        SELECT
+            #{propertyId},
+            #{transactionType},
+            #{exclusiveAreaM2},
+            #{floor},
+            #{dealAmountKrw},
+            #{depositAmountKrw},
+            #{monthlyRentKrw},
+            #{dealDate},
+            #{sourceSystem},
+            #{sourceTransactionId}
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM property_transactions
+            WHERE source_system = #{sourceSystem}
+              AND source_transaction_id = #{sourceTransactionId}
+        )
+    </insert>
+
+    <update id="markRawCanonicalApplied">
+        UPDATE public_data_raw_apartment_transactions
+        SET canonical_status = 'APPLIED',
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE raw_transaction_id = #{rawTransactionId}
+    </update>
+
+    <update id="markRawCanonicalSkipped">
+        UPDATE public_data_raw_apartment_transactions
+        SET canonical_status = 'SKIPPED',
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE raw_transaction_id = #{rawTransactionId}
+    </update>
+
+    <update id="markRawCanonicalFailed">
+        UPDATE public_data_raw_apartment_transactions
+        SET canonical_status = 'FAILED',
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE raw_transaction_id = #{rawTransactionId}
+    </update>
 </mapper>

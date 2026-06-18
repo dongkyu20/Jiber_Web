@@ -108,7 +108,6 @@ public class PublicDataImportService {
                 var geocoding = geocode(address);
                 importMapper.upsertGeocodingCache(GeocodingCacheRecord.from(address, geocoding));
                 importMapper.updateRawGeocodingStatus(transaction.sourceKey(), geocoding.status());
-                canonicalUpsertService.decide(transaction, address, geocoding);
                 if (geocoding.status() == GeocodingStatus.SUCCESS) {
                     summary = summary.addGeocoded();
                 }
@@ -137,6 +136,7 @@ public class PublicDataImportService {
     }
 
     private PublicDataImportSummary finish(PublicDataImportRunRecord run, PublicDataImportSummary summary) {
+        canonicalUpsertService.upsertEligibleRawRows(run.importRunId());
         importMapper.markImportRunSucceeded(run.finish("SUCCEEDED", summary, null));
         return summary;
     }

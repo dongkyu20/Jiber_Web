@@ -125,6 +125,7 @@ Schema preflight가 통과한 뒤 smoke 순서:
 - MyBatis mapper 위치 설정
 - 공공데이터포털 아파트 실거래 import batch skeleton
 - Kakao Local jibun 주소 geocoding client skeleton
+- 공공데이터 raw staging의 geocoding 성공 아파트 거래를 canonical `properties` / `property_transactions`로 반영하는 upsert flow
 
 아직 mock/skeleton인 부분:
 
@@ -133,7 +134,6 @@ Schema preflight가 통과한 뒤 smoke 순서:
 - refresh token reuse 감지 시 session family revocation SQL의 실제 MySQL 통합 검증
 - 현재 로그인 사용자 주입과 favorite ownership 검증
 - model-server feature mapping의 실제 DB/거래 데이터 기반 보강
-- 공공데이터 canonical upsert의 DB-backed matching rule
 - 공지사항 작성자/수정자 기록
 
 ## Auth / Security Handoff
@@ -253,6 +253,8 @@ schema 초안은 `../db/001_phase1_schema.sql`입니다.
 - `public_data_raw_apartment_transactions`: 공공데이터 원천 거래 staging. `source_key` unique key로 중복 저장을 방지합니다.
 - `public_data_geocoding_cache`: `sido + sigungu + legalDong + jibun` 주소 조합별 Kakao geocoding 상태와 좌표 cache.
 
+기존 local/dev DB에서 canonical transaction source idempotency를 보강하려면 `../db/005_property_transaction_source_unique.sql`을 적용합니다. fresh DB의 `001`과 같은 최종 상태는 `property_transactions.source_transaction_id VARCHAR(500)` 및 `UNIQUE KEY uk_transactions_source (source_system, source_transaction_id)`입니다.
+
 로컬 개발에서는 Docker MySQL 또는 로컬 MySQL 중 편한 방식을 사용할 수 있습니다. 운영에서는 Docker MySQL 고정이 아니라 managed DB 또는 운영 표준 MySQL 중 선택해야 합니다.
 
 ### 004 Auth Account Migration Runbook
@@ -299,6 +301,14 @@ Cleanup policy:
 
 004가 DDL 시작 이후 실패했다면 무작정 재실행하지 않습니다. DB snapshot/volume을 복원하거나, 어떤 DDL이 적용됐는지 확인한 뒤 수동 복구 SQL을 작성해야 합니다.
 
+### 005 Property Transaction Source Migration
+
+`../db/005_property_transaction_source_unique.sql`은 기존 DB의 `property_transactions.source_transaction_id`를 `VARCHAR(500)`으로 확장하고 `source_system + source_transaction_id` unique key인 `uk_transactions_source`를 추가하는 idempotent migration입니다. fresh DB에서는 `001`에 이미 같은 column length와 unique key가 들어 있습니다.
+
+raw staging의 `source_key`가 `VARCHAR(500)`이므로 canonical transaction도 같은 값을 해시나 prefix 없이 그대로 저장합니다. `source_system VARCHAR(100)`과 `source_transaction_id VARCHAR(500)`의 utf8mb4 unique index는 최악의 경우 약 2400 bytes라 MySQL 8 InnoDB 3072-byte key limit 안쪽입니다. 이 전략은 원천 row 추적성을 유지하고 mapper/idempotency 로직을 단순하게 둡니다.
+
+005는 DDL 전에 중복 preflight를 수행합니다. `source_system`과 `source_transaction_id`가 모두 `NULL`이 아닌 row만 unique 대상입니다. 하나라도 `NULL`이면 legacy/manual row로 보고 MySQL unique index의 NULL semantics에 따라 여러 row가 허용됩니다. 중복이 있으면 `JIBER_PROPERTY_TX_SOURCE_DUPLICATE`로 중단하며 실제 source id 값은 메시지에 넣지 않습니다.
+
 ### Local Docker MySQL
 
 루트 `compose.yaml`은 MySQL 8 로컬 개발용입니다. 실제 DB 비밀번호는 `.env`에만 둡니다.
@@ -318,6 +328,7 @@ db/001_phase1_schema.sql
 db/002_public_data_import.sql
 db/003_seed_sample_properties.sql
 db/004_auth_account_social_link.sql
+db/005_property_transaction_source_unique.sql
 ```
 
 이미 volume이 존재하는 상태에서 seed를 다시 적용하려면 `.env`를 로드한 뒤 필요한 SQL만 직접 실행합니다.
@@ -392,12 +403,19 @@ sido + sigungu + legalDong + jibun
 
 ### Canonical Upsert Policy
 
-Phase 1 Java 코드는 raw staging 저장과 geocoding cache 저장까지 구현합니다. 좌표가 확보된 거래만 canonical 반영 후보가 되며, 실제 `properties` / `property_transactions` upsert는 `CanonicalApartmentUpsertService` skeleton으로 분리했습니다.
+Live import는 raw staging 저장과 Kakao geocoding 상태 갱신을 마친 뒤 `CanonicalApartmentUpsertService.upsertEligibleRawRows(importRunId)`를 호출합니다. 이 단계는 `public_data_raw_apartment_transactions`와 `public_data_geocoding_cache`를 다시 조회해 다음 조건을 모두 만족하는 row만 canonical 테이블에 반영합니다.
 
-다음 Backend/Data 작업에서 확인할 내용:
+- `public_data_raw_apartment_transactions.geocoding_status = SUCCESS`
+- `public_data_geocoding_cache.status = SUCCESS`
+- `latitude`, `longitude`가 모두 존재
+- `canonical_status`가 `NOT_READY`, `ELIGIBLE`, 또는 재처리 가능한 `FAILED`
 
-- 같은 단지 판별 기준: `sido`, `sigungu`, `legalDong`, `jibun`, `apartmentName`, 좌표 반경.
-- 공공데이터 거래별 source id 안정성.
-- 전세/월세 금액 단위 검증.
-- canonical upsert transaction boundary와 idempotency.
+MVP matching rule은 아파트 기준으로 `sido + sigungu + legalDong + jibun/fullAddress + apartmentName`을 같은 단지 identity로 봅니다. `properties`에는 `property_type=APARTMENT`, 공공데이터 단지명, 법정동, `jibun_address=fullAddress`, Kakao 좌표, 준공연도, `source_system=PUBLIC_DATA_PORTAL`을 저장합니다.
+
+거래는 raw `source_key`를 `property_transactions.source_transaction_id VARCHAR(500)`로 그대로 저장하고, `source_system + source_transaction_id` unique key와 insert-before-check 로직으로 중복 생성을 막습니다. 금액은 raw staging의 KRW 값을 그대로 사용합니다. 매매는 `deal_amount_krw`, 전세는 `deposit_amount_krw`, 월세는 `deposit_amount_krw`와 `monthly_rent_krw`에 매핑합니다. 반영 완료 raw row는 `canonical_status=APPLIED`, 좌표 미확정 row는 `SKIPPED`, 처리 중 예외가 난 row는 `FAILED`로 표시합니다.
+
+남은 ambiguity와 후속 확인 사항:
+
+- 같은 지번 안에 같은 이름의 복수 단지가 존재하는 예외는 좌표/동 단위 세분화 데이터가 들어온 뒤 보강합니다.
+- 기존 운영 DB에는 `uk_transactions_source`가 없거나 `source_transaction_id`가 150자일 수 있으므로 `db/005_property_transaction_source_unique.sql` 적용 전 duplicate preflight 결과를 확인해야 합니다.
 - 오피스텔/연립다세대 endpoint와 DTO 확장.

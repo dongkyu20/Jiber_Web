@@ -104,5 +104,6 @@ CREATE TABLE IF NOT EXISTS public_data_raw_apartment_transactions (
 -- 1. Save raw apartment transactions first with a unique source_key.
 -- 2. Build full_address/address_key from sido + sigungu + legal_dong + jibun.
 -- 3. Cache Kakao geocoding status per address_key.
--- 4. Only rows with geocoding_status='SUCCESS' are eligible for properties/property_transactions upsert.
--- 5. Phase 1 Java code leaves canonical upsert as an explicit service skeleton until DB-backed matching rules are verified.
+-- 4. Only rows with geocoding_status='SUCCESS' and a SUCCESS geocoding cache row are eligible for properties/property_transactions upsert.
+-- 5. Canonical apartment identity is sido + sigungu + legal_dong + jibun/full_address + apartment_name.
+-- 6. property_transactions source_system + source_transaction_id prevents duplicate canonical transactions.

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS properties (
     KEY idx_properties_bounds (latitude, longitude),
     KEY idx_properties_region (sido, sigungu, legal_dong),
     KEY idx_properties_name (name),
+    KEY idx_properties_apartment_identity (property_type, sido, sigungu, legal_dong, name(120), jibun_address(191)),
     CONSTRAINT chk_properties_latitude CHECK (latitude BETWEEN -90 AND 90),
     CONSTRAINT chk_properties_longitude CHECK (longitude BETWEEN -180 AND 180)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -40,13 +41,14 @@ CREATE TABLE IF NOT EXISTS property_transactions (
     monthly_rent_krw BIGINT NULL,
     deal_date DATE NOT NULL,
     source_system VARCHAR(100) NULL,
-    source_transaction_id VARCHAR(150) NULL,
+    source_transaction_id VARCHAR(500) NULL,
     created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     PRIMARY KEY (transaction_id),
     KEY idx_transactions_property_date (property_id, deal_date DESC),
     KEY idx_transactions_type_date (transaction_type, deal_date DESC),
     KEY idx_transactions_amount (deal_amount_krw),
     KEY idx_transactions_area (exclusive_area_m2),
+    UNIQUE KEY uk_transactions_source (source_system, source_transaction_id),
     CONSTRAINT fk_transactions_property
         FOREIGN KEY (property_id) REFERENCES properties (property_id)
         ON DELETE CASCADE
