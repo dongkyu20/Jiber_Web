@@ -8,7 +8,7 @@ import ShapChart from '@/charts/ShapChart.vue'
 import TransactionChart from '@/charts/TransactionChart.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useAuthStore } from '@/stores/auth'
-import { formatDate, formatKrw, propertyTypeLabel } from '@/utils/format'
+import { formatDate, formatKrw, propertyTypeLabel, transactionTypeLabel } from '@/utils/format'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -22,6 +22,17 @@ const shapValues = ref<ShapValue[]>([])
 
 const propertyId = computed(() => String(route.params.propertyId))
 const aiUnavailableMessage = '아파트 단지에 한해 제공되는 기능입니다.'
+const latestTransaction = computed(() => {
+  if (!property.value?.transactions.length) {
+    return null
+  }
+
+  return (
+    property.value.transactions.find((transaction) => transaction.dealDate === property.value?.summary.latestDealDate) ??
+    property.value.transactions[0]
+  )
+})
+const recentTransactionCount = computed(() => property.value?.transactions.length ?? 0)
 const canRequestAi = computed(() => {
   return Boolean(
     authStore.isAuthenticated &&
@@ -107,8 +118,16 @@ onMounted(fetchProperty)
           <dd>{{ formatKrw(property.summary.latestDealAmount) }}</dd>
         </div>
         <div>
+          <dt>최근 거래유형</dt>
+          <dd>{{ latestTransaction ? transactionTypeLabel(latestTransaction.transactionType) : '정보 없음' }}</dd>
+        </div>
+        <div>
           <dt>최근 거래일</dt>
           <dd>{{ formatDate(property.summary.latestDealDate) }}</dd>
+        </div>
+        <div>
+          <dt>거래 건수</dt>
+          <dd>최근 거래 {{ recentTransactionCount.toLocaleString('ko-KR') }}건</dd>
         </div>
       </dl>
     </article>

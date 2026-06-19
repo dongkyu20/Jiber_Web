@@ -8,6 +8,7 @@ import {
   clearMarkers,
   syncKakaoMarkers,
   viewportFromMap,
+  type LatLngPoint,
   type KakaoMapLike,
   type KakaoMapsApi,
   type KakaoMarkerLike,
@@ -19,9 +20,11 @@ const props = withDefaults(
   defineProps<{
     items: PropertyMapItem[]
     selectedPropertyId?: number | null
+    focusTarget?: LatLngPoint | null
   }>(),
   {
-    selectedPropertyId: null
+    selectedPropertyId: null,
+    focusTarget: null
   }
 )
 
@@ -80,6 +83,20 @@ function renderMarkers() {
   })
 }
 
+function focusMap(target: LatLngPoint | null) {
+  if (!target || !kakaoMaps || !map) {
+    return
+  }
+
+  const latLng = new kakaoMaps.LatLng(target.lat, target.lng)
+  if (map.panTo) {
+    map.panTo(latLng)
+    return
+  }
+
+  map.setCenter?.(latLng)
+}
+
 onMounted(async () => {
   if (!hasKakaoMapKey()) {
     return
@@ -106,6 +123,7 @@ onMounted(async () => {
     message.value = '지도를 움직이면 현재 화면 범위로 검색합니다.'
     emitViewport('ready')
     renderMarkers()
+    focusMap(props.focusTarget)
   } catch (error) {
     message.value = error instanceof Error ? error.message : '카카오 지도를 불러오지 못했습니다.'
     emit('loadError', message.value)
@@ -115,6 +133,7 @@ onMounted(async () => {
 })
 
 watch(() => [props.items, props.selectedPropertyId], renderMarkers, { deep: true })
+watch(() => props.focusTarget, focusMap, { deep: true })
 
 onBeforeUnmount(() => {
   if (idleTimer) {

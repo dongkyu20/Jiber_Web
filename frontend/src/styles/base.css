@@ -296,6 +296,12 @@ a {
   font-size: 1.1rem;
 }
 
+.map-search-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
 fieldset {
   margin: 0 0 18px;
   padding: 0;
@@ -533,6 +539,15 @@ input[type="range"] {
 .search-row {
   gap: 10px;
   margin-bottom: 18px;
+}
+
+.search-row.compact {
+  align-items: stretch;
+  margin-bottom: 0;
+}
+
+.search-row.compact input {
+  min-width: 0;
 }
 
 .search-row input,

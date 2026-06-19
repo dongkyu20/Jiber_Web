@@ -3,10 +3,10 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { propertyApi } from '@/api/property'
-import type { PropertyMapItem, PropertyType, TransactionType } from '@/api/types'
+import type { PropertyMapItem, PropertySearchItem, PropertyType, TransactionType } from '@/api/types'
 import KakaoMapPanel from '@/components/KakaoMapPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { SEOUL_SEED_VIEWPORT, type MapViewport } from '@/map/kakaoMap'
+import { SEOUL_SEED_VIEWPORT, type LatLngPoint, type MapViewport } from '@/map/kakaoMap'
 import { hasKakaoMapKey } from '@/map/kakaoLoader'
 import { formatKrw, propertyTypeLabel, transactionTypeLabel } from '@/utils/format'
 
@@ -14,31 +14,65 @@ const propertyTypeOptions: PropertyType[] = ['APARTMENT', 'OFFICETEL', 'VILLA', 
 const transactionTypeOptions: TransactionType[] = ['SALE', 'JEONSE', 'MONTHLY_RENT']
 
 const selectedPropertyTypes = ref<PropertyType[]>(['APARTMENT'])
-const selectedTransactionTypes = ref<TransactionType[]>(['SALE'])
+const selectedTransactionTypes = ref<TransactionType[]>([...transactionTypeOptions])
 const zoomLevel = ref(SEOUL_SEED_VIEWPORT.zoomLevel)
 const loading = ref(false)
 const errorMessage = ref('')
 const items = ref<PropertyMapItem[]>([])
 const currentViewport = ref<MapViewport>({ ...SEOUL_SEED_VIEWPORT })
 const selectedPropertyId = ref<number | null>(null)
+const searchKeyword = ref('')
+const activeSearchKeyword = ref('')
+const mapFocusTarget = ref<LatLngPoint | null>(null)
 const hasMapKey = hasKakaoMapKey()
 let searchTimer: number | null = null
 
+const isKeywordSearch = computed(() => activeSearchKeyword.value.length > 0)
+
 const resultDescription = computed(() => {
   if (loading.value) {
-    return '현재 지도 범위의 실거래 정보를 불러오고 있습니다.'
+    return isKeywordSearch.value
+      ? '검색어와 거래 조건에 맞는 실거래 정보를 불러오고 있습니다.'
+      : '현재 지도 범위의 실거래 정보를 불러오고 있습니다.'
   }
 
   if (items.value.length > 0) {
-    return `${items.value.length.toLocaleString('ko-KR')}건의 실거래 위치를 찾았습니다.`
+    const count = items.value.length.toLocaleString('ko-KR')
+    return isKeywordSearch.value
+      ? `"${activeSearchKeyword.value}" 검색 결과 ${count}건을 찾았습니다.`
+      : `${count}건의 실거래 위치를 찾았습니다.`
   }
 
-  return '현재 조건에 맞는 검색 결과가 없습니다.'
+  return isKeywordSearch.value
+    ? `"${activeSearchKeyword.value}"에 맞는 검색 결과가 없습니다. 검색어 또는 거래 조건을 조정해 보세요.`
+    : '현재 조건에 맞는 검색 결과가 없습니다.'
 })
+
+function toMapItem(item: PropertySearchItem): PropertyMapItem {
+  return {
+    propertyId: item.propertyId,
+    propertyType: item.propertyType,
+    name: item.name,
+    address: item.address,
+    lat: item.lat,
+    lng: item.lng,
+    latestTransaction: item.latestTransaction,
+    dealCount: item.latestTransaction ? 1 : 0,
+    aiAvailable: item.aiAvailable
+  }
+}
+
+function focusFirstResult(nextItems: PropertyMapItem[]) {
+  const firstItem = nextItems.find((item) => Number.isFinite(item.lat) && Number.isFinite(item.lng))
+  selectedPropertyId.value = firstItem?.propertyId ?? null
+  mapFocusTarget.value = firstItem ? { lat: firstItem.lat, lng: firstItem.lng } : null
+}
 
 async function searchVisibleArea(viewport: MapViewport = currentViewport.value) {
   loading.value = true
   errorMessage.value = ''
+  activeSearchKeyword.value = ''
+  mapFocusTarget.value = null
   currentViewport.value = viewport
   zoomLevel.value = viewport.zoomLevel
 
@@ -64,7 +98,54 @@ async function searchVisibleArea(viewport: MapViewport = currentViewport.value) 
   }
 }
 
+async function searchByKeyword(keyword: string) {
+  loading.value = true
+  errorMessage.value = ''
+  activeSearchKeyword.value = keyword
+
+  try {
+    const response = await propertyApi.searchProperties({
+      keyword,
+      propertyTypes: selectedPropertyTypes.value,
+      transactionTypes: selectedTransactionTypes.value,
+      size: 20,
+      sort: 'relevance,desc'
+    })
+    const nextItems = response.items.map(toMapItem)
+    items.value = nextItems
+    focusFirstResult(nextItems)
+  } catch {
+    items.value = []
+    selectedPropertyId.value = null
+    mapFocusTarget.value = null
+    errorMessage.value = '검색 결과를 불러오지 못했습니다. 검색어를 확인하거나 잠시 후 다시 시도해 주세요.'
+  } finally {
+    loading.value = false
+  }
+}
+
+function handleKeywordSubmit() {
+  const keyword = searchKeyword.value.trim()
+
+  if (!keyword) {
+    searchKeyword.value = ''
+    void searchVisibleArea()
+    return
+  }
+
+  void searchByKeyword(keyword)
+}
+
+function resetToVisibleArea() {
+  searchKeyword.value = ''
+  void searchVisibleArea()
+}
+
 function scheduleSearch(viewport: MapViewport) {
+  if (isKeywordSearch.value) {
+    return
+  }
+
   if (searchTimer) {
     window.clearTimeout(searchTimer)
   }
@@ -77,7 +158,9 @@ function scheduleSearch(viewport: MapViewport) {
 function handleMapReady(viewport: MapViewport) {
   currentViewport.value = viewport
   zoomLevel.value = viewport.zoomLevel
-  void searchVisibleArea(viewport)
+  if (!isKeywordSearch.value) {
+    void searchVisibleArea(viewport)
+  }
 }
 
 function handleBoundsChanged(viewport: MapViewport) {
@@ -122,6 +205,32 @@ onBeforeUnmount(() => {
   <section class="map-layout">
     <aside class="filter-panel" aria-label="지도 검색 조건">
       <h2>검색 조건</h2>
+      <form class="map-search-form" data-test="map-search-form" @submit.prevent="handleKeywordSubmit">
+        <label class="field-label" for="map-search-keyword">단지명 또는 지역 검색</label>
+        <div class="search-row compact">
+          <input
+            id="map-search-keyword"
+            v-model="searchKeyword"
+            data-test="map-search-keyword"
+            type="search"
+            autocomplete="off"
+            placeholder="경희궁롯데캐슬, 무악동, 종로구"
+          />
+          <button class="primary-button" type="submit" :disabled="loading">
+            {{ loading && searchKeyword.trim() ? '검색 중' : '검색' }}
+          </button>
+        </div>
+        <button
+          v-if="isKeywordSearch"
+          class="text-button full-width"
+          type="button"
+          :disabled="loading"
+          @click="resetToVisibleArea"
+        >
+          검색어 지우고 지도 범위 보기
+        </button>
+      </form>
+
       <fieldset>
         <legend>부동산 유형</legend>
         <label v-for="type in propertyTypeOptions" :key="type" class="check-row">
@@ -142,7 +251,7 @@ onBeforeUnmount(() => {
       <input id="zoom-level" v-model.number="zoomLevel" min="1" max="14" type="range" />
       <span class="range-value">{{ zoomLevel }}단계</span>
 
-      <button class="primary-button full-width" type="button" :disabled="loading" @click="searchVisibleArea()">
+      <button class="primary-button full-width" type="button" :disabled="loading" @click="resetToVisibleArea">
         {{ loading ? '검색 중입니다' : '현재 지도 범위로 검색' }}
       </button>
 
@@ -156,6 +265,7 @@ onBeforeUnmount(() => {
       <KakaoMapPanel
         :items="items"
         :selected-property-id="selectedPropertyId"
+        :focus-target="mapFocusTarget"
         @ready="handleMapReady"
         @bounds-changed="handleBoundsChanged"
         @property-selected="selectProperty"
@@ -192,7 +302,11 @@ onBeforeUnmount(() => {
         <EmptyState
           v-else
           title="검색 결과가 없습니다."
-          description="지도를 이동하거나 부동산 유형과 거래 유형 조건을 조정해 보세요."
+          :description="
+            isKeywordSearch
+              ? '단지명이나 지역명을 다시 입력하거나 거래 유형 조건을 조정해 보세요.'
+              : '지도를 이동하거나 부동산 유형과 거래 유형 조건을 조정해 보세요.'
+          "
         />
       </section>
     </div>
