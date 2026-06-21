@@ -4,13 +4,15 @@ import { RouterLink } from 'vue-router'
 
 import { favoritesApi } from '@/api/favorites'
 import { getApiError } from '@/api/client'
-import type { FavoriteApartmentItem } from '@/api/types'
+import type { FavoriteApartmentItem, FavoriteAreaItem } from '@/api/types'
 import EmptyState from '@/components/EmptyState.vue'
 import { formatDate, formatKrw, transactionTypeLabel } from '@/utils/format'
 
 const apartments = ref<FavoriteApartmentItem[]>([])
+const areas = ref<FavoriteAreaItem[]>([])
 const loading = ref(false)
 const deletingPropertyId = ref<number | null>(null)
+const deletingAreaId = ref<number | null>(null)
 const errorMessage = ref('')
 const statusMessage = ref('')
 
@@ -19,13 +21,47 @@ async function fetchFavorites() {
   errorMessage.value = ''
 
   try {
-    const apartmentResponse = await favoritesApi.listApartments()
+    const [apartmentResponse, areaResponse] = await Promise.all([
+      favoritesApi.listApartments(),
+      favoritesApi.listAreas()
+    ])
     apartments.value = apartmentResponse.items
+    areas.value = areaResponse.items
   } catch {
     errorMessage.value = '즐겨찾기를 아직 불러오지 못했습니다. 로그인 상태와 백엔드 API를 확인해 주세요.'
   } finally {
     loading.value = false
   }
+}
+
+function areaMapQuery(item: FavoriteAreaItem): Record<string, string> {
+  const query: Record<string, string> = {
+    areaLabel: item.label
+  }
+
+  if (typeof item.centerLat === 'number' && typeof item.centerLng === 'number') {
+    query.centerLat = String(item.centerLat)
+    query.centerLng = String(item.centerLng)
+  }
+
+  if (typeof item.zoomLevel === 'number') {
+    query.zoomLevel = String(item.zoomLevel)
+  }
+
+  return query
+}
+
+function formatAreaLocation(item: FavoriteAreaItem) {
+  const regionText = [item.sido, item.sigungu, item.legalDong].filter(Boolean).join(' ')
+  if (regionText) {
+    return regionText
+  }
+
+  if (typeof item.centerLat === 'number' && typeof item.centerLng === 'number') {
+    return `지도 중심 ${item.centerLat.toFixed(4)}, ${item.centerLng.toFixed(4)}`
+  }
+
+  return '저장된 지도 영역'
 }
 
 async function removeApartmentFavorite(propertyId: number) {
@@ -48,6 +84,29 @@ async function removeApartmentFavorite(propertyId: number) {
     errorMessage.value = '관심 아파트를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     deletingPropertyId.value = null
+  }
+}
+
+async function removeAreaFavorite(favoriteAreaId: number) {
+  deletingAreaId.value = favoriteAreaId
+  errorMessage.value = ''
+  statusMessage.value = ''
+
+  try {
+    await favoritesApi.removeArea(favoriteAreaId)
+    statusMessage.value = '관심 지역에서 삭제했습니다.'
+    await fetchFavorites()
+  } catch (error) {
+    const apiError = getApiError(error)
+    if (apiError?.code === 'FAVORITE_AREA_NOT_FOUND') {
+      areas.value = areas.value.filter((item) => item.favoriteAreaId !== favoriteAreaId)
+      statusMessage.value = '이미 삭제된 관심 지역입니다.'
+      return
+    }
+
+    errorMessage.value = '관심 지역을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    deletingAreaId.value = null
   }
 }
 
@@ -87,6 +146,7 @@ onMounted(fetchFavorites)
           <div class="favorite-item-actions">
             <button
               class="text-button secondary"
+              data-test="apartment-favorite-delete"
               type="button"
               :disabled="deletingPropertyId === item.propertyId"
               @click="removeApartmentFavorite(item.propertyId)"
@@ -106,11 +166,35 @@ onMounted(fetchFavorites)
     <article class="info-panel">
       <div class="section-title">
         <h2>관심 지역</h2>
-        <span>준비 중</span>
+        <span>{{ areas.length }}건</span>
       </div>
+      <ul v-if="areas.length" class="result-list">
+        <li v-for="item in areas" :key="item.favoriteAreaId" class="favorite-item">
+          <RouterLink :to="{ path: '/map', query: areaMapQuery(item) }">
+            <strong>{{ item.label }}</strong>
+            <span>{{ formatAreaLocation(item) }}</span>
+            <small>
+              <template v-if="item.zoomLevel">지도 {{ item.zoomLevel }}단계 · </template>
+              저장일 {{ formatDate(item.createdAt) }}
+            </small>
+          </RouterLink>
+          <div class="favorite-item-actions">
+            <button
+              class="text-button secondary"
+              data-test="area-favorite-delete"
+              type="button"
+              :disabled="deletingAreaId === item.favoriteAreaId"
+              @click="removeAreaFavorite(item.favoriteAreaId)"
+            >
+              {{ deletingAreaId === item.favoriteAreaId ? '삭제 중' : '삭제' }}
+            </button>
+          </div>
+        </li>
+      </ul>
       <EmptyState
-        title="관심 지역 저장은 준비 중입니다."
-        description="이번 단계에서는 아파트 즐겨찾기만 실제 저장됩니다. 관심 지역 저장은 백엔드 저장소가 완성된 뒤 연결할 예정입니다."
+        v-else
+        title="저장한 관심 지역이 없습니다."
+        description="지도에서 현재 영역을 관심 지역으로 등록하면 여기에 표시됩니다."
       />
     </article>
   </section>

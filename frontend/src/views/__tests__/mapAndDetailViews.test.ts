@@ -28,7 +28,8 @@ const propertyApiMock = vi.hoisted(() => ({
 
 const favoritesApiMock = vi.hoisted(() => ({
   addApartment: vi.fn(),
-  removeApartment: vi.fn()
+  removeApartment: vi.fn(),
+  addArea: vi.fn()
 }))
 
 const kakaoLoaderMock = vi.hoisted(() => ({
@@ -168,14 +169,20 @@ function createTestRouter(initialPath = '/map') {
   })
 }
 
-async function mountMapView() {
+async function mountMapView(options: { authenticated?: boolean; path?: string } = {}) {
+  const pinia = createPinia()
+  setActivePinia(pinia)
   const router = createTestRouter('/map')
-  await router.push('/map')
+  await router.push(options.path ?? '/map')
   await router.isReady()
+
+  if (options.authenticated) {
+    useAuthStore().setSession(userSession)
+  }
 
   const wrapper = mount(MapView, {
     global: {
-      plugins: [router]
+      plugins: [pinia, router]
     }
   })
   await flushPromises()
@@ -250,6 +257,12 @@ beforeEach(() => {
   favoritesApiMock.removeApartment.mockReset().mockResolvedValue({
     propertyId: 1912,
     message: '삭제했습니다.'
+  })
+  favoritesApiMock.addArea.mockReset().mockResolvedValue({
+    favoriteAreaId: 801,
+    label: '현재 지도 영역',
+    createdAt: '2026-06-19T10:00:00+09:00',
+    message: '저장했습니다.'
   })
 })
 
@@ -329,6 +342,88 @@ describe('MapView keyword search', () => {
     expect(propertyApiMock.searchProperties).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('샘플 역삼아파트')
     expect(wrapper.text()).not.toContain('"종로구" 검색 결과')
+  })
+
+  it('adds the current map area as a favorite for authenticated users', async () => {
+    const { wrapper } = await mountMapView({ authenticated: true })
+
+    await wrapper.get('[data-test="area-favorite-button"]').trigger('click')
+    await flushPromises()
+
+    expect(favoritesApiMock.addArea).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: '현재 지도 영역',
+        centerLat: 37.5,
+        centerLng: 127.035,
+        zoomLevel: 5
+      })
+    )
+    expect(wrapper.text()).toContain('관심 지역에 추가했습니다.')
+  })
+
+  it('does not call the area favorite API for anonymous users', async () => {
+    const { wrapper } = await mountMapView()
+
+    await wrapper.get('[data-test="area-favorite-button"]').trigger('click')
+    await flushPromises()
+
+    expect(favoritesApiMock.addArea).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('로그인 후 관심 지역을 저장할 수 있습니다.')
+  })
+
+  it('handles duplicate and validation area favorite errors in Korean', async () => {
+    favoritesApiMock.addArea.mockRejectedValueOnce(createApiError('FAVORITE_AREA_ALREADY_EXISTS'))
+    const duplicateWrapper = await mountMapView({ authenticated: true })
+
+    await duplicateWrapper.wrapper.get('[data-test="area-favorite-button"]').trigger('click')
+    await flushPromises()
+
+    expect(duplicateWrapper.wrapper.text()).toContain('이미 관심 지역에 저장되어 있습니다.')
+
+    favoritesApiMock.addArea.mockRejectedValueOnce(createApiError('VALIDATION_FAILED'))
+    const validationWrapper = await mountMapView({ authenticated: true })
+
+    await validationWrapper.wrapper.get('[data-test="area-favorite-button"]').trigger('click')
+    await flushPromises()
+
+    expect(validationWrapper.wrapper.text()).toContain('관심 지역 정보를 저장할 수 없습니다.')
+  })
+
+  it('uses the active keyword as the area favorite label and selected result as center', async () => {
+    propertyApiMock.searchProperties.mockResolvedValueOnce(searchResponse([importedSearchItem]))
+    const { wrapper } = await mountMapView({ authenticated: true })
+
+    await wrapper.get('[data-test="map-search-keyword"]').setValue('무악동')
+    await wrapper.get('[data-test="map-search-form"]').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-test="area-favorite-button"]').trigger('click')
+    await flushPromises()
+
+    expect(favoritesApiMock.addArea).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: '검색: 무악동',
+        centerLat: importedSearchItem.lat,
+        centerLng: importedSearchItem.lng,
+        zoomLevel: 5
+      })
+    )
+  })
+
+  it('restores a favorite area from map query parameters without a Kakao key', async () => {
+    const { wrapper } = await mountMapView({
+      path: '/map?areaLabel=%EA%B2%80%EC%83%89%3A%20%EB%AC%B4%EC%95%85%EB%8F%99&centerLat=37.5738636&centerLng=126.9594466&zoomLevel=6'
+    })
+
+    expect(propertyApiMock.getMapProperties).toHaveBeenCalledWith(
+      expect.objectContaining({
+        swLat: 37.5538636,
+        swLng: 126.9344466,
+        neLat: 37.5938636,
+        neLng: 126.9844466,
+        zoomLevel: 6
+      })
+    )
+    expect(wrapper.text()).toContain('검색: 무악동 관심 지역을 지도로 불러왔습니다.')
   })
 })
 
