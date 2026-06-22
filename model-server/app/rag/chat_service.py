@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Optional
 
 import chromadb
 from openai import OpenAI
@@ -18,31 +19,7 @@ from app.schemas.chat import ChatContext, RagConfig, RealEstateChatResponse
 
 BM25_WEIGHT = 0.5
 SKIP_EXTENSIONS = {".html", ".xlsx", ".xls", ".csv", ".json", ".ds_store"}
-LOADER_VERSION = "source-summary-v1"
-
-SOURCE_SUMMARIES = {
-    "real_estate_sources/r_one_2026_05_housing_price_trend_report.pdf": (
-        "문서 제목: 2026년 5월 전국주택가격동향조사 보고서.\n"
-        "문서 성격: 한국부동산원 R-ONE의 월간 주택 가격 동향 리포트.\n"
-        "조사대상기간: 2026년 5월 1일 ~ 2026년 5월 31일. 공표일: 2026년 6월 15일.\n"
-        "조사결과 요약: 2026년 5월 전국 주택가격은 지난달 대비 상승했다.\n"
-        "전월대비 변동률은 전국 기준 매매가격지수 0.21%, 전세가격지수 0.35%, 월세통합가격지수 0.35%이다.\n"
-        "수도권은 매매 0.46%, 전세 0.61%, 월세통합 0.56%로 전국보다 상승폭이 컸다.\n"
-        "지방은 매매 -0.02%, 전세 0.10%, 월세통합 0.16%로 매매는 소폭 하락했고 임대차 지표는 상승했다.\n"
-        "서울은 매매 0.90%, 전세 0.91%, 월세통합 0.81%로 상승폭이 컸다.\n"
-        "보고서 설명에 따르면 서울은 정주여건 양호 단지, 대단지, 역세권 중심으로 매수·임차 문의가 증가하며 상승했다."
-    ),
-    "real_estate_sources/r_one_2026_04_apartment_actual_transaction_price_index_report.pdf": (
-        "문서 제목: 2026년 4월 공동주택 실거래가격지수 보고서.\n"
-        "문서 성격: 한국부동산원 R-ONE의 공동주택 실거래가격지수 리포트.\n"
-        "아파트, 연립·다세대 등 공동주택 실거래가격지수와 지역별·규모별 가격지수 변동을 설명한다."
-    ),
-    "real_estate_sources/r_one_2026_05_officetel_price_trend_report.pdf": (
-        "문서 제목: 2026년 5월 오피스텔가격동향조사 보고서.\n"
-        "문서 성격: 한국부동산원 R-ONE의 월간 오피스텔 매매·전세·월세 가격 동향 리포트.\n"
-        "오피스텔 가격 동향과 아파트 가격 동향 비교 정보를 포함한다."
-    ),
-}
+LOADER_VERSION = "structured-docs-v1"
 
 
 @dataclass(frozen=True)
@@ -68,7 +45,7 @@ class RealEstateRagChatService:
         return RealEstateChatResponse(
             answer=answer,
             contexts=[ChatContext(source=context.source, text=context.text) for context in contexts],
-            model="gpt-4o-mini",
+            model="gpt-4o-mini" if self.openai_client is not None else "local-rag-fallback",
             ragConfig=RagConfig(
                 embedding=self.settings.rag_embedding_model,
                 chunkSize=self.settings.rag_chunk_size,
@@ -110,6 +87,9 @@ class RealEstateRagChatService:
         runtime_context: dict | None,
         contexts: list[ChunkRecord],
     ) -> str:
+        if self.openai_client is None:
+            return self._fallback_answer(question, runtime_context, contexts)
+
         context_text = "\n\n".join(
             f"[문서 {index + 1}: {context.source}]\n{context.text}"
             for index, context in enumerate(contexts)
@@ -150,6 +130,31 @@ class RealEstateRagChatService:
             temperature=0,
         )
         return response.choices[0].message.content or ""
+
+    def _fallback_answer(
+        self,
+        question: str,
+        runtime_context: dict | None,
+        contexts: list[ChunkRecord],
+    ) -> str:
+        lines = [
+            "현재 로컬 모드에서는 OPENAI_API_KEY가 없어 생성형 답변 대신 검색 문서 기반 요약을 제공합니다.",
+            f"질문: {question}",
+        ]
+        if runtime_context:
+            lines.append("현재 선택된 매물/분석 컨텍스트가 함께 전달되었습니다.")
+        if not contexts:
+            lines.append("검색된 근거 문서가 없어 일반적인 답변을 생성하지 않았습니다.")
+            return "\n\n".join(lines)
+
+        lines.append("관련 근거 문서 요약:")
+        for index, context in enumerate(contexts[: self.settings.rag_top_k_final], start=1):
+            excerpt = " ".join(context.text.split())
+            if len(excerpt) > 260:
+                excerpt = excerpt[:257].rstrip() + "..."
+            lines.append(f"{index}. {context.source}: {excerpt}")
+        lines.append("실제 계약, 법적 판단, 매수·매도 결정은 공식 문서와 전문가 검토를 함께 확인하세요.")
+        return "\n\n".join(lines)
 
     def _load_or_build_collection(self, settings: Settings):
         client = chromadb.PersistentClient(path=settings.rag_chroma_path)
@@ -219,9 +224,6 @@ class RealEstateRagChatService:
                 reader = PdfReader(str(path))
                 text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
                 if text:
-                    summary = SOURCE_SUMMARIES.get(relative_path)
-                    if summary:
-                        documents.append((f"{relative_path}#summary", summary))
                     documents.append((relative_path, text))
         return documents
 
@@ -258,10 +260,10 @@ class RealEstateRagChatService:
         if settings.rag_docs_dir:
             return Path(settings.rag_docs_dir).expanduser().resolve()
         project_root = Path(__file__).resolve().parents[3]
-        sibling_docs = project_root.parent / "rag-practice" / "documents"
-        if sibling_docs.exists():
-            return sibling_docs.resolve()
-        return (project_root / "documents").resolve()
+        structured_docs = project_root / "model-server" / "documents" / "structured"
+        if structured_docs.exists():
+            return structured_docs.resolve()
+        return (project_root / "model-server" / "documents").resolve()
 
     def _collection_metadata(self, settings: Settings) -> dict[str, str]:
         return {
@@ -279,7 +281,10 @@ class RealEstateRagChatService:
             ),
         }
 
-    def _openai_client(self, settings: Settings) -> OpenAI:
+    def _openai_client(self, settings: Settings) -> Optional[OpenAI]:
+        if not settings.openai_api_key and not settings.openai_base_url:
+            return None
+
         kwargs = {}
         if settings.openai_api_key:
             kwargs["api_key"] = settings.openai_api_key

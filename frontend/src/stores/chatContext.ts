@@ -38,21 +38,37 @@ interface ChatContextState {
 }
 
 function readStoredContext(): PropertyChatRuntimeContext | null {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as PropertyChatRuntimeContext) : null
-  } catch {
-    return null
+  const storages = [localStorage, sessionStorage]
+
+  for (const storage of storages) {
+    try {
+      const raw = storage.getItem(STORAGE_KEY)
+      if (raw) {
+        return JSON.parse(raw) as PropertyChatRuntimeContext
+      }
+    } catch {
+      continue
+    }
   }
+
+  return null
 }
 
 function writeStoredContext(context: PropertyChatRuntimeContext | null) {
-  if (!context) {
-    sessionStorage.removeItem(STORAGE_KEY)
-    return
-  }
+  const storages = [localStorage, sessionStorage]
 
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(context))
+  for (const storage of storages) {
+    try {
+      if (!context) {
+        storage.removeItem(STORAGE_KEY)
+        continue
+      }
+
+      storage.setItem(STORAGE_KEY, JSON.stringify(context))
+    } catch {
+      continue
+    }
+  }
 }
 
 export const useChatContextStore = defineStore('chatContext', {

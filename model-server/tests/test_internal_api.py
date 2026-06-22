@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
 from app.main import app
+from app.rag.chat_service import ChunkRecord, RealEstateRagChatService
 
 
 @pytest.fixture(autouse=True)
@@ -172,3 +173,19 @@ def test_internal_token_accepts_valid_bearer_header(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["supported"] is True
+
+
+def test_chat_fallback_answer_without_openai_client() -> None:
+    service = RealEstateRagChatService.__new__(RealEstateRagChatService)
+    service.openai_client = None
+    service.settings = type("SettingsStub", (), {"rag_top_k_final": 1})()
+
+    answer = service._llm_answer(
+        "전세 계약 전에 확인할 것 알려줘",
+        None,
+        [ChunkRecord(text="전세계약 전에는 등기부등본, 보증금 반환 가능성, 선순위 권리를 확인해야 합니다.", source="safe_jeonse_contract_checklist.md")],
+    )
+
+    assert "OPENAI_API_KEY" in answer
+    assert "safe_jeonse_contract_checklist.md" in answer
+    assert "등기부등본" in answer
