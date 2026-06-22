@@ -2,8 +2,6 @@ import { defineStore } from 'pinia'
 
 import type { PropertyDetail, ShapValue, ValuationResponse } from '@/api/types'
 
-const STORAGE_KEY = 'jiber.chat.runtimeContext'
-
 export interface PropertyChatRuntimeContext {
   source: 'property-detail'
   property: {
@@ -37,43 +35,9 @@ interface ChatContextState {
   runtimeContext: PropertyChatRuntimeContext | null
 }
 
-function readStoredContext(): PropertyChatRuntimeContext | null {
-  const storages = [localStorage, sessionStorage]
-
-  for (const storage of storages) {
-    try {
-      const raw = storage.getItem(STORAGE_KEY)
-      if (raw) {
-        return JSON.parse(raw) as PropertyChatRuntimeContext
-      }
-    } catch {
-      continue
-    }
-  }
-
-  return null
-}
-
-function writeStoredContext(context: PropertyChatRuntimeContext | null) {
-  const storages = [localStorage, sessionStorage]
-
-  for (const storage of storages) {
-    try {
-      if (!context) {
-        storage.removeItem(STORAGE_KEY)
-        continue
-      }
-
-      storage.setItem(STORAGE_KEY, JSON.stringify(context))
-    } catch {
-      continue
-    }
-  }
-}
-
 export const useChatContextStore = defineStore('chatContext', {
   state: (): ChatContextState => ({
-    runtimeContext: readStoredContext()
+    runtimeContext: null
   }),
 
   getters: {
@@ -121,12 +85,10 @@ export const useChatContextStore = defineStore('chatContext', {
           values: shapValues
         }
       }
-      writeStoredContext(this.runtimeContext)
     },
 
     clearRuntimeContext() {
       this.runtimeContext = null
-      writeStoredContext(null)
     }
   }
 })

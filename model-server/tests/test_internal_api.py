@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
 from app.main import app
-from app.rag.chat_service import ChunkRecord, RealEstateRagChatService
 
 
 @pytest.fixture(autouse=True)
@@ -175,17 +174,35 @@ def test_internal_token_accepts_valid_bearer_header(monkeypatch) -> None:
     assert response.json()["supported"] is True
 
 
-def test_chat_fallback_answer_without_openai_client() -> None:
-    service = RealEstateRagChatService.__new__(RealEstateRagChatService)
-    service.openai_client = None
-    service.settings = type("SettingsStub", (), {"rag_top_k_final": 1})()
-
-    answer = service._llm_answer(
-        "전세 계약 전에 확인할 것 알려줘",
-        None,
-        [ChunkRecord(text="전세계약 전에는 등기부등본, 보증금 반환 가능성, 선순위 권리를 확인해야 합니다.", source="safe_jeonse_contract_checklist.md")],
+def test_chat_real_estate_returns_skeleton_unavailable_response() -> None:
+    response = _client().post(
+        "/internal/v1/chat/real-estate",
+        json={
+            "question": "전세 계약 전에 확인할 것 알려줘",
+            "runtimeContext": {
+                "source": "property-detail",
+                "property": {
+                    "propertyId": 1912,
+                    "name": "경희궁롯데캐슬",
+                },
+            },
+        },
     )
 
-    assert "OPENAI_API_KEY" in answer
-    assert "safe_jeonse_contract_checklist.md" in answer
-    assert "등기부등본" in answer
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["answer"] == (
+        "부동산 챗봇은 현재 계약 skeleton 단계입니다. "
+        "실제 RAG corpus, vector index, embedding model, reranker, LLM provider는 사용자 구현 후 연결됩니다. "
+        "현 단계에서는 투자 조언, 법률·세무 판단, 매수·매도 추천을 제공하지 않습니다."
+    )
+    assert body["contexts"] == []
+    assert body["model"] == "chat-skeleton-v1"
+    assert body["ragConfig"] == {
+        "embedding": "disabled",
+        "chunkSize": 0,
+        "overlap": 0,
+        "hybrid": False,
+        "rerank": False,
+    }
