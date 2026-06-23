@@ -21,7 +21,7 @@ interface SourceSummary {
 const messages = ref<ChatMessage[]>([
   {
     role: 'assistant',
-    content: '부동산 챗봇은 현재 계약 skeleton 단계입니다. 실제 RAG와 모델은 추후 연결됩니다.'
+    content: '전세 계약, 실거래, 가격 동향, 가격예측 설명에 대해 궁금한 점을 질문해 주세요.'
   }
 ])
 const question = ref('')
