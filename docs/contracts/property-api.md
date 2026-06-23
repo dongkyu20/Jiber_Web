@@ -29,7 +29,7 @@ List query parameters use comma-separated values, for example `propertyTypes=APA
 
 `GET /api/v1/properties/map`
 
-Map search is optimized for marker and cluster rendering within the visible Kakao Maps bounds. It returns lightweight property summaries, not full detail records.
+Map search is optimized for marker and cluster rendering within the visible Kakao Maps bounds. It returns lightweight property summaries, per-property recent transaction counts for frontend MarkerClusterer badges, and administrative cluster summaries for wider zoom levels. It does not return full detail records.
 
 Query parameters:
 
@@ -76,7 +76,23 @@ Draft response:
         "dealDate": "2026-05-20"
       },
       "dealCount": 18,
+      "recentTransactionCount": 6,
       "aiAvailable": true
+    }
+  ],
+  "administrativeClusters": [
+    {
+      "clusterId": "LEGAL_DONG:서울특별시:강남구:예시동",
+      "level": "LEGAL_DONG",
+      "sido": "서울특별시",
+      "sigungu": "강남구",
+      "legalDong": "예시동",
+      "label": "예시동",
+      "centerLat": 37.5008,
+      "centerLng": 127.0366,
+      "propertyCount": 12,
+      "transactionCount": 34,
+      "averageDealAmount": 1230000000
     }
   ],
   "bounds": {
@@ -92,6 +108,16 @@ Draft response:
   }
 }
 ```
+
+Cluster fields:
+
+- `recentTransactionCount` counts transactions for the property in the most recent six months from the backend clock after applying the current transaction filters. The frontend uses this value in Kakao MarkerClusterer clusters from map level `4` upward.
+- `administrativeClusters` contains only administrative regions visible in the requested map bounds and matching the same property and transaction filters.
+- For `zoomLevel` below `5`, `administrativeClusters` is empty.
+- For `zoomLevel` `5` and `6`, each administrative cluster represents one legal dong and uses `level: "LEGAL_DONG"`.
+- For `zoomLevel` `7` and above, each administrative cluster represents one sigungu and uses `level: "SIGUNGU"`.
+- `transactionCount` counts recent six-month transactions inside the administrative cluster after filters.
+- `averageDealAmount` is the rounded average of recent priced transactions in KRW and may be `null` when no priced transaction exists.
 
 ## Filter Search
 
