@@ -15,7 +15,7 @@ export function hasKakaoMapKey(appKey = import.meta.env.VITE_KAKAO_MAP_APP_KEY):
 }
 
 export function getKakaoMapFallbackMessage(): string {
-  return '카카오 지도 API 키가 아직 설정되지 않았습니다. frontend/.env에 VITE_KAKAO_MAP_APP_KEY를 설정하면 실제 지도를 불러올 수 있습니다.'
+  return '카카오 지도 API 키가 아직 설정되지 않았습니다. root .env 또는 frontend 실행 환경에 VITE_KAKAO_MAP_APP_KEY를 설정하면 실제 지도를 불러올 수 있습니다.'
 }
 
 export function getKakaoMaps(): (KakaoMapsApi & { load(callback: () => void): void }) | null {

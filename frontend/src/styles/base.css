@@ -243,6 +243,17 @@ a {
   margin: 0;
 }
 
+.map-runtime-status {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.map-runtime-status .helper-text,
+.map-runtime-status .inline-error {
+  margin: 0;
+}
+
 .favorite-item-actions {
   justify-content: flex-end;
 }

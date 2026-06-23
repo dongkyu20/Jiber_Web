@@ -44,6 +44,11 @@ const areaFavoriteErrorMessage = ref('')
 let searchTimer: number | null = null
 
 const isKeywordSearch = computed(() => activeSearchKeyword.value.length > 0)
+const mapRuntimeMessage = computed(() =>
+  hasMapKey
+    ? '지도 SDK가 준비되면 현재 화면 범위로 다시 검색합니다.'
+    : '지도 SDK 키가 없어도 목록 검색은 계속 사용할 수 있습니다. root .env 또는 frontend 실행 환경에 VITE_KAKAO_MAP_APP_KEY를 설정하세요.'
+)
 const currentAreaLabel = computed(() => {
   const keyword = activeSearchKeyword.value.trim()
   return keyword ? `검색: ${keyword}` : '현재 지도 영역'
@@ -253,7 +258,8 @@ async function searchVisibleArea(viewport: MapViewport = currentViewport.value) 
   } catch {
     items.value = []
     administrativeClusters.value = []
-    errorMessage.value = '현재 지도 범위의 실거래 정보를 불러오지 못했습니다. 백엔드 서버 상태를 확인해 주세요.'
+    errorMessage.value =
+      '실거래 데이터 API 연결에 실패했습니다. 백엔드 서버 실행 상태와 VITE_API_BASE_URL, DB_PORT 설정을 확인해 주세요.'
   } finally {
     loading.value = false
   }
@@ -437,10 +443,11 @@ onBeforeUnmount(() => {
         <p v-if="areaFavoriteErrorMessage" class="inline-error">{{ areaFavoriteErrorMessage }}</p>
       </div>
 
-      <p v-if="errorMessage" class="inline-error">{{ errorMessage }}</p>
-      <p class="helper-text">
-        {{ hasMapKey ? '지도를 이동하면 현재 화면 범위로 다시 검색합니다.' : '지도 키가 없으면 기본 강남권 범위로 검색합니다.' }}
-      </p>
+      <div class="map-runtime-status" data-test="map-runtime-status" aria-live="polite">
+        <p class="helper-text">{{ mapRuntimeMessage }}</p>
+        <p v-if="errorMessage" class="inline-error" data-test="map-data-error">{{ errorMessage }}</p>
+        <p v-else class="helper-text">실거래 데이터 API가 연결되면 현재 조건에 맞춰 검색합니다.</p>
+      </div>
     </aside>
 
     <div class="map-workspace">

@@ -47,7 +47,7 @@ const kakaoLoaderMock = vi.hoisted(() => ({
   getKakaoMaps: vi.fn(),
   getKakaoMapFallbackMessage: vi.fn(
     () =>
-      '카카오 지도 API 키가 아직 설정되지 않았습니다. frontend/.env에 VITE_KAKAO_MAP_APP_KEY를 설정하면 실제 지도를 불러올 수 있습니다.'
+      '카카오 지도 API 키가 아직 설정되지 않았습니다. root .env 또는 frontend 실행 환경에 VITE_KAKAO_MAP_APP_KEY를 설정하면 실제 지도를 불러올 수 있습니다.'
   )
 }))
 
@@ -318,6 +318,22 @@ describe('MapView keyword search', () => {
     await flushPromises()
 
     expect(wrapper.findComponent(KakaoMapPanel).props('administrativeClusters')).toEqual([])
+    expect(wrapper.text()).toContain('실거래 데이터 API 연결에 실패했습니다.')
+    expect(wrapper.text()).toContain('VITE_API_BASE_URL')
+    expect(wrapper.text()).toContain('DB_PORT')
+  })
+
+  it('shows separate diagnostics for missing Kakao key and backend map API failure', async () => {
+    propertyApiMock.getMapProperties.mockRejectedValueOnce(new Error('backend failed'))
+
+    const { wrapper } = await mountMapView()
+
+    expect(wrapper.text()).toContain('지도 SDK')
+    expect(wrapper.text()).toContain('VITE_KAKAO_MAP_APP_KEY')
+    expect(wrapper.text()).toContain('목록 검색은 계속 사용할 수 있습니다.')
+    expect(wrapper.text()).toContain('실거래 데이터 API 연결에 실패했습니다.')
+    expect(wrapper.text()).toContain('VITE_API_BASE_URL')
+    expect(wrapper.text()).toContain('DB_PORT')
   })
 
   it('renders a Korean keyword search input', async () => {

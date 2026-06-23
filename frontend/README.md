@@ -4,6 +4,16 @@ Vue 3 기반 Phase 1 프론트엔드 skeleton입니다. 실제 Kakao Maps API ke
 
 ## 실행 방법
 
+권장 실행은 root `.env`를 기준으로 Vite를 실행하는 방식입니다. 현재 Vite config는 repo root `.env`를 envDir로 읽습니다.
+
+```bash
+scripts/dev-frontend.sh
+```
+
+root `.env`에 `VITE_KAKAO_MAP_APP_KEY`가 있으면 `frontend/`에서 `npm run dev`를 실행해도 Kakao Maps JavaScript key가 주입됩니다. `scripts/dev-frontend.sh`는 같은 env를 명시적으로 export하고 API base URL 기본값을 맞춰 주는 편의 스크립트입니다.
+
+수동 실행도 가능합니다.
+
 ```bash
 cd frontend
 npm install
@@ -20,7 +30,7 @@ npm run build
 
 ## 환경 변수
 
-`frontend/.env.example`을 참고해 `frontend/.env`를 만듭니다.
+권장 방식은 root `.env`에 frontend와 backend env를 함께 두는 것입니다. Vite는 `VITE_` prefix가 붙은 값만 브라우저 번들에 노출합니다.
 
 ```bash
 VITE_API_BASE_URL=http://localhost:8080/api/v1
@@ -28,9 +38,10 @@ VITE_KAKAO_MAP_APP_KEY=
 ```
 
 - `VITE_API_BASE_URL`: Spring Boot public API base URL입니다. 프론트엔드는 `/api/v1/**`만 호출합니다.
-- `VITE_KAKAO_MAP_APP_KEY`: Kakao Maps JavaScript app key입니다. 비어 있으면 지도 fallback 안내를 보여줍니다.
+- `VITE_KAKAO_MAP_APP_KEY`: Kakao Maps JavaScript app key입니다. 비어 있으면 지도 fallback 안내를 보여줍니다. 값은 출력하거나 커밋하지 않습니다.
+- `KAKAO_REST_API_KEY`: backend Kakao Local geocoding용 key입니다. frontend Kakao 지도 SDK key가 아닙니다.
 
-Vite는 frontend 앱 실행 시점의 env만 주입합니다. 루트 `.env`를 그대로 복사하지 말고, `frontend/.env`를 만들거나 실행 환경에서 `VITE_API_BASE_URL`, `VITE_KAKAO_MAP_APP_KEY`를 process env로 주입해 주세요.
+실행 환경의 process env에 같은 이름의 값이 있으면 root `.env`보다 우선합니다. 로컬에서 다른 backend 포트를 볼 때는 `VITE_API_BASE_URL`만 일회성으로 override하세요.
 
 ## Auth Token 저장 정책
 

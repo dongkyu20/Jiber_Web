@@ -12,6 +12,22 @@ Maven을 사용합니다.
 
 ## Local Run
 
+권장 실행은 root에서 `.env`를 process env로 export하는 dev script를 사용하는 방식입니다. 이 script는 DB password 등 secret 값을 출력하지 않습니다.
+
+```bash
+scripts/dev-backend.sh
+```
+
+`scripts/dev-backend.sh`는 실행 전에 다음을 확인합니다.
+
+- root `.env` 로드.
+- `jiber-mysql` Docker published port와 `DB_PORT` mismatch 확인.
+- `scripts/check-auth-schema.sh` auth schema preflight 실행.
+
+preflight를 임시로 건너뛰어야 하는 경우에만 `SKIP_DB_PREFLIGHT=true scripts/dev-backend.sh`를 사용합니다. Docker published port와 `DB_PORT`가 다르지만 의도적으로 다른 DB를 볼 때만 `ALLOW_DB_PORT_MISMATCH=true`를 사용합니다.
+
+수동 실행도 가능합니다.
+
 ```bash
 cd backend
 mvn spring-boot:run
