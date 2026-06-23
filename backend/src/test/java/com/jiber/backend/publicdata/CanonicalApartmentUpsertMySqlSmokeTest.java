@@ -148,6 +148,7 @@ class CanonicalApartmentUpsertMySqlSmokeTest {
     }
 
     private boolean mapContains(String apartmentName) {
+        var recentSince = LocalDate.now().minusMonths(6);
         var rows = propertyMapper.findMapProperties(new MapSearchRequest(
                 new BigDecimal("37.49"),
                 new BigDecimal("127.02"),
@@ -162,7 +163,7 @@ class CanonicalApartmentUpsertMySqlSmokeTest {
                 null,
                 null,
                 null
-        ));
+        ), recentSince);
         return rows.stream().anyMatch(row -> apartmentName.equals(row.getName()));
     }
 }

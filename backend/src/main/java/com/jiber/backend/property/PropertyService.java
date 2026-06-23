@@ -6,7 +6,10 @@ import com.jiber.backend.common.error.ApiException;
 import com.jiber.backend.common.error.ErrorCode;
 import com.jiber.backend.favorite.FavoriteMapper;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -18,24 +21,39 @@ public class PropertyService {
     private final FavoriteMapper favoriteMapper;
     private final PropertyAiEligibilityService eligibilityService;
     private final PropertyValuationClient valuationClient;
+    private final Clock clock;
 
+    @Autowired
     public PropertyService(
             PropertyMapper propertyMapper,
             FavoriteMapper favoriteMapper,
             PropertyAiEligibilityService eligibilityService,
             PropertyValuationClient valuationClient
     ) {
+        this(propertyMapper, favoriteMapper, eligibilityService, valuationClient, Clock.systemDefaultZone());
+    }
+
+    PropertyService(
+            PropertyMapper propertyMapper,
+            FavoriteMapper favoriteMapper,
+            PropertyAiEligibilityService eligibilityService,
+            PropertyValuationClient valuationClient,
+            Clock clock
+    ) {
         this.propertyMapper = propertyMapper;
         this.favoriteMapper = favoriteMapper;
         this.eligibilityService = eligibilityService;
         this.valuationClient = valuationClient;
+        this.clock = clock;
     }
 
     public PropertyMapResponse findMapProperties(MapSearchRequest request) {
+        var recentSince = LocalDate.now(clock).minusMonths(6);
         return new PropertyMapResponse(
-                propertyMapper.findMapProperties(request).stream()
+                propertyMapper.findMapProperties(request, recentSince).stream()
                         .map(this::toMapItem)
                         .toList(),
+                administrativeClusters(request, recentSince),
                 new BoundsResponse(request.swLat(), request.swLng(), request.neLat(), request.neLng()),
                 new MapFilterResponse(request.propertyTypes(), request.transactionTypes(), request.zoomLevel())
         );
@@ -110,8 +128,49 @@ public class PropertyService {
                 toDouble(row.getLongitude()),
                 toLatestTransaction(row),
                 row.getDealCount() == null ? 0 : row.getDealCount(),
+                row.getRecentTransactionCount(),
                 row.getPropertyType() == PropertyType.APARTMENT
         );
+    }
+
+    private List<AdministrativeClusterResponse> administrativeClusters(MapSearchRequest request, LocalDate recentSince) {
+        if (request.zoomLevel() < 5) {
+            return List.of();
+        }
+        if (request.zoomLevel() < 7) {
+            return propertyMapper.findLegalDongClusters(request, recentSince).stream()
+                    .map(row -> toAdministrativeCluster(row, AdministrativeClusterLevel.LEGAL_DONG))
+                    .toList();
+        }
+        return propertyMapper.findSigunguClusters(request, recentSince).stream()
+                .map(row -> toAdministrativeCluster(row, AdministrativeClusterLevel.SIGUNGU))
+                .toList();
+    }
+
+    private AdministrativeClusterResponse toAdministrativeCluster(
+            AdministrativeClusterRow row,
+            AdministrativeClusterLevel level
+    ) {
+        return new AdministrativeClusterResponse(
+                clusterId(row, level),
+                level,
+                row.getSido(),
+                row.getSigungu(),
+                row.getLegalDong(),
+                row.getLabel(),
+                toDouble(row.getCenterLat()),
+                toDouble(row.getCenterLng()),
+                row.getPropertyCount() == null ? 0 : row.getPropertyCount(),
+                row.getTransactionCount() == null ? 0 : row.getTransactionCount(),
+                row.getAverageDealAmount()
+        );
+    }
+
+    private String clusterId(AdministrativeClusterRow row, AdministrativeClusterLevel level) {
+        if (level == AdministrativeClusterLevel.SIGUNGU) {
+            return "SIGUNGU:%s:%s".formatted(row.getSido(), row.getSigungu());
+        }
+        return "LEGAL_DONG:%s:%s:%s".formatted(row.getSido(), row.getSigungu(), row.getLegalDong());
     }
 
     private PropertySearchItemResponse toSearchItem(PropertyListRow row) {
