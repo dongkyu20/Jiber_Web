@@ -2,8 +2,6 @@ package com.jiber.backend.chat;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jiber.backend.common.error.ApiException;
-import com.jiber.backend.common.error.ErrorCode;
 import java.util.List;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +18,11 @@ public class ChatService {
             투자 조언, 매수/매도 추천, 수익 보장은 하지 않습니다.
             답변은 한국어로 작성합니다.
             """;
+    private static final String FALLBACK_ANSWER = "부동산 챗봇은 현재 생성형 답변을 사용할 수 없습니다. "
+            + "OpenAI 설정을 확인한 뒤 다시 시도해 주세요. "
+            + "현 단계에서는 투자 조언, 법률·세무 판단, 매수·매도 추천을 제공하지 않습니다.";
+    private static final RagConfigResponse FALLBACK_RAG_CONFIG =
+            new RagConfigResponse("disabled", 0, 0, false, false);
 
     private final ModelServerChatClient modelServerChatClient;
     private final ChatClient chatClient;
@@ -40,33 +43,33 @@ public class ChatService {
 
     public ChatResponse ask(ChatRequest request) {
         var retrieval = modelServerChatClient.retrieve(request);
-        var answer = generateAnswer(request, retrieval.contexts());
-        return new ChatResponse(true, answer, retrieval.contexts(), chatModel, retrieval.ragConfig());
+        try {
+            var answer = generateAnswer(request, retrieval.contexts());
+            return new ChatResponse(true, answer, retrieval.contexts(), chatModel, retrieval.ragConfig());
+        } catch (RuntimeException exception) {
+            return new ChatResponse(false, FALLBACK_ANSWER, retrieval.contexts(), "chat-fallback", FALLBACK_RAG_CONFIG);
+        }
     }
 
     private String generateAnswer(ChatRequest request, List<ChatContextResponse> contexts) {
-        try {
-            var content = chatClient.prompt()
-                    .system(SYSTEM_PROMPT)
-                    .user(user -> user.text("""
-                            [런타임 컨텍스트]
-                            {runtimeContext}
+        var content = chatClient.prompt()
+                .system(SYSTEM_PROMPT)
+                .user(user -> user.text("""
+                        [런타임 컨텍스트]
+                        {runtimeContext}
 
-                            [검색 문서]
-                            {contexts}
+                        [검색 문서]
+                        {contexts}
 
-                            [질문]
-                            {question}
-                            """)
-                            .param("runtimeContext", runtimeContextJson(request))
-                            .param("contexts", contextText(contexts))
-                            .param("question", request.question()))
-                    .call()
-                    .content();
-            return content == null ? "" : content;
-        } catch (RuntimeException exception) {
-            throw new ApiException(ErrorCode.CHATBOT_UNAVAILABLE);
-        }
+                        [질문]
+                        {question}
+                        """)
+                        .param("runtimeContext", runtimeContextJson(request))
+                        .param("contexts", contextText(contexts))
+                        .param("question", request.question()))
+                .call()
+                .content();
+        return content == null ? "" : content;
     }
 
     private String runtimeContextJson(ChatRequest request) {
