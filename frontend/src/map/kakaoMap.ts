@@ -12,7 +12,7 @@ export interface LatLngPoint {
 
 export interface MapMarkerRenderMode {
   showIndividualMarkers: boolean
-  showTransactionClusterer: boolean
+  showPropertyClusterer: boolean
   showAdministrativeClusters: boolean
 }
 
@@ -29,9 +29,21 @@ export interface KakaoBoundsLike {
 export interface KakaoMapLike {
   getBounds(): KakaoBoundsLike
   getLevel(): number
+  getProjection?(): KakaoProjectionLike
   setCenter?(latLng: unknown): void
   setLevel?(level: number): void
   panTo?(latLng: unknown): void
+}
+
+export interface KakaoPointLike {
+  x?: number
+  y?: number
+  getX?: () => number
+  getY?: () => number
+}
+
+export interface KakaoProjectionLike {
+  containerPointFromCoords(latLng: unknown): KakaoPointLike
 }
 
 export interface KakaoMarkerLike {
@@ -42,12 +54,8 @@ export interface KakaoOverlayLike {
   setMap(map: KakaoMapLike | null): void
 }
 
-export interface KakaoTransactionMarkerLike extends KakaoMarkerLike {
-  recentTransactionCount?: number
-}
-
 export interface KakaoClusterLike {
-  getMarkers(): KakaoTransactionMarkerLike[]
+  getMarkers(): KakaoMarkerLike[]
   getClusterMarker(): {
     setContent(content: string): void
   }
@@ -68,6 +76,7 @@ export interface KakaoMapsApi {
     title: string
     image?: unknown
     clickable?: boolean
+    opacity?: number
   }) => KakaoMarkerLike
   MarkerClusterer?: new (options: {
     map: KakaoMapLike
@@ -78,7 +87,7 @@ export interface KakaoMapsApi {
   CustomOverlay?: new (options: {
     map: KakaoMapLike
     position: unknown
-    content: string
+    content: string | HTMLElement
     yAnchor?: number
   }) => KakaoOverlayLike
   MarkerImage?: new (src: string, size: unknown, options?: { offset?: unknown }) => unknown
@@ -103,6 +112,9 @@ export const SEOUL_SEED_VIEWPORT: MapViewport = {
   neLng: 127.06,
   zoomLevel: DEFAULT_MAP_LEVEL
 }
+
+const ADMINISTRATIVE_OVERLAY_MIN_X_DISTANCE_PX = 154
+const ADMINISTRATIVE_OVERLAY_MIN_Y_DISTANCE_PX = 86
 
 export function boundsFromKakao(bounds: KakaoBoundsLike, zoomLevel: number): MapViewport {
   const southWest = bounds.getSouthWest()
@@ -129,7 +141,7 @@ export function clearOverlayMarkers(overlays: KakaoOverlayLike[]) {
   overlays.forEach((overlay) => overlay.setMap(null))
 }
 
-export function clearKakaoTransactionClusterer(clusterer: KakaoMarkerClustererLike | null) {
+export function clearKakaoPropertyClusterer(clusterer: KakaoMarkerClustererLike | null) {
   clusterer?.clear()
   clusterer?.setMap?.(null)
 }
@@ -138,20 +150,113 @@ export function mapMarkerRenderMode(zoomLevel: number): MapMarkerRenderMode {
   if (zoomLevel <= 3) {
     return {
       showIndividualMarkers: true,
-      showTransactionClusterer: false,
+      showPropertyClusterer: false,
       showAdministrativeClusters: false
+    }
+  }
+
+  if (zoomLevel <= 5) {
+    return {
+      showIndividualMarkers: false,
+      showPropertyClusterer: true,
+      showAdministrativeClusters: zoomLevel >= 5
     }
   }
 
   return {
     showIndividualMarkers: false,
-    showTransactionClusterer: true,
-    showAdministrativeClusters: zoomLevel >= 5
+    showPropertyClusterer: false,
+    showAdministrativeClusters: true
   }
 }
 
 export function sumRecentTransactionCount(items: PropertyMapItem[]): number {
   return items.reduce((total, item) => total + (item.recentTransactionCount ?? 0), 0)
+}
+
+function transactionTime(transaction: PropertyMapItem['latestTransaction']): number {
+  if (!transaction?.dealDate) {
+    return Number.NEGATIVE_INFINITY
+  }
+
+  const parsed = Date.parse(transaction.dealDate)
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY
+}
+
+function isRecentYearTransaction(transaction: PropertyMapItem['latestTransaction'], referenceDate: Date): boolean {
+  const parsed = transactionTime(transaction)
+  if (!Number.isFinite(parsed)) {
+    return false
+  }
+
+  const oneYearMs = 365 * 24 * 60 * 60 * 1000
+  return parsed >= referenceDate.getTime() - oneYearMs && parsed <= referenceDate.getTime()
+}
+
+function average(values: number[]): number | null {
+  if (!values.length) {
+    return null
+  }
+
+  return Math.round(values.reduce((total, value) => total + value, 0) / values.length)
+}
+
+export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDate = new Date()): PropertyMapItem[] {
+  const grouped = new Map<
+    number,
+    {
+      base: PropertyMapItem
+      latestTransaction: PropertyMapItem['latestTransaction']
+      recentDealAmounts: number[]
+      providedAverage: number | null
+      maxDealCount: number
+      maxRecentTransactionCount: number
+      rowCount: number
+    }
+  >()
+
+  items.forEach((item) => {
+    const current = grouped.get(item.propertyId)
+    const providedAverage =
+      typeof item.recentYearAverageDealAmount === 'number' ? item.recentYearAverageDealAmount : null
+    const recentDealAmounts =
+      isRecentYearTransaction(item.latestTransaction, referenceDate) &&
+      typeof item.latestTransaction?.dealAmount === 'number'
+        ? [item.latestTransaction.dealAmount]
+        : []
+
+    if (!current) {
+      grouped.set(item.propertyId, {
+        base: item,
+        latestTransaction: item.latestTransaction ?? null,
+        recentDealAmounts,
+        providedAverage,
+        maxDealCount: item.dealCount ?? 0,
+        maxRecentTransactionCount: item.recentTransactionCount ?? 0,
+        rowCount: 1
+      })
+      return
+    }
+
+    current.rowCount += 1
+    current.recentDealAmounts.push(...recentDealAmounts)
+    current.maxDealCount = Math.max(current.maxDealCount, item.dealCount ?? 0)
+    current.maxRecentTransactionCount = Math.max(current.maxRecentTransactionCount, item.recentTransactionCount ?? 0)
+    if (providedAverage !== null) {
+      current.providedAverage = providedAverage
+    }
+    if (transactionTime(item.latestTransaction) > transactionTime(current.latestTransaction)) {
+      current.latestTransaction = item.latestTransaction ?? null
+    }
+  })
+
+  return Array.from(grouped.values()).map((group) => ({
+    ...group.base,
+    latestTransaction: group.latestTransaction,
+    dealCount: Math.max(group.maxDealCount, group.rowCount),
+    recentTransactionCount: Math.max(group.maxRecentTransactionCount, group.recentDealAmounts.length),
+    recentYearAverageDealAmount: group.providedAverage ?? average(group.recentDealAmounts)
+  }))
 }
 
 export function formatAdministrativeClusterLabel(cluster: AdministrativeCluster): string {
@@ -163,8 +268,15 @@ export function formatAdministrativeClusterLabel(cluster: AdministrativeCluster)
   return `${cluster.label}\n${averageLabel}\n거래 ${cluster.transactionCount.toLocaleString('ko-KR')}건`
 }
 
-function transactionClusterBadgeContent(count: number): string {
-  return `<div class="map-transaction-cluster">거래 ${count.toLocaleString('ko-KR')}건</div>`
+function propertyClusterBadgeContent(count: number): string {
+  const formattedCount = count.toLocaleString('ko-KR')
+
+  return [
+    '<div class="map-property-cluster" aria-label="부동산 수 클러스터">',
+    '<span class="map-property-cluster-label">부동산 수</span>',
+    `<strong class="map-property-cluster-count">${formattedCount}</strong>`,
+    '</div>'
+  ].join('')
 }
 
 function escapeHtml(value: string): string {
@@ -198,6 +310,124 @@ function administrativeClusterContent(cluster: AdministrativeCluster): string {
   ].join('')
 }
 
+function pointCoordinate(point: KakaoPointLike, axis: 'x' | 'y'): number | null {
+  const directValue = point[axis]
+  if (typeof directValue === 'number' && Number.isFinite(directValue)) {
+    return directValue
+  }
+
+  const getter = axis === 'x' ? point.getX : point.getY
+  if (!getter) {
+    return null
+  }
+
+  const getterValue = getter()
+  return Number.isFinite(getterValue) ? getterValue : null
+}
+
+function administrativeClusterPoint(
+  kakaoMaps: KakaoMapsApi,
+  map: KakaoMapLike,
+  cluster: AdministrativeCluster
+): { x: number; y: number } | null {
+  const projection = map.getProjection?.()
+  if (!projection) {
+    return null
+  }
+
+  const point = projection.containerPointFromCoords(new kakaoMaps.LatLng(cluster.centerLat, cluster.centerLng))
+  const x = pointCoordinate(point, 'x')
+  const y = pointCoordinate(point, 'y')
+
+  if (x === null || y === null) {
+    return null
+  }
+
+  return { x, y }
+}
+
+function administrativeClusterPriority(cluster: AdministrativeCluster): number {
+  return cluster.transactionCount * 100000 + cluster.propertyCount
+}
+
+function pointsOverlap(first: { x: number; y: number }, second: { x: number; y: number }): boolean {
+  return (
+    Math.abs(first.x - second.x) < ADMINISTRATIVE_OVERLAY_MIN_X_DISTANCE_PX &&
+    Math.abs(first.y - second.y) < ADMINISTRATIVE_OVERLAY_MIN_Y_DISTANCE_PX
+  )
+}
+
+function nonOverlappingAdministrativeClusters(
+  kakaoMaps: KakaoMapsApi,
+  map: KakaoMapLike,
+  clusters: AdministrativeCluster[]
+): AdministrativeCluster[] {
+  const positionedClusters = clusters.map((cluster, index) => ({
+    cluster,
+    index,
+    point: administrativeClusterPoint(kakaoMaps, map, cluster)
+  }))
+
+  if (positionedClusters.some(({ point }) => point === null)) {
+    return clusters
+  }
+
+  const selected: typeof positionedClusters = []
+  const byPriority = [...positionedClusters].sort((first, second) => {
+    const priorityGap = administrativeClusterPriority(second.cluster) - administrativeClusterPriority(first.cluster)
+    return priorityGap || first.index - second.index
+  })
+
+  byPriority.forEach((candidate) => {
+    const candidatePoint = candidate.point
+    if (!candidatePoint) {
+      return
+    }
+
+    const overlapsSelected = selected.some((selectedCluster) => {
+      const selectedPoint = selectedCluster.point
+      return selectedPoint ? pointsOverlap(candidatePoint, selectedPoint) : false
+    })
+
+    if (!overlapsSelected) {
+      selected.push(candidate)
+    }
+  })
+
+  return selected.sort((first, second) => first.index - second.index).map(({ cluster }) => cluster)
+}
+
+function propertyAverageLabel(item: PropertyMapItem): string {
+  return typeof item.recentYearAverageDealAmount === 'number'
+    ? `최근 1년 평균 ${formatKrw(item.recentYearAverageDealAmount)}`
+    : '최근 1년 평균 정보 없음'
+}
+
+function propertyMarkerContent(
+  item: PropertyMapItem,
+  selected: boolean,
+  onClick: (propertyId: number) => void
+): HTMLElement {
+  const markerButton = document.createElement('button')
+  markerButton.type = 'button'
+  markerButton.className = selected ? 'map-property-marker is-selected' : 'map-property-marker'
+  markerButton.setAttribute('aria-label', `${item.name}, ${propertyAverageLabel(item)}`)
+
+  const name = document.createElement('strong')
+  name.textContent = item.name
+
+  const averageLabel = document.createElement('span')
+  averageLabel.textContent = propertyAverageLabel(item)
+
+  markerButton.append(name, averageLabel)
+  markerButton.addEventListener('click', (event) => {
+    event.preventDefault()
+    onClick(item.propertyId)
+  })
+
+  return markerButton
+}
+
 function markerSvg(fill: string, stroke: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="42" viewBox="0 0 34 42"><path d="M17 41s15-13.2 15-25A15 15 0 1 0 2 16c0 11.8 15 25 15 25Z" fill="${fill}" stroke="${stroke}" stroke-width="3"/><circle cx="17" cy="16" r="5" fill="#fff"/></svg>`
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
@@ -214,6 +444,21 @@ function createMarkerImage(kakaoMaps: KakaoMapsApi, selected: boolean): unknown 
   return new kakaoMaps.MarkerImage(markerSvg(fill, stroke), new kakaoMaps.Size(34, 42), {
     offset: new kakaoMaps.Point(17, 42)
   })
+}
+
+function createTransparentMarkerImage(kakaoMaps: KakaoMapsApi): unknown {
+  if (!kakaoMaps.MarkerImage || !kakaoMaps.Size || !kakaoMaps.Point) {
+    return undefined
+  }
+
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="none"/></svg>'
+  return new kakaoMaps.MarkerImage(
+    `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    new kakaoMaps.Size(1, 1),
+    {
+      offset: new kakaoMaps.Point(0, 0)
+    }
+  )
 }
 
 export function syncKakaoMarkers(options: {
@@ -241,27 +486,54 @@ export function syncKakaoMarkers(options: {
   })
 }
 
-export function syncKakaoTransactionClusters(options: {
+export function syncPropertyMarkerOverlays(options: {
+  kakaoMaps: KakaoMapsApi
+  map: KakaoMapLike
+  previousOverlays: KakaoOverlayLike[]
+  items: PropertyMapItem[]
+  selectedPropertyId: number | null
+  onClick: (propertyId: number) => void
+}): KakaoOverlayLike[] {
+  clearOverlayMarkers(options.previousOverlays)
+
+  if (!options.kakaoMaps.CustomOverlay) {
+    return []
+  }
+
+  const CustomOverlay = options.kakaoMaps.CustomOverlay
+
+  return options.items.map((item) => {
+    const content = propertyMarkerContent(item, options.selectedPropertyId === item.propertyId, options.onClick)
+
+    return new CustomOverlay({
+      map: options.map,
+      position: new options.kakaoMaps.LatLng(item.lat, item.lng),
+      content,
+      yAnchor: 1
+    })
+  })
+}
+
+export function syncKakaoPropertyClusters(options: {
   kakaoMaps: KakaoMapsApi
   map: KakaoMapLike
   previousClusterer: KakaoMarkerClustererLike | null
   items: PropertyMapItem[]
 }): KakaoMarkerClustererLike | null {
-  clearKakaoTransactionClusterer(options.previousClusterer)
+  clearKakaoPropertyClusterer(options.previousClusterer)
 
   if (!options.kakaoMaps.MarkerClusterer) {
     return null
   }
 
   const markers = options.items.map((item) => {
-    const marker = new options.kakaoMaps.Marker({
+    return new options.kakaoMaps.Marker({
       position: new options.kakaoMaps.LatLng(item.lat, item.lng),
-      title: `property-cluster-${item.propertyId}`
-    }) as KakaoTransactionMarkerLike
-
-    marker.recentTransactionCount = item.recentTransactionCount ?? 0
-
-    return marker
+      title: `property-cluster-${item.propertyId}`,
+      image: createTransparentMarkerImage(options.kakaoMaps),
+      clickable: false,
+      opacity: 0
+    })
   })
 
   const clusterer = new options.kakaoMaps.MarkerClusterer({
@@ -278,11 +550,7 @@ export function syncKakaoTransactionClusters(options: {
 
     clusters.forEach((cluster) => {
       const kakaoCluster = cluster as KakaoClusterLike
-      const transactionCount = kakaoCluster
-        .getMarkers()
-        .reduce((total, marker) => total + (marker.recentTransactionCount ?? 0), 0)
-
-      kakaoCluster.getClusterMarker().setContent(transactionClusterBadgeContent(transactionCount))
+      kakaoCluster.getClusterMarker().setContent(propertyClusterBadgeContent(kakaoCluster.getMarkers().length))
     })
   })
 
@@ -305,7 +573,9 @@ export function syncAdministrativeClusterOverlays(options: {
 
   const CustomOverlay = options.kakaoMaps.CustomOverlay
 
-  return options.clusters.map(
+  const visibleClusters = nonOverlappingAdministrativeClusters(options.kakaoMaps, options.map, options.clusters)
+
+  return visibleClusters.map(
     (cluster) =>
       new CustomOverlay({
         map: options.map,

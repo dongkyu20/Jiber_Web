@@ -5,19 +5,17 @@ import type { AdministrativeCluster, PropertyMapItem } from '@/api/types'
 import {
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_LEVEL,
-  clearKakaoTransactionClusterer,
-  clearMarkers,
+  clearKakaoPropertyClusterer,
   clearOverlayMarkers,
   mapMarkerRenderMode,
   syncAdministrativeClusterOverlays,
-  syncKakaoMarkers,
-  syncKakaoTransactionClusters,
+  syncKakaoPropertyClusters,
+  syncPropertyMarkerOverlays,
   viewportFromMap,
   type LatLngPoint,
   type KakaoMapLike,
   type KakaoMapsApi,
   type KakaoMarkerClustererLike,
-  type KakaoMarkerLike,
   type KakaoOverlayLike,
   type MapViewport
 } from '@/map/kakaoMap'
@@ -53,8 +51,8 @@ const mapElement = ref<HTMLDivElement | null>(null)
 
 let kakaoMaps: KakaoMapsApi | null = null
 let map: KakaoMapLike | null = null
-let markers: KakaoMarkerLike[] = []
-let transactionClusterer: KakaoMarkerClustererLike | null = null
+let propertyOverlays: KakaoOverlayLike[] = []
+let propertyClusterer: KakaoMarkerClustererLike | null = null
 let administrativeOverlays: KakaoOverlayLike[] = []
 let idleTimer: number | null = null
 let renderQueued = false
@@ -93,7 +91,7 @@ function scheduleBoundsChanged() {
 function mapRenderModeKey(mode: ReturnType<typeof mapMarkerRenderMode>) {
   return [
     mode.showIndividualMarkers ? 'individual' : 'no-individual',
-    mode.showTransactionClusterer ? 'transaction' : 'no-transaction',
+    mode.showPropertyClusterer ? 'property-cluster' : 'no-property-cluster',
     mode.showAdministrativeClusters ? 'administrative' : 'no-administrative'
   ].join('|')
 }
@@ -113,29 +111,29 @@ function renderMapLayers(options: { force?: boolean } = {}) {
   lastRenderedModeKey = modeKey
 
   if (mode.showIndividualMarkers) {
-    markers = syncKakaoMarkers({
+    propertyOverlays = syncPropertyMarkerOverlays({
       kakaoMaps,
       map,
-      previousMarkers: markers,
+      previousOverlays: propertyOverlays,
       items: props.items,
       selectedPropertyId: props.selectedPropertyId,
       onClick: (propertyId) => emit('propertySelected', propertyId)
     })
   } else {
-    clearMarkers(markers)
-    markers = []
+    clearOverlayMarkers(propertyOverlays)
+    propertyOverlays = []
   }
 
-  if (mode.showTransactionClusterer) {
-    transactionClusterer = syncKakaoTransactionClusters({
+  if (mode.showPropertyClusterer) {
+    propertyClusterer = syncKakaoPropertyClusters({
       kakaoMaps,
       map,
-      previousClusterer: transactionClusterer,
+      previousClusterer: propertyClusterer,
       items: props.items
     })
   } else {
-    clearKakaoTransactionClusterer(transactionClusterer)
-    transactionClusterer = null
+    clearKakaoPropertyClusterer(propertyClusterer)
+    propertyClusterer = null
   }
 
   if (mode.showAdministrativeClusters) {
@@ -237,10 +235,10 @@ onBeforeUnmount(() => {
   idleTimer = null
   renderQueued = false
   lastRenderedModeKey = null
-  clearMarkers(markers)
-  markers = []
-  clearKakaoTransactionClusterer(transactionClusterer)
-  transactionClusterer = null
+  clearOverlayMarkers(propertyOverlays)
+  propertyOverlays = []
+  clearKakaoPropertyClusterer(propertyClusterer)
+  propertyClusterer = null
   clearOverlayMarkers(administrativeOverlays)
   administrativeOverlays = []
   map = null

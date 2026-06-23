@@ -4,10 +4,12 @@ import {
   boundsFromKakao,
   formatAdministrativeClusterLabel,
   mapMarkerRenderMode,
+  normalizePropertyMapItems,
   sumRecentTransactionCount,
   syncAdministrativeClusterOverlays,
   syncKakaoMarkers,
-  syncKakaoTransactionClusters
+  syncPropertyMarkerOverlays,
+  syncKakaoPropertyClusters
 } from '@/map/kakaoMap'
 import type { AdministrativeCluster, PropertyMapItem } from '@/api/types'
 
@@ -46,6 +48,96 @@ describe('kakaoMap utilities', () => {
       neLng: 127.06,
       zoomLevel: 5
     })
+  })
+
+  it('normalizes transaction-like map rows into one item per property with a recent-year average price', () => {
+    const normalized = normalizePropertyMapItems(
+      [
+        {
+          ...property(1001, 37.5, 127.03),
+          latestTransaction: {
+            transactionType: 'SALE',
+            dealAmount: 1000000000,
+            dealDate: '2026-06-01'
+          }
+        },
+        {
+          ...property(1001, 37.5001, 127.0301),
+          latestTransaction: {
+            transactionType: 'JEONSE',
+            dealAmount: 1200000000,
+            dealDate: '2025-07-01'
+          }
+        },
+        {
+          ...property(1001, 37.5002, 127.0302),
+          latestTransaction: {
+            transactionType: 'SALE',
+            dealAmount: 900000000,
+            dealDate: '2025-05-01'
+          }
+        },
+        property(1002, 37.51, 127.04)
+      ],
+      new Date('2026-06-23T00:00:00Z')
+    )
+
+    expect(normalized).toHaveLength(2)
+    expect(normalized[0].propertyId).toBe(1001)
+    expect(normalized[0].latestTransaction?.dealDate).toBe('2026-06-01')
+    expect(normalized[0].recentTransactionCount).toBe(2)
+    expect(normalized[0].recentYearAverageDealAmount).toBe(1100000000)
+    expect(normalized[1].propertyId).toBe(1002)
+  })
+
+  it('clears old property overlays, renders labeled average-price markers, and wires clicks', () => {
+    const oldOverlay = { setMap: vi.fn() }
+    const createdOverlays: Array<{ content: HTMLElement; setMap: ReturnType<typeof vi.fn> }> = []
+    const map = { id: 'map' }
+    const kakaoMaps = {
+      LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
+      CustomOverlay: vi.fn((options: { content: HTMLElement }) => {
+        const overlay = { content: options.content, setMap: vi.fn() }
+        createdOverlays.push(overlay)
+        return overlay
+      }),
+      event: {
+        addListener: vi.fn()
+      }
+    }
+    const onClick = vi.fn()
+
+    const overlays = syncPropertyMarkerOverlays({
+      kakaoMaps,
+      map,
+      previousOverlays: [oldOverlay],
+      items: [
+        {
+          ...property(1001, 37.5, 127.03),
+          name: '경희궁롯데캐슬',
+          recentYearAverageDealAmount: 1100000000
+        }
+      ],
+      selectedPropertyId: 1001,
+      onClick
+    })
+
+    expect(oldOverlay.setMap).toHaveBeenCalledWith(null)
+    expect(overlays).toHaveLength(1)
+    expect(kakaoMaps.CustomOverlay).toHaveBeenCalledWith({
+      map,
+      position: { lat: 37.5, lng: 127.03 },
+      content: createdOverlays[0].content,
+      yAnchor: 1
+    })
+    expect(createdOverlays[0].content.className).toContain('map-property-marker')
+    expect(createdOverlays[0].content.className).toContain('is-selected')
+    expect(createdOverlays[0].content.textContent).toContain('경희궁롯데캐슬')
+    expect(createdOverlays[0].content.textContent).toContain('최근 1년 평균 11억 원')
+
+    createdOverlays[0].content.dispatchEvent(new MouseEvent('click'))
+
+    expect(onClick).toHaveBeenCalledWith(1001)
   })
 
   it('clears old markers, renders new markers, and wires marker clicks to property selection', () => {
@@ -98,28 +190,36 @@ describe('kakaoMap utilities', () => {
   it('selects individual markers at zoom level 3', () => {
     expect(mapMarkerRenderMode(3)).toEqual({
       showIndividualMarkers: true,
-      showTransactionClusterer: false,
+      showPropertyClusterer: false,
       showAdministrativeClusters: false
     })
   })
 
-  it('selects transaction clusterer at zoom level 4', () => {
+  it('switches to property cluster markers at zoom level 4', () => {
     expect(mapMarkerRenderMode(4)).toEqual({
       showIndividualMarkers: false,
-      showTransactionClusterer: true,
+      showPropertyClusterer: true,
       showAdministrativeClusters: false
     })
   })
 
-  it('selects administrative clusters at zoom level 5 and above', () => {
+  it('keeps property cluster markers alongside administrative clusters only at zoom level 5', () => {
     expect(mapMarkerRenderMode(5)).toEqual({
       showIndividualMarkers: false,
-      showTransactionClusterer: true,
+      showPropertyClusterer: true,
+      showAdministrativeClusters: true
+    })
+  })
+
+  it('shows only administrative overlays from zoom level 6', () => {
+    expect(mapMarkerRenderMode(6)).toEqual({
+      showIndividualMarkers: false,
+      showPropertyClusterer: false,
       showAdministrativeClusters: true
     })
     expect(mapMarkerRenderMode(7)).toEqual({
       showIndividualMarkers: false,
-      showTransactionClusterer: true,
+      showPropertyClusterer: false,
       showAdministrativeClusters: true
     })
   })
@@ -170,16 +270,19 @@ describe('kakaoMap utilities', () => {
     ).toBe(4)
   })
 
-  it('creates a MarkerClusterer and updates cluster marker content with summed transaction counts', () => {
+  it('creates a MarkerClusterer and updates cluster marker content with property counts', () => {
     const oldClusterer = { clear: vi.fn() }
     const clusteredHandlers: Array<(clusters: unknown[]) => void> = []
     const clusterMarker = { setContent: vi.fn() }
-    const createdMarkers: Array<{ recentTransactionCount?: number; setMap: ReturnType<typeof vi.fn> }> = []
+    const createdMarkers: Array<{ setMap: ReturnType<typeof vi.fn> }> = []
     const markerOptions: Array<Record<string, unknown>> = []
     const addMarkers = vi.fn()
     const map = { id: 'map' }
     const kakaoMaps = {
       LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
+      Size: vi.fn((width: number, height: number) => ({ width, height })),
+      Point: vi.fn((x: number, y: number) => ({ x, y })),
+      MarkerImage: vi.fn((src: string) => ({ src })),
       Marker: vi.fn((options: Record<string, unknown>) => {
         markerOptions.push(options)
         const marker = { setMap: vi.fn() }
@@ -199,7 +302,7 @@ describe('kakaoMap utilities', () => {
       }
     }
 
-    const clusterer = syncKakaoTransactionClusters({
+    const clusterer = syncKakaoPropertyClusters({
       kakaoMaps,
       map,
       previousClusterer: oldClusterer,
@@ -220,6 +323,16 @@ describe('kakaoMap utilities', () => {
     expect(markerOptions).toHaveLength(2)
     expect(markerOptions[0]).not.toHaveProperty('map')
     expect(markerOptions[1]).not.toHaveProperty('map')
+    expect(markerOptions[0]).toMatchObject({
+      clickable: false,
+      opacity: 0,
+      image: expect.objectContaining({ src: expect.stringContaining('data:image/svg+xml') })
+    })
+    expect(markerOptions[1]).toMatchObject({
+      clickable: false,
+      opacity: 0,
+      image: expect.objectContaining({ src: expect.stringContaining('data:image/svg+xml') })
+    })
     expect(addMarkers).toHaveBeenCalledWith(createdMarkers)
     expect(kakaoMaps.event.addListener.mock.invocationCallOrder[0]).toBeLessThan(
       addMarkers.mock.invocationCallOrder[0]
@@ -232,7 +345,12 @@ describe('kakaoMap utilities', () => {
       }
     ])
 
-    expect(clusterMarker.setContent).toHaveBeenCalledWith(expect.stringContaining('거래 8건'))
+    const clusterContent = clusterMarker.setContent.mock.calls[0][0]
+    expect(clusterContent).toContain('map-property-cluster')
+    expect(clusterContent).toContain('map-property-cluster-count')
+    expect(clusterContent).toContain('부동산 수')
+    expect(clusterContent).toContain('>2<')
+    expect(clusterContent).not.toContain('곳')
   })
 
   it('clears old administrative overlays and creates Korean cluster content', () => {
@@ -287,5 +405,78 @@ describe('kakaoMap utilities', () => {
     expect(createdOverlays[0].content).not.toContain('<img')
     expect(createdOverlays[0].content).toContain('평균 15억 원')
     expect(createdOverlays[0].content).toContain('거래 1,234건')
+  })
+
+  it('skips lower-priority administrative overlays that would overlap on the map', () => {
+    const createdOverlays: Array<{ content: string; setMap: ReturnType<typeof vi.fn> }> = []
+    const map = {
+      id: 'map',
+      getProjection: () => ({
+        containerPointFromCoords: (latLng: { lat: number; lng: number }) => ({
+          x: (latLng.lng - 127) * 10000,
+          y: (37.6 - latLng.lat) * 10000
+        })
+      })
+    }
+    const kakaoMaps = {
+      LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
+      Marker: vi.fn(),
+      CustomOverlay: vi.fn((options: { content: string }) => {
+        const overlay = { content: options.content, setMap: vi.fn() }
+        createdOverlays.push(overlay)
+        return overlay
+      }),
+      event: {
+        addListener: vi.fn()
+      }
+    }
+    const lowPriorityOverlap: AdministrativeCluster = {
+      clusterId: 'legal-dong-low',
+      level: 'LEGAL_DONG',
+      sido: '서울특별시',
+      sigungu: '강남구',
+      legalDong: '낮은동',
+      label: '낮은동',
+      centerLat: 37.5,
+      centerLng: 127.03,
+      propertyCount: 3,
+      transactionCount: 3,
+      averageDealAmount: 1000000000
+    }
+    const highPriorityOverlap: AdministrativeCluster = {
+      ...lowPriorityOverlap,
+      clusterId: 'legal-dong-high',
+      legalDong: '높은동',
+      label: '높은동',
+      centerLat: 37.5001,
+      centerLng: 127.0301,
+      propertyCount: 20,
+      transactionCount: 30
+    }
+    const farCluster: AdministrativeCluster = {
+      ...lowPriorityOverlap,
+      clusterId: 'legal-dong-far',
+      legalDong: '먼동',
+      label: '먼동',
+      centerLat: 37.52,
+      centerLng: 127.06,
+      propertyCount: 2,
+      transactionCount: 2
+    }
+
+    const overlays = syncAdministrativeClusterOverlays({
+      kakaoMaps,
+      map,
+      previousOverlays: [],
+      clusters: [lowPriorityOverlap, highPriorityOverlap, farCluster]
+    })
+
+    expect(overlays).toHaveLength(2)
+    expect(createdOverlays.map((overlay) => overlay.content)).toEqual(
+      expect.arrayContaining([expect.stringContaining('높은동'), expect.stringContaining('먼동')])
+    )
+    expect(createdOverlays.map((overlay) => overlay.content)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('낮은동')])
+    )
   })
 })

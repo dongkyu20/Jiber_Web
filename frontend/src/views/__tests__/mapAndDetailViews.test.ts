@@ -292,6 +292,42 @@ beforeEach(() => {
 })
 
 describe('MapView keyword search', () => {
+  it('normalizes duplicate transaction-like map rows into one property result with an average-price marker payload', async () => {
+    const runtimeYear = new Date().getFullYear()
+    const duplicateTransactionRows: PropertyMapItem[] = [
+      {
+        ...seedMapItem,
+        dealCount: 1,
+        recentTransactionCount: 1,
+        latestTransaction: {
+          transactionType: 'SALE',
+          dealAmount: 1000000000,
+          dealDate: `${runtimeYear}-06-01`
+        }
+      },
+      {
+        ...seedMapItem,
+        dealCount: 1,
+        recentTransactionCount: 1,
+        latestTransaction: {
+          transactionType: 'JEONSE',
+          dealAmount: 1200000000,
+          dealDate: `${runtimeYear - 1}-07-01`
+        }
+      }
+    ]
+    propertyApiMock.getMapProperties.mockResolvedValueOnce(mapResponse(duplicateTransactionRows))
+
+    const { wrapper } = await mountMapView()
+    const panelItems = wrapper.findComponent(KakaoMapPanel).props('items') as PropertyMapItem[]
+
+    expect(panelItems).toHaveLength(1)
+    expect(panelItems[0].propertyId).toBe(seedMapItem.propertyId)
+    expect(panelItems[0].recentTransactionCount).toBe(2)
+    expect(panelItems[0].recentYearAverageDealAmount).toBe(1100000000)
+    expect(wrapper.findAll('.result-list li')).toHaveLength(1)
+  })
+
   it('passes administrative clusters from map search to KakaoMapPanel and clears them for keyword search', async () => {
     propertyApiMock.getMapProperties.mockResolvedValueOnce(mapResponse([seedMapItem], [seedAdministrativeCluster]))
     propertyApiMock.searchProperties.mockResolvedValueOnce(searchResponse([importedSearchItem]))

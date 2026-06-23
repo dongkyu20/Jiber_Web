@@ -484,21 +484,97 @@ input[type="range"] {
   white-space: nowrap;
 }
 
-.map-transaction-cluster {
+.map-property-marker {
+  position: relative;
   display: grid;
-  min-width: 42px;
-  height: 42px;
-  place-items: center;
-  padding: 0 8px;
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  background: var(--brand-strong);
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.24);
-  font-size: 0.78rem;
+  min-width: 118px;
+  max-width: 168px;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid rgba(37, 99, 235, 0.34);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #172033;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.2);
+  text-align: left;
+  white-space: normal;
+}
+
+.map-property-marker::after {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-right: 1px solid rgba(37, 99, 235, 0.34);
+  border-bottom: 1px solid rgba(37, 99, 235, 0.34);
+  background: rgba(255, 255, 255, 0.96);
+  content: "";
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.map-property-marker strong,
+.map-property-marker span {
+  position: relative;
+  z-index: 1;
+  overflow-wrap: anywhere;
+}
+
+.map-property-marker strong {
+  color: #111827;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.map-property-marker span {
+  color: var(--brand-strong);
+  font-size: 0.75rem;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.25;
+}
+
+.map-property-marker.is-selected {
+  border-color: var(--warning);
+  background: #fff7ed;
+}
+
+.map-property-marker.is-selected::after {
+  border-color: var(--warning);
+  background: #fff7ed;
+}
+
+.map-property-cluster {
+  display: inline-flex;
+  width: 72px;
+  height: 72px;
+  box-sizing: border-box;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 9px;
+  border: 2px solid rgba(255, 255, 255, 0.82);
+  border-radius: 50%;
+  background: rgba(15, 118, 110, 0.82);
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24);
   text-align: center;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.map-property-cluster-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0.92;
+}
+
+.map-property-cluster-count {
+  margin-top: 4px;
+  font-size: 0.88rem;
+  font-weight: 900;
+  line-height: 1.05;
   white-space: nowrap;
 }
 

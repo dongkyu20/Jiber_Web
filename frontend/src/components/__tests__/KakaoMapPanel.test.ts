@@ -58,7 +58,7 @@ const kakaoMock = vi.hoisted(() => {
       state.clusterers.push(clusterer)
       return clusterer
     }),
-    CustomOverlay: vi.fn((options: { content: string }) => {
+    CustomOverlay: vi.fn((options: { content: string | HTMLElement }) => {
       const overlay = {
         setMap: vi.fn(),
         content: options.content
@@ -111,6 +111,7 @@ function property(propertyId: number): PropertyMapItem {
     latestTransaction: null,
     dealCount: 1,
     recentTransactionCount: propertyId,
+    recentYearAverageDealAmount: 1100000000,
     aiAvailable: true
   }
 }
@@ -178,7 +179,7 @@ describe('KakaoMapPanel', () => {
     expect(wrapper.text()).toContain('VITE_KAKAO_MAP_APP_KEY')
   })
 
-  it('creates a Kakao map, emits lifecycle bounds, syncs markers, and forwards marker clicks when a key exists', async () => {
+  it('creates a Kakao map, emits lifecycle bounds, syncs labeled property overlays, and forwards marker clicks when a key exists', async () => {
     kakaoMock.state.hasKey = true
     kakaoMock.state.mapInstance.getLevel.mockReturnValue(3)
     vi.useFakeTimers()
@@ -211,13 +212,17 @@ describe('KakaoMapPanel', () => {
         }
       ])
 
-      expect(kakaoMock.maps.Marker).toHaveBeenCalledTimes(1)
-      expect(kakaoMock.state.markers[0].title).toBe('property-1001')
+      expect(kakaoMock.maps.Marker).not.toHaveBeenCalled()
+      expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
+      expect(kakaoMock.state.overlays[0].content).toBeInstanceOf(HTMLElement)
+      expect(kakaoMock.state.overlays[0].content.textContent).toContain('테스트 단지 1001')
+      expect(kakaoMock.state.overlays[0].content.textContent).toContain('최근 1년 평균 11억 원')
 
       kakaoMock.state.idleHandler?.()
       vi.advanceTimersByTime(180)
 
-      expect(kakaoMock.maps.Marker).toHaveBeenCalledTimes(1)
+      expect(kakaoMock.maps.Marker).not.toHaveBeenCalled()
+      expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
 
       expect(wrapper.emitted('boundsChanged')?.[0]).toEqual([
         {
@@ -229,19 +234,20 @@ describe('KakaoMapPanel', () => {
         }
       ])
 
-      kakaoMock.state.markerClickHandlers[0]()
+      kakaoMock.state.overlays[0].content.dispatchEvent(new MouseEvent('click'))
       expect(wrapper.emitted('propertySelected')?.[0]).toEqual([1001])
 
-      const firstMarker = kakaoMock.state.markers[0]
+      const firstOverlay = kakaoMock.state.overlays[0]
       await wrapper.setProps({
         items: [property(1002)],
         selectedPropertyId: 1002
       })
       await flushPromises()
 
-      expect(firstMarker.setMap).toHaveBeenCalledWith(null)
-      expect(kakaoMock.maps.Marker).toHaveBeenCalledTimes(2)
-      expect(kakaoMock.state.markers[1].title).toBe('property-1002')
+      expect(firstOverlay.setMap).toHaveBeenCalledWith(null)
+      expect(kakaoMock.maps.Marker).not.toHaveBeenCalled()
+      expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(2)
+      expect(kakaoMock.state.overlays[1].content.textContent).toContain('테스트 단지 1002')
 
       await wrapper.setProps({
         focusTarget: {
@@ -262,7 +268,7 @@ describe('KakaoMapPanel', () => {
     }
   })
 
-  it('renders transaction clusterer plus legal-dong administrative overlays at level 5', async () => {
+  it('renders property clusterer plus legal-dong administrative overlays at level 5', async () => {
     kakaoMock.state.hasKey = true
     kakaoMock.state.mapInstance.getLevel.mockReturnValue(5)
 
@@ -279,18 +285,16 @@ describe('KakaoMapPanel', () => {
     expect(kakaoMock.maps.MarkerClusterer).toHaveBeenCalledTimes(1)
     expect(kakaoMock.state.clusterers[0].addMarkers).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ title: 'property-cluster-1001', recentTransactionCount: 1001 }),
-        expect.objectContaining({ title: 'property-cluster-1002', recentTransactionCount: 1002 })
+        expect.objectContaining({ title: 'property-cluster-1001' }),
+        expect.objectContaining({ title: 'property-cluster-1002' })
       ])
     )
     expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
     expect(kakaoMock.state.overlays[0].content).toContain('map-admin-cluster')
     expect(kakaoMock.state.overlays[0].content).toContain('역삼동')
-    expect(kakaoMock.maps.Marker).toHaveBeenCalledTimes(2)
-    expect(kakaoMock.state.markers.every((marker) => marker.title.startsWith('property-cluster-'))).toBe(true)
 
     const firstClusterer = kakaoMock.state.clusterers[0]
-    const firstOverlay = kakaoMock.state.overlays[0]
+    const firstAdminOverlay = kakaoMock.state.overlays[0]
 
     await wrapper.setProps({
       items: [property(1003)],
@@ -300,7 +304,7 @@ describe('KakaoMapPanel', () => {
 
     expect(firstClusterer.clear).toHaveBeenCalled()
     expect(firstClusterer.setMap).toHaveBeenCalledWith(null)
-    expect(firstOverlay.setMap).toHaveBeenCalledWith(null)
+    expect(firstAdminOverlay.setMap).toHaveBeenCalledWith(null)
     expect(kakaoMock.maps.MarkerClusterer).toHaveBeenCalledTimes(2)
     expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(2)
   })
@@ -345,7 +349,7 @@ describe('KakaoMapPanel', () => {
     }
   })
 
-  it('renders transaction clusterer plus sigungu administrative overlays at level 7 and clears them on unmount', async () => {
+  it('renders only sigungu administrative overlays at level 7 and clears them on unmount', async () => {
     kakaoMock.state.hasKey = true
     kakaoMock.state.mapInstance.getLevel.mockReturnValue(7)
 
@@ -359,15 +363,14 @@ describe('KakaoMapPanel', () => {
 
     await flushPromises()
 
-    expect(kakaoMock.maps.MarkerClusterer).toHaveBeenCalledTimes(1)
+    expect(kakaoMock.maps.MarkerClusterer).not.toHaveBeenCalled()
     expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
     expect(kakaoMock.state.overlays[0].content).toContain('강남구')
     expect(kakaoMock.state.overlays[0].content).toContain('map-admin-cluster')
 
     wrapper.unmount()
 
-    expect(kakaoMock.state.clusterers[0].clear).toHaveBeenCalled()
-    expect(kakaoMock.state.clusterers[0].setMap).toHaveBeenCalledWith(null)
+    expect(kakaoMock.state.clusterers).toHaveLength(0)
     expect(kakaoMock.state.overlays[0].setMap).toHaveBeenCalledWith(null)
   })
 

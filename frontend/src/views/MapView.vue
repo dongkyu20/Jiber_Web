@@ -15,7 +15,7 @@ import type {
 } from '@/api/types'
 import KakaoMapPanel from '@/components/KakaoMapPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import { SEOUL_SEED_VIEWPORT, type LatLngPoint, type MapViewport } from '@/map/kakaoMap'
+import { SEOUL_SEED_VIEWPORT, normalizePropertyMapItems, type LatLngPoint, type MapViewport } from '@/map/kakaoMap'
 import { hasKakaoMapKey } from '@/map/kakaoLoader'
 import { useAuthStore } from '@/stores/auth'
 import { formatKrw, propertyTypeLabel, transactionTypeLabel } from '@/utils/format'
@@ -250,9 +250,10 @@ async function searchVisibleArea(viewport: MapViewport = currentViewport.value) 
       propertyTypes: selectedPropertyTypes.value,
       transactionTypes: selectedTransactionTypes.value
     })
-    items.value = response.items
+    const nextItems = normalizePropertyMapItems(response.items)
+    items.value = nextItems
     administrativeClusters.value = response.administrativeClusters ?? []
-    if (!response.items.some((item) => item.propertyId === selectedPropertyId.value)) {
+    if (!nextItems.some((item) => item.propertyId === selectedPropertyId.value)) {
       selectedPropertyId.value = null
     }
   } catch {
@@ -279,7 +280,7 @@ async function searchByKeyword(keyword: string) {
       size: 20,
       sort: 'relevance,desc'
     })
-    const nextItems = response.items.map(toMapItem)
+    const nextItems = normalizePropertyMapItems(response.items.map(toMapItem))
     items.value = nextItems
     focusFirstResult(nextItems)
   } catch {
