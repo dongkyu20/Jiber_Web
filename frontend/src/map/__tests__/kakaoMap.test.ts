@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { boundsFromKakao, syncKakaoMarkers } from '@/map/kakaoMap'
-import type { PropertyMapItem } from '@/api/types'
+import {
+  boundsFromKakao,
+  formatAdministrativeClusterLabel,
+  mapMarkerRenderMode,
+  sumRecentTransactionCount,
+  syncKakaoMarkers
+} from '@/map/kakaoMap'
+import type { AdministrativeCluster, PropertyMapItem } from '@/api/types'
 
 function property(propertyId: number, lat: number, lng: number): PropertyMapItem {
   return {
@@ -13,6 +19,7 @@ function property(propertyId: number, lat: number, lng: number): PropertyMapItem
     lng,
     latestTransaction: null,
     dealCount: 1,
+    recentTransactionCount: 1,
     aiAvailable: true
   }
 }
@@ -84,5 +91,80 @@ describe('kakaoMap utilities', () => {
     clickHandlers[1]()
     expect(onClick).toHaveBeenCalledWith(1002)
     expect(createdMarkers[0].setMap).not.toHaveBeenCalledWith(null)
+  })
+
+  it('selects individual markers at zoom level 3', () => {
+    expect(mapMarkerRenderMode(3)).toEqual({
+      showIndividualMarkers: true,
+      showTransactionClusterer: false,
+      showAdministrativeClusters: false
+    })
+  })
+
+  it('selects transaction clusterer at zoom level 4', () => {
+    expect(mapMarkerRenderMode(4)).toEqual({
+      showIndividualMarkers: false,
+      showTransactionClusterer: true,
+      showAdministrativeClusters: false
+    })
+  })
+
+  it('selects administrative clusters at zoom level 5 and above', () => {
+    expect(mapMarkerRenderMode(5)).toEqual({
+      showIndividualMarkers: false,
+      showTransactionClusterer: true,
+      showAdministrativeClusters: true
+    })
+    expect(mapMarkerRenderMode(7)).toEqual({
+      showIndividualMarkers: false,
+      showTransactionClusterer: true,
+      showAdministrativeClusters: true
+    })
+  })
+
+  it('formats administrative cluster labels with average deal amount', () => {
+    const cluster: AdministrativeCluster = {
+      clusterId: 'legal-dong-1168010100',
+      level: 'LEGAL_DONG',
+      sido: '서울특별시',
+      sigungu: '강남구',
+      legalDong: '역삼동',
+      label: '역삼동',
+      centerLat: 37.5,
+      centerLng: 127.03,
+      propertyCount: 12,
+      transactionCount: 1234,
+      averageDealAmount: 1500000000
+    }
+
+    expect(formatAdministrativeClusterLabel(cluster)).toBe('역삼동\n평균 15억 원\n거래 1,234건')
+  })
+
+  it('formats administrative cluster labels without average deal amount', () => {
+    const cluster: AdministrativeCluster = {
+      clusterId: 'sigungu-11680',
+      level: 'SIGUNGU',
+      sido: '서울특별시',
+      sigungu: '강남구',
+      legalDong: null,
+      label: '강남구',
+      centerLat: 37.5,
+      centerLng: 127.03,
+      propertyCount: 120,
+      transactionCount: 0,
+      averageDealAmount: null
+    }
+
+    expect(formatAdministrativeClusterLabel(cluster)).toBe('강남구\n평균 정보 없음\n거래 0건')
+  })
+
+  it('sums recent transaction counts defensively', () => {
+    expect(
+      sumRecentTransactionCount([
+        property(1001, 37.5, 127.03),
+        { ...property(1002, 37.51, 127.04), recentTransactionCount: 3 },
+        { ...property(1003, 37.52, 127.05), recentTransactionCount: undefined as unknown as number }
+      ])
+    ).toBe(4)
   })
 })

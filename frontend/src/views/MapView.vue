@@ -214,6 +214,7 @@ function toMapItem(item: PropertySearchItem): PropertyMapItem {
     lng: item.lng,
     latestTransaction: item.latestTransaction,
     dealCount: item.latestTransaction ? 1 : 0,
+    recentTransactionCount: 0,
     aiAvailable: item.aiAvailable
   }
 }

@@ -1,4 +1,5 @@
-import type { Bounds, PropertyMapItem } from '@/api/types'
+import type { AdministrativeCluster, Bounds, PropertyMapItem } from '@/api/types'
+import { formatKrw } from '@/utils/format'
 
 export interface MapViewport extends Bounds {
   zoomLevel: number
@@ -7,6 +8,12 @@ export interface MapViewport extends Bounds {
 export interface LatLngPoint {
   lat: number
   lng: number
+}
+
+export interface MapMarkerRenderMode {
+  showIndividualMarkers: boolean
+  showTransactionClusterer: boolean
+  showAdministrativeClusters: boolean
 }
 
 export interface KakaoLatLngLike {
@@ -83,6 +90,35 @@ export function viewportFromMap(map: KakaoMapLike): MapViewport {
 
 export function clearMarkers(markers: KakaoMarkerLike[]) {
   markers.forEach((marker) => marker.setMap(null))
+}
+
+export function mapMarkerRenderMode(zoomLevel: number): MapMarkerRenderMode {
+  if (zoomLevel <= 3) {
+    return {
+      showIndividualMarkers: true,
+      showTransactionClusterer: false,
+      showAdministrativeClusters: false
+    }
+  }
+
+  return {
+    showIndividualMarkers: false,
+    showTransactionClusterer: true,
+    showAdministrativeClusters: zoomLevel >= 5
+  }
+}
+
+export function sumRecentTransactionCount(items: PropertyMapItem[]): number {
+  return items.reduce((total, item) => total + (item.recentTransactionCount ?? 0), 0)
+}
+
+export function formatAdministrativeClusterLabel(cluster: AdministrativeCluster): string {
+  const averageLabel =
+    typeof cluster.averageDealAmount === 'number'
+      ? `평균 ${formatKrw(cluster.averageDealAmount)}`
+      : '평균 정보 없음'
+
+  return `${cluster.label}\n${averageLabel}\n거래 ${cluster.transactionCount.toLocaleString('ko-KR')}건`
 }
 
 function markerSvg(fill: string, stroke: string): string {
