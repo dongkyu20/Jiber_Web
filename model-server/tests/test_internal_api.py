@@ -3,14 +3,17 @@ from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
 from app.main import app
+from app.rag.chat_service import get_rag_chat_service
 
 
 @pytest.fixture(autouse=True)
 def clear_model_server_settings(monkeypatch):
     monkeypatch.delenv("MODEL_SERVER_INTERNAL_TOKEN", raising=False)
     get_settings.cache_clear()
+    get_rag_chat_service.cache_clear()
     yield
     get_settings.cache_clear()
+    get_rag_chat_service.cache_clear()
 
 
 def test_model_server_app_importable_from_package() -> None:
@@ -193,16 +196,39 @@ def test_chat_real_estate_returns_skeleton_unavailable_response() -> None:
     body = response.json()
     assert body["available"] is False
     assert body["answer"] == (
-        "부동산 챗봇은 현재 계약 skeleton 단계입니다. "
-        "실제 RAG corpus, vector index, embedding model, reranker, LLM provider는 사용자 구현 후 연결됩니다. "
+        "부동산 챗봇은 현재 Spring AI 답변 생성 경로에서 사용됩니다. "
+        "model-server는 RAG 검색 컨텍스트만 반환하며 직접 답변을 생성하지 않습니다. "
         "현 단계에서는 투자 조언, 법률·세무 판단, 매수·매도 추천을 제공하지 않습니다."
     )
-    assert body["contexts"] == []
+    assert body["contexts"]
     assert body["model"] == "chat-skeleton-v1"
     assert body["ragConfig"] == {
-        "embedding": "disabled",
-        "chunkSize": 0,
-        "overlap": 0,
+        "embedding": "lexical-bm25",
+        "chunkSize": 1200,
+        "overlap": 200,
         "hybrid": False,
         "rerank": False,
     }
+
+
+def test_chat_retrieve_returns_2026_housing_trend_context() -> None:
+    response = _client().post(
+        "/internal/v1/chat/real-estate/retrieve",
+        json={
+            "question": "2026주택동향에 대해서 설명해줘",
+            "runtimeContext": {},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["contexts"]
+    assert body["ragConfig"]["embedding"] == "lexical-bm25"
+    assert any(
+        "r_one_2026_05_housing_price_trend_report" in context["source"]
+        for context in body["contexts"]
+    )
+    assert any(
+        "전국주택가격동향조사" in context["text"] or "2026년 5월" in context["text"]
+        for context in body["contexts"]
+    )
