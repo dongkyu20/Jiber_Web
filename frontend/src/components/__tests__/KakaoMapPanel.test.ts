@@ -110,6 +110,7 @@ function property(propertyId: number): PropertyMapItem {
     lng: 127.03 + propertyId / 100000,
     latestTransaction: null,
     dealCount: 1,
+    recentTransactionCount: propertyId,
     aiAvailable: true
   }
 }
@@ -278,8 +279,8 @@ describe('KakaoMapPanel', () => {
     expect(kakaoMock.maps.MarkerClusterer).toHaveBeenCalledTimes(1)
     expect(kakaoMock.state.clusterers[0].addMarkers).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ title: 'property-cluster-1001' }),
-        expect.objectContaining({ title: 'property-cluster-1002' })
+        expect.objectContaining({ title: 'property-cluster-1001', recentTransactionCount: 1001 }),
+        expect.objectContaining({ title: 'property-cluster-1002', recentTransactionCount: 1002 })
       ])
     )
     expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)

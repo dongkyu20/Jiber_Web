@@ -221,6 +221,9 @@ describe('kakaoMap utilities', () => {
     expect(markerOptions[0]).not.toHaveProperty('map')
     expect(markerOptions[1]).not.toHaveProperty('map')
     expect(addMarkers).toHaveBeenCalledWith(createdMarkers)
+    expect(kakaoMaps.event.addListener.mock.invocationCallOrder[0]).toBeLessThan(
+      addMarkers.mock.invocationCallOrder[0]
+    )
 
     clusteredHandlers[0]([
       {

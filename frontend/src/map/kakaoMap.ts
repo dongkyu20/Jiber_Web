@@ -271,8 +271,6 @@ export function syncKakaoTransactionClusters(options: {
     gridSize: 80
   })
 
-  clusterer.addMarkers(markers)
-
   options.kakaoMaps.event.addListener(clusterer, 'clustered', (clusters: unknown) => {
     if (!Array.isArray(clusters)) {
       return
@@ -287,6 +285,8 @@ export function syncKakaoTransactionClusters(options: {
       kakaoCluster.getClusterMarker().setContent(transactionClusterBadgeContent(transactionCount))
     })
   })
+
+  clusterer.addMarkers(markers)
 
   return clusterer
 }

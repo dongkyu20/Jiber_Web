@@ -105,7 +105,11 @@ class PropertyMapperMyBatisTest {
         insertTransaction(401L, 4L, TransactionType.SALE, 100_000_000L, null, LocalDate.of(2026, 1, 10));
         insertTransaction(901L, 9L, TransactionType.SALE, 900_000_000L, null, LocalDate.of(2026, 1, 10));
 
+        insertProperty(5L, PropertyType.APARTMENT, "Old A", "Seoul", "Gangnam-gu", "Old-dong", "37.5400000", "127.0800000");
+        insertTransaction(501L, 5L, TransactionType.SALE, 400_000_000L, null, LocalDate.of(2025, 1, 10));
+
         var rows = propertyMapper.findLegalDongClusters(mapRequest(5), RECENT_SINCE);
+        assertThat(rows).extracting(AdministrativeClusterRow::getLegalDong).doesNotContain("Old-dong");
 
         assertThat(rows).extracting(AdministrativeClusterRow::getLegalDong).containsExactly("역삼동", "삼성동");
         var yeoksam = cluster(rows, "역삼동");
@@ -131,7 +135,11 @@ class PropertyMapperMyBatisTest {
         insertTransaction(301L, 3L, TransactionType.SALE, null, null, LocalDate.of(2026, 2, 10));
         insertTransaction(901L, 9L, TransactionType.SALE, 900_000_000L, null, LocalDate.of(2026, 1, 10));
 
+        insertProperty(4L, PropertyType.APARTMENT, "Old District A", "Seoul", "Old-gu", "Old-dong", "37.5400000", "127.0800000");
+        insertTransaction(401L, 4L, TransactionType.SALE, 400_000_000L, null, LocalDate.of(2025, 1, 10));
+
         var rows = propertyMapper.findSigunguClusters(mapRequest(7), RECENT_SINCE);
+        assertThat(rows).extracting(AdministrativeClusterRow::getSigungu).doesNotContain("Old-gu");
 
         assertThat(rows).extracting(AdministrativeClusterRow::getSigungu).containsExactly("강남구", "서초구");
         var gangnam = cluster(rows, "강남구");
