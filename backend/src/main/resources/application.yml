@@ -4,6 +4,18 @@ server:
 spring:
   application:
     name: jiber-backend
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          temperature: 0
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:jiber}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=utf8
     username: ${DB_USER:jiber}
@@ -67,7 +79,7 @@ jiber:
     base-url: ${MODEL_SERVER_BASE_URL:http://localhost:8000}
     internal-token: ${MODEL_SERVER_INTERNAL_TOKEN:}
     connect-timeout-ms: ${MODEL_SERVER_CONNECT_TIMEOUT_MS:2000}
-    read-timeout-ms: ${MODEL_SERVER_READ_TIMEOUT_MS:5000}
+    read-timeout-ms: ${MODEL_SERVER_READ_TIMEOUT_MS:120000}
     model-version: ${MODEL_VERSION:hedonic-v1}
     baseline-date: ${MODEL_BASELINE_DATE:2026-06-12}
     feature-set-version: ${MODEL_FEATURE_SET_VERSION:apartment-basic-v1}

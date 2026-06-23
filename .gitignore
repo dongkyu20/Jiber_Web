@@ -52,6 +52,17 @@ venv/
 # Model and local data artifacts
 artifacts/
 model-artifacts/
+model-server/artifacts/
+model-server/cache/
+model-server/documents/**
+!model-server/documents/
+!model-server/documents/README.md
+model-server/rag_chroma_db/
+model-server/vector-index/
+model-server/vector_index/
+rag_chroma_db/
+vector-index/
+vector_index/
 *.pkl
 *.joblib
 *.parquet
@@ -64,3 +75,6 @@ model-server/documents/**/.DS_Store
 # Local database files
 mysql-data/
 *.sql.gz
+
+# Local git worktrees
+.worktrees/

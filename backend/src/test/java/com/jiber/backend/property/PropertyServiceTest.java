@@ -6,10 +6,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.jiber.backend.auth.AuthUserPrincipal;
 import com.jiber.backend.common.error.ApiException;
 import com.jiber.backend.common.error.ErrorCode;
+import com.jiber.backend.favorite.FavoriteAreaInsertCommand;
+import com.jiber.backend.favorite.FavoriteAreaRow;
 import com.jiber.backend.favorite.FavoriteApartmentRow;
 import com.jiber.backend.favorite.FavoriteMapper;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -18,6 +23,9 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class PropertyServiceTest {
+
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-06-23T00:00:00Z"), ZoneOffset.UTC);
+    private static final LocalDate EXPECTED_RECENT_SINCE = LocalDate.of(2025, 12, 23);
 
     @Test
     void searchPropertiesReturnsEmptyPageFromMapper() {
@@ -91,21 +99,7 @@ class PropertyServiceTest {
         var mapper = new FakePropertyMapper();
         mapper.mapRows.add(sampleListRow());
         var service = service(mapper, new RecordingValuationClient());
-        var request = new MapSearchRequest(
-                new BigDecimal("37.40"),
-                new BigDecimal("126.90"),
-                new BigDecimal("37.60"),
-                new BigDecimal("127.20"),
-                5,
-                List.of(PropertyType.APARTMENT),
-                List.of(TransactionType.SALE),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-        );
+        var request = mapRequest(5);
 
         var response = service.findMapProperties(request);
 
@@ -120,6 +114,96 @@ class PropertyServiceTest {
             assertThat(item.dealCount()).isEqualTo(2);
             assertThat(item.aiAvailable()).isTrue();
         });
+    }
+
+    @Test
+    void mapPropertiesAtLevelFourIncludesRecentTransactionCountAndNoAdministrativeClusters() {
+        var mapper = new FakePropertyMapper();
+        mapper.mapRows.add(sampleListRow());
+        var service = service(mapper, new RecordingValuationClient());
+
+        var response = service.findMapProperties(mapRequest(4));
+
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.recentTransactionCount()).isEqualTo(3);
+            assertThat(item.aiAvailable()).isTrue();
+        });
+        assertThat(response.administrativeClusters()).isEmpty();
+        assertThat(mapper.mapRecentSince).isEqualTo(EXPECTED_RECENT_SINCE);
+        assertThat(mapper.legalDongClustersCalled).isFalse();
+        assertThat(mapper.sigunguClustersCalled).isFalse();
+    }
+
+    @Test
+    void mapPropertiesAtLevelFiveReturnsLegalDongAdministrativeClusters() {
+        var mapper = new FakePropertyMapper();
+        mapper.legalDongClusters.add(sampleClusterRow(
+                "Sido",
+                "Sigungu",
+                "LegalDong",
+                "LegalDong",
+                new BigDecimal("37.5001000"),
+                new BigDecimal("127.0364000"),
+                7,
+                11,
+                1_180_000_000L
+        ));
+        var service = service(mapper, new RecordingValuationClient());
+
+        var response = service.findMapProperties(mapRequest(5));
+
+        assertThat(response.administrativeClusters()).singleElement().satisfies(cluster -> {
+            assertThat(cluster.clusterId()).isEqualTo("LEGAL_DONG:Sido:Sigungu:LegalDong");
+            assertThat(cluster.level()).isEqualTo(AdministrativeClusterLevel.LEGAL_DONG);
+            assertThat(cluster.sido()).isEqualTo("Sido");
+            assertThat(cluster.sigungu()).isEqualTo("Sigungu");
+            assertThat(cluster.legalDong()).isEqualTo("LegalDong");
+            assertThat(cluster.label()).isEqualTo("LegalDong");
+            assertThat(cluster.centerLat()).isEqualTo(37.5001000d);
+            assertThat(cluster.centerLng()).isEqualTo(127.0364000d);
+            assertThat(cluster.propertyCount()).isEqualTo(7);
+            assertThat(cluster.transactionCount()).isEqualTo(11);
+            assertThat(cluster.averageDealAmount()).isEqualTo(1_180_000_000L);
+        });
+        assertThat(mapper.legalDongRequest.zoomLevel()).isEqualTo(5);
+        assertThat(mapper.legalDongRecentSince).isEqualTo(EXPECTED_RECENT_SINCE);
+        assertThat(mapper.sigunguClustersCalled).isFalse();
+    }
+
+    @Test
+    void mapPropertiesAtLevelSevenReturnsSigunguAdministrativeClusters() {
+        var mapper = new FakePropertyMapper();
+        mapper.sigunguClusters.add(sampleClusterRow(
+                "Sido",
+                "Sigungu",
+                null,
+                "Sigungu",
+                new BigDecimal("37.5172000"),
+                new BigDecimal("127.0473000"),
+                null,
+                null,
+                null
+        ));
+        var service = service(mapper, new RecordingValuationClient());
+
+        var response = service.findMapProperties(mapRequest(7));
+
+        assertThat(response.administrativeClusters()).singleElement().satisfies(cluster -> {
+            assertThat(cluster.clusterId()).isEqualTo("SIGUNGU:Sido:Sigungu");
+            assertThat(cluster.level()).isEqualTo(AdministrativeClusterLevel.SIGUNGU);
+            assertThat(cluster.sido()).isEqualTo("Sido");
+            assertThat(cluster.sigungu()).isEqualTo("Sigungu");
+            assertThat(cluster.legalDong()).isNull();
+            assertThat(cluster.label()).isEqualTo("Sigungu");
+            assertThat(cluster.centerLat()).isEqualTo(37.5172000d);
+            assertThat(cluster.centerLng()).isEqualTo(127.0473000d);
+            assertThat(cluster.propertyCount()).isZero();
+            assertThat(cluster.transactionCount()).isZero();
+            assertThat(cluster.averageDealAmount()).isNull();
+        });
+        assertThat(mapper.sigunguRequest.zoomLevel()).isEqualTo(7);
+        assertThat(mapper.sigunguRecentSince).isEqualTo(EXPECTED_RECENT_SINCE);
+        assertThat(mapper.legalDongClustersCalled).isFalse();
     }
 
     @Test
@@ -164,7 +248,7 @@ class PropertyServiceTest {
     }
 
     private PropertyService service(PropertyMapper mapper, FavoriteMapper favoriteMapper, PropertyValuationClient valuationClient) {
-        return new PropertyService(mapper, favoriteMapper, new PropertyAiEligibilityService(), valuationClient);
+        return new PropertyService(mapper, favoriteMapper, new PropertyAiEligibilityService(), valuationClient, FIXED_CLOCK);
     }
 
     private ValuationRequest valuationRequest() {
@@ -173,6 +257,24 @@ class PropertyServiceTest {
 
     private ShapRequest shapRequest() {
         return new ShapRequest(new BigDecimal("84.95"), 15, LocalDate.of(2026, 6, 12));
+    }
+
+    private MapSearchRequest mapRequest(int zoomLevel) {
+        return new MapSearchRequest(
+                new BigDecimal("37.40"),
+                new BigDecimal("126.90"),
+                new BigDecimal("37.60"),
+                new BigDecimal("127.20"),
+                zoomLevel,
+                List.of(PropertyType.APARTMENT),
+                List.of(TransactionType.SALE),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
     }
 
     private PropertyListRow sampleListRow() {
@@ -188,6 +290,31 @@ class PropertyServiceTest {
         row.setLatestDealAmount(1_250_000_000L);
         row.setLatestDealDate(LocalDate.of(2026, 5, 20));
         row.setDealCount(2);
+        row.setRecentTransactionCount(3);
+        return row;
+    }
+
+    private AdministrativeClusterRow sampleClusterRow(
+            String sido,
+            String sigungu,
+            String legalDong,
+            String label,
+            BigDecimal centerLat,
+            BigDecimal centerLng,
+            Integer propertyCount,
+            Integer transactionCount,
+            Long averageDealAmount
+    ) {
+        var row = new AdministrativeClusterRow();
+        row.setSido(sido);
+        row.setSigungu(sigungu);
+        row.setLegalDong(legalDong);
+        row.setLabel(label);
+        row.setCenterLat(centerLat);
+        row.setCenterLng(centerLng);
+        row.setPropertyCount(propertyCount);
+        row.setTransactionCount(transactionCount);
+        row.setAverageDealAmount(averageDealAmount);
         return row;
     }
 
@@ -233,6 +360,8 @@ class PropertyServiceTest {
     private static class FakePropertyMapper implements PropertyMapper {
 
         private final List<PropertyListRow> mapRows = new ArrayList<>();
+        private final List<AdministrativeClusterRow> legalDongClusters = new ArrayList<>();
+        private final List<AdministrativeClusterRow> sigunguClusters = new ArrayList<>();
         private final List<PropertyListRow> searchRows = new ArrayList<>();
         private final List<PropertyTransactionRow> transactionRows = new ArrayList<>();
         private PropertyType propertyType;
@@ -240,10 +369,34 @@ class PropertyServiceTest {
         private int searchLimit;
         private int searchOffset;
         private long totalElements;
+        private LocalDate mapRecentSince;
+        private MapSearchRequest legalDongRequest;
+        private LocalDate legalDongRecentSince;
+        private boolean legalDongClustersCalled;
+        private MapSearchRequest sigunguRequest;
+        private LocalDate sigunguRecentSince;
+        private boolean sigunguClustersCalled;
 
         @Override
-        public List<PropertyListRow> findMapProperties(MapSearchRequest request) {
+        public List<PropertyListRow> findMapProperties(MapSearchRequest request, LocalDate recentSince) {
+            this.mapRecentSince = recentSince;
             return mapRows;
+        }
+
+        @Override
+        public List<AdministrativeClusterRow> findLegalDongClusters(MapSearchRequest request, LocalDate recentSince) {
+            this.legalDongRequest = request;
+            this.legalDongRecentSince = recentSince;
+            this.legalDongClustersCalled = true;
+            return legalDongClusters;
+        }
+
+        @Override
+        public List<AdministrativeClusterRow> findSigunguClusters(MapSearchRequest request, LocalDate recentSince) {
+            this.sigunguRequest = request;
+            this.sigunguRecentSince = recentSince;
+            this.sigunguClustersCalled = true;
+            return sigunguClusters;
         }
 
         @Override
@@ -310,6 +463,31 @@ class PropertyServiceTest {
         @Override
         public boolean existsFavoriteApartment(Long userId, Long propertyId) {
             return favorites.contains(key(userId, propertyId));
+        }
+
+        @Override
+        public List<FavoriteAreaRow> findFavoriteAreas(Long userId) {
+            return List.of();
+        }
+
+        @Override
+        public Optional<FavoriteAreaRow> findFavoriteAreaByNormalizedKey(Long userId, String normalizedKey) {
+            return Optional.empty();
+        }
+
+        @Override
+        public int insertFavoriteArea(FavoriteAreaInsertCommand command) {
+            return 0;
+        }
+
+        @Override
+        public int deleteFavoriteArea(Long userId, Long favoriteAreaId) {
+            return 0;
+        }
+
+        @Override
+        public boolean existsFavoriteAreaByNormalizedKey(Long userId, String normalizedKey) {
+            return false;
         }
 
         private String key(Long userId, Long propertyId) {

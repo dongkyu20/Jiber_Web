@@ -58,6 +58,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/notices/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/favorites/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.POST,
+                                "/api/v1/chat/real-estate",
                                 "/api/v1/properties/*/valuation",
                                 "/api/v1/properties/*/shap").hasAnyRole("USER", "ADMIN")
                         .anyRequest().authenticated())

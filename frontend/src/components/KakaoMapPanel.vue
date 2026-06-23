@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import type { PropertyMapItem } from '@/api/types'
+import type { AdministrativeCluster, PropertyMapItem } from '@/api/types'
 import {
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_LEVEL,
+  clearKakaoTransactionClusterer,
   clearMarkers,
+  clearOverlayMarkers,
+  mapMarkerRenderMode,
+  syncAdministrativeClusterOverlays,
   syncKakaoMarkers,
+  syncKakaoTransactionClusters,
   viewportFromMap,
   type LatLngPoint,
   type KakaoMapLike,
   type KakaoMapsApi,
+  type KakaoMarkerClustererLike,
   type KakaoMarkerLike,
+  type KakaoOverlayLike,
   type MapViewport
 } from '@/map/kakaoMap'
 import { getKakaoMapFallbackMessage, getKakaoMaps, hasKakaoMapKey, loadKakaoMaps } from '@/map/kakaoLoader'
@@ -19,12 +26,16 @@ import { getKakaoMapFallbackMessage, getKakaoMaps, hasKakaoMapKey, loadKakaoMaps
 const props = withDefaults(
   defineProps<{
     items: PropertyMapItem[]
+    administrativeClusters?: AdministrativeCluster[]
     selectedPropertyId?: number | null
     focusTarget?: LatLngPoint | null
+    focusZoomLevel?: number | null
   }>(),
   {
+    administrativeClusters: () => [],
     selectedPropertyId: null,
-    focusTarget: null
+    focusTarget: null,
+    focusZoomLevel: null
   }
 )
 
@@ -43,7 +54,12 @@ const mapElement = ref<HTMLDivElement | null>(null)
 let kakaoMaps: KakaoMapsApi | null = null
 let map: KakaoMapLike | null = null
 let markers: KakaoMarkerLike[] = []
+let transactionClusterer: KakaoMarkerClustererLike | null = null
+let administrativeOverlays: KakaoOverlayLike[] = []
 let idleTimer: number | null = null
+let renderQueued = false
+let disposed = false
+let lastRenderedModeKey: string | null = null
 
 function emitViewport(eventName: 'ready' | 'boundsChanged') {
   if (!map) {
@@ -61,6 +77,12 @@ function emitViewport(eventName: 'ready' | 'boundsChanged') {
 }
 
 function scheduleBoundsChanged() {
+  if (disposed) {
+    return
+  }
+
+  renderMapLayersIfModeChanged()
+
   if (idleTimer) {
     window.clearTimeout(idleTimer)
   }
@@ -68,27 +90,93 @@ function scheduleBoundsChanged() {
   idleTimer = window.setTimeout(() => emitViewport('boundsChanged'), 180)
 }
 
-function renderMarkers() {
-  if (!kakaoMaps || !map) {
+function mapRenderModeKey(mode: ReturnType<typeof mapMarkerRenderMode>) {
+  return [
+    mode.showIndividualMarkers ? 'individual' : 'no-individual',
+    mode.showTransactionClusterer ? 'transaction' : 'no-transaction',
+    mode.showAdministrativeClusters ? 'administrative' : 'no-administrative'
+  ].join('|')
+}
+
+function renderMapLayers(options: { force?: boolean } = {}) {
+  if (disposed || !kakaoMaps || !map) {
     return
   }
 
-  markers = syncKakaoMarkers({
-    kakaoMaps,
-    map,
-    previousMarkers: markers,
-    items: props.items,
-    selectedPropertyId: props.selectedPropertyId,
-    onClick: (propertyId) => emit('propertySelected', propertyId)
+  const mode = mapMarkerRenderMode(map.getLevel())
+  const modeKey = mapRenderModeKey(mode)
+
+  if (!options.force && modeKey === lastRenderedModeKey) {
+    return
+  }
+
+  lastRenderedModeKey = modeKey
+
+  if (mode.showIndividualMarkers) {
+    markers = syncKakaoMarkers({
+      kakaoMaps,
+      map,
+      previousMarkers: markers,
+      items: props.items,
+      selectedPropertyId: props.selectedPropertyId,
+      onClick: (propertyId) => emit('propertySelected', propertyId)
+    })
+  } else {
+    clearMarkers(markers)
+    markers = []
+  }
+
+  if (mode.showTransactionClusterer) {
+    transactionClusterer = syncKakaoTransactionClusters({
+      kakaoMaps,
+      map,
+      previousClusterer: transactionClusterer,
+      items: props.items
+    })
+  } else {
+    clearKakaoTransactionClusterer(transactionClusterer)
+    transactionClusterer = null
+  }
+
+  if (mode.showAdministrativeClusters) {
+    administrativeOverlays = syncAdministrativeClusterOverlays({
+      kakaoMaps,
+      map,
+      previousOverlays: administrativeOverlays,
+      clusters: props.administrativeClusters
+    })
+  } else {
+    clearOverlayMarkers(administrativeOverlays)
+    administrativeOverlays = []
+  }
+}
+
+function renderMapLayersIfModeChanged() {
+  renderMapLayers()
+}
+
+function queueRenderMapLayers() {
+  if (disposed || renderQueued) {
+    return
+  }
+
+  renderQueued = true
+  window.queueMicrotask(() => {
+    renderQueued = false
+    renderMapLayers({ force: true })
   })
 }
 
 function focusMap(target: LatLngPoint | null) {
-  if (!target || !kakaoMaps || !map) {
+  if (disposed || !target || !kakaoMaps || !map) {
     return
   }
 
   const latLng = new kakaoMaps.LatLng(target.lat, target.lng)
+  if (props.focusZoomLevel) {
+    map.setLevel?.(props.focusZoomLevel)
+  }
+
   if (map.panTo) {
     map.panTo(latLng)
     return
@@ -107,6 +195,10 @@ onMounted(async () => {
 
   try {
     await loadKakaoMaps()
+    if (disposed) {
+      return
+    }
+
     const maps = getKakaoMaps()
     if (!maps || !mapElement.value) {
       throw new Error('카카오 지도 SDK를 확인하지 못했습니다. JavaScript 키 설정을 확인해 주세요.')
@@ -122,7 +214,7 @@ onMounted(async () => {
     ready.value = true
     message.value = '지도를 움직이면 현재 화면 범위로 검색합니다.'
     emitViewport('ready')
-    renderMarkers()
+    renderMapLayers({ force: true })
     focusMap(props.focusTarget)
   } catch (error) {
     message.value = error instanceof Error ? error.message : '카카오 지도를 불러오지 못했습니다.'
@@ -132,15 +224,27 @@ onMounted(async () => {
   }
 })
 
-watch(() => [props.items, props.selectedPropertyId], renderMarkers, { deep: true })
-watch(() => props.focusTarget, focusMap, { deep: true })
+watch([() => props.items, () => props.selectedPropertyId, () => props.administrativeClusters], queueRenderMapLayers, {
+  deep: true
+})
+watch(() => [props.focusTarget, props.focusZoomLevel], () => focusMap(props.focusTarget), { deep: true })
 
 onBeforeUnmount(() => {
+  disposed = true
   if (idleTimer) {
     window.clearTimeout(idleTimer)
   }
+  idleTimer = null
+  renderQueued = false
+  lastRenderedModeKey = null
   clearMarkers(markers)
   markers = []
+  clearKakaoTransactionClusterer(transactionClusterer)
+  transactionClusterer = null
+  clearOverlayMarkers(administrativeOverlays)
+  administrativeOverlays = []
+  map = null
+  kakaoMaps = null
 })
 </script>
 

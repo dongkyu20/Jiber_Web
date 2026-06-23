@@ -8,6 +8,8 @@ export type TransactionType = 'SALE' | 'JEONSE' | 'MONTHLY_RENT'
 
 export type ShapDirection = 'UP' | 'DOWN' | 'NEUTRAL'
 
+export type AdministrativeClusterLevel = 'LEGAL_DONG' | 'SIGUNGU'
+
 export interface ApiErrorDetail {
   field?: string
   reason: string
@@ -93,7 +95,22 @@ export interface PropertyMapItem {
   lng: number
   latestTransaction?: LatestTransaction | null
   dealCount: number
+  recentTransactionCount: number
   aiAvailable: boolean
+}
+
+export interface AdministrativeCluster {
+  clusterId: string
+  level: AdministrativeClusterLevel
+  sido: string
+  sigungu: string
+  legalDong?: string | null
+  label: string
+  centerLat: number
+  centerLng: number
+  propertyCount: number
+  transactionCount: number
+  averageDealAmount?: number | null
 }
 
 export interface Bounds {
@@ -117,6 +134,7 @@ export interface MapSearchParams extends Bounds {
 
 export interface PropertyMapResponse {
   items: PropertyMapItem[]
+  administrativeClusters: AdministrativeCluster[]
   bounds: Bounds
   filters: {
     propertyTypes: PropertyType[]
@@ -246,6 +264,30 @@ export interface ShapResponse {
   baselineDate?: string
   featureSetVersion?: string
   message: string
+}
+
+export interface ChatRequest {
+  question: string
+  runtimeContext?: Record<string, unknown>
+}
+
+export interface ChatContext {
+  source: string
+  text: string
+}
+
+export interface ChatResponse {
+  available: boolean
+  answer: string
+  contexts: ChatContext[]
+  model: string
+  ragConfig: {
+    embedding: string
+    chunkSize: number
+    overlap: number
+    hybrid: boolean
+    rerank: boolean
+  }
 }
 
 export interface FavoriteApartmentItem {
