@@ -14,6 +14,7 @@ from sentence_transformers import CrossEncoder, SentenceTransformer
 
 from app.core.config import Settings, get_settings
 from app.schemas.chat import ChatContext, RagConfig, RealEstateChatResponse
+from app.schemas.chat import RealEstateChatRetrievalResponse
 
 
 BM25_WEIGHT = 0.5
@@ -62,23 +63,27 @@ class RealEstateRagChatService:
         self.bm25 = BM25Okapi([record.text.split() for record in self.chunks])
 
     def answer(self, question: str, runtime_context: dict | None) -> RealEstateChatResponse:
-        retrieval_question = self._question_with_runtime_context(question, runtime_context)
-        contexts = self._retrieve(retrieval_question)
+        retrieval = self.retrieve(question, runtime_context)
+        contexts = [ChunkRecord(text=context.text, source=context.source) for context in retrieval.contexts]
         answer = self._llm_answer(question, runtime_context, contexts)
         return RealEstateChatResponse(
             answer=answer,
-            contexts=[ChatContext(source=context.source, text=context.text) for context in contexts],
+            contexts=retrieval.contexts,
             model="gpt-4o-mini",
-            ragConfig=RagConfig(
-                embedding=self.settings.rag_embedding_model,
-                chunkSize=self.settings.rag_chunk_size,
-                overlap=self.settings.rag_chunk_overlap,
-                hybrid=True,
-                rerank=True,
-            ),
+            ragConfig=retrieval.ragConfig,
+        )
+
+    def retrieve(self, question: str, runtime_context: dict | None) -> RealEstateChatRetrievalResponse:
+        retrieval_question = self._question_with_runtime_context(question, runtime_context)
+        contexts = self._retrieve(retrieval_question)
+        return RealEstateChatRetrievalResponse(
+            contexts=[ChatContext(source=context.source, text=context.text) for context in contexts],
+            ragConfig=self._rag_config(),
         )
 
     def _retrieve(self, query: str) -> list[ChunkRecord]:
+        if not self.chunks or self.collection.count() == 0:
+            return []
         n = min(self.settings.rag_top_k_initial, self.collection.count())
         query_embedding = self.embedder.encode([query], normalize_embeddings=True).tolist()
         dense_result = self.collection.query(
@@ -98,6 +103,8 @@ class RealEstateRagChatService:
         sparse_indexes = sorted(range(len(sparse_scores)), key=lambda index: sparse_scores[index], reverse=True)[:n]
         sparse_docs = [self.chunks[index] for index in sparse_indexes]
         candidates = self._rrf_fusion(dense_docs, sparse_docs)
+        if not candidates:
+            return []
 
         pairs = [(query, candidate.text) for candidate in candidates]
         scores = self.reranker.predict(pairs)
@@ -151,6 +158,15 @@ class RealEstateRagChatService:
         )
         return response.choices[0].message.content or ""
 
+    def _rag_config(self) -> RagConfig:
+        return RagConfig(
+            embedding=self.settings.rag_embedding_model,
+            chunkSize=self.settings.rag_chunk_size,
+            overlap=self.settings.rag_chunk_overlap,
+            hybrid=True,
+            rerank=True,
+        )
+
     def _load_or_build_collection(self, settings: Settings):
         client = chromadb.PersistentClient(path=settings.rag_chroma_path)
         collection_name = settings.rag_collection_name
@@ -169,6 +185,8 @@ class RealEstateRagChatService:
             collection_name,
             metadata=expected_metadata,
         )
+        if not records:
+            return collection, records
         embeddings = self.embedder.encode(
             [record.text for record in records],
             normalize_embeddings=True,
@@ -199,7 +217,7 @@ class RealEstateRagChatService:
             for chunk in self._chunk_text(content, settings.rag_chunk_size, settings.rag_chunk_overlap):
                 records.append(ChunkRecord(text=chunk, source=source))
         if not records:
-            raise RuntimeError(f"No RAG documents found in {self.docs_dir}")
+            return []
         return records
 
     def _load_documents(self, docs_dir: Path) -> list[tuple[str, str]]:
