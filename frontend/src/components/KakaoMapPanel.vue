@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { PropertyMapItem } from '@/api/types'
 import {
@@ -127,9 +127,15 @@ onMounted(async () => {
 
     ready.value = true
     message.value = '지도를 움직이면 현재 화면 범위로 검색합니다.'
-    emitViewport('ready')
-    renderMarkers()
-    focusMap(props.focusTarget)
+
+    // relayout after DOM paint so the container has its final CSS dimensions
+    await nextTick()
+    window.requestAnimationFrame(() => {
+      map?.relayout?.()
+      emitViewport('ready')
+      renderMarkers()
+      focusMap(props.focusTarget)
+    })
   } catch (error) {
     message.value = error instanceof Error ? error.message : '카카오 지도를 불러오지 못했습니다.'
     emit('loadError', message.value)

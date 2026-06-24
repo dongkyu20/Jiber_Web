@@ -18,7 +18,7 @@ vi.mock('@/api/favorites', () => ({
 
 const favoriteItem: FavoriteApartmentItem = {
   favoriteId: 11,
-  propertyId: 1912,
+  propertyId: 1001,
   propertyType: 'APARTMENT',
   name: '경희궁롯데캐슬',
   address: '서울특별시 종로구 무악동 89',
@@ -85,7 +85,7 @@ async function mountFavoritesView() {
 beforeEach(() => {
   favoritesApiMock.listApartments.mockReset().mockResolvedValue({ items: [] })
   favoritesApiMock.removeApartment.mockReset().mockResolvedValue({
-    propertyId: 1912,
+    propertyId: 1001,
     message: '삭제했습니다.'
   })
   favoritesApiMock.listAreas.mockReset().mockResolvedValue({ items: [] })
@@ -126,10 +126,10 @@ describe('FavoritesView', () => {
 
     const { wrapper, router } = await mountFavoritesView()
 
-    await wrapper.get('a[href="/properties/1912"]').trigger('click')
+    await wrapper.get('a[href="/properties/1001"]').trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.fullPath).toBe('/properties/1912')
+    expect(router.currentRoute.value.fullPath).toBe('/properties/1001')
   })
 
   it('links area favorites back to the map with restore query parameters', async () => {
@@ -157,7 +157,7 @@ describe('FavoritesView', () => {
     await wrapper.get('[data-test="apartment-favorite-delete"]').trigger('click')
     await flushPromises()
 
-    expect(favoritesApiMock.removeApartment).toHaveBeenCalledWith(1912)
+    expect(favoritesApiMock.removeApartment).toHaveBeenCalledWith(1001)
     expect(favoritesApiMock.listApartments).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('관심 아파트에서 삭제했습니다.')
     expect(wrapper.text()).toContain('저장한 아파트가 없습니다.')

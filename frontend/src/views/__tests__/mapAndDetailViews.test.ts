@@ -104,7 +104,7 @@ const seedMapItem: PropertyMapItem = {
 }
 
 const importedSearchItem: PropertySearchItem = {
-  propertyId: 1912,
+  propertyId: 1001,
   propertyType: 'APARTMENT',
   name: '경희궁롯데캐슬',
   address: '서울특별시 종로구 무악동',
@@ -120,7 +120,7 @@ const importedSearchItem: PropertySearchItem = {
 }
 
 const importedDetail: PropertyDetail = {
-  propertyId: 1912,
+  propertyId: 1001,
   propertyType: 'APARTMENT',
   name: '경희궁롯데캐슬',
   address: {
@@ -165,6 +165,7 @@ function createTestRouter(initialPath = '/map') {
       { path: '/', component: { template: '<main />' } },
       { path: '/map', component: MapView },
       { path: '/chat', component: { template: '<main />' } },
+      { path: '/login', component: { template: '<main />' } },
       { path: '/properties/:propertyId', component: PropertyDetailView }
     ]
   })
@@ -220,8 +221,8 @@ async function mountPropertyDetailView(options: { authenticated?: boolean; detai
   setActivePinia(pinia)
   propertyApiMock.getProperty.mockResolvedValueOnce(options.detail ?? importedDetail)
 
-  const router = createTestRouter('/properties/1912')
-  await router.push('/properties/1912')
+  const router = createTestRouter('/properties/1001')
+  await router.push('/properties/1001')
   await router.isReady()
 
   if (options.authenticated) {
@@ -251,12 +252,12 @@ beforeEach(() => {
   propertyApiMock.requestShap.mockReset()
   favoritesApiMock.addApartment.mockReset().mockResolvedValue({
     favoriteId: 1,
-    propertyId: 1912,
+    propertyId: 1001,
     createdAt: '2026-06-19T10:00:00+09:00',
     message: '저장했습니다.'
   })
   favoritesApiMock.removeApartment.mockReset().mockResolvedValue({
-    propertyId: 1912,
+    propertyId: 1001,
     message: '삭제했습니다.'
   })
   favoritesApiMock.addArea.mockReset().mockResolvedValue({
@@ -295,7 +296,7 @@ describe('MapView keyword search', () => {
     expect(wrapper.text()).toContain('카카오 지도 API 키가 아직 설정되지 않았습니다.')
     expect(wrapper.text()).toContain('경희궁롯데캐슬')
     expect(wrapper.text()).toContain('전세')
-    expect(wrapper.find('#property-result-1912').classes()).toContain('is-selected')
+    expect(wrapper.find('#property-result-1001').classes()).toContain('is-selected')
   })
 
   it('applies transaction filters to keyword searches and routes from a result item', async () => {
@@ -319,10 +320,10 @@ describe('MapView keyword search', () => {
     expect(propertyApiMock.searchProperties.mock.calls[0][0]).not.toHaveProperty('zoom')
     expect(propertyApiMock.searchProperties.mock.calls[0][0]).not.toHaveProperty('propertyType')
 
-    await wrapper.get('a[href="/properties/1912"]').trigger('click')
+    await wrapper.get('a[href="/properties/1001"]').trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.fullPath).toBe('/properties/1912')
+    expect(router.currentRoute.value.fullPath).toBe('/properties/1001')
   })
 
   it('returns to map bounds search when an empty keyword is submitted', async () => {
@@ -432,7 +433,7 @@ describe('PropertyDetailView transaction summary', () => {
   it('shows the latest transaction type and recent transaction count in Korean', async () => {
     const wrapper = await mountPropertyDetailView()
 
-    expect(propertyApiMock.getProperty).toHaveBeenCalledWith('1912')
+    expect(propertyApiMock.getProperty).toHaveBeenCalledWith('1001')
     expect(wrapper.text()).toContain('경희궁롯데캐슬')
     expect(wrapper.text()).toContain('최근 거래유형')
     expect(wrapper.text()).toContain('전세')
@@ -453,7 +454,7 @@ describe('PropertyDetailView transaction summary', () => {
     await wrapper.get('[data-test="apartment-favorite-button"]').trigger('click')
     await flushPromises()
 
-    expect(favoritesApiMock.addApartment).toHaveBeenCalledWith(1912)
+    expect(favoritesApiMock.addApartment).toHaveBeenCalledWith(1001)
     expect(wrapper.text()).toContain('관심 아파트에 추가했습니다.')
     expect(wrapper.text()).toContain('관심 아파트 삭제')
   })
@@ -464,7 +465,7 @@ describe('PropertyDetailView transaction summary', () => {
     await wrapper.get('[data-test="apartment-favorite-button"]').trigger('click')
     await flushPromises()
 
-    expect(favoritesApiMock.removeApartment).toHaveBeenCalledWith(1912)
+    expect(favoritesApiMock.removeApartment).toHaveBeenCalledWith(1001)
     expect(wrapper.text()).toContain('관심 아파트에서 삭제했습니다.')
     expect(wrapper.text()).toContain('관심 아파트 추가')
   })
