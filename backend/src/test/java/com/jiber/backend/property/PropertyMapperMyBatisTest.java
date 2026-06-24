@@ -86,15 +86,17 @@ class PropertyMapperMyBatisTest {
 
         assertThat(rows).extracting(PropertyListRow::getPropertyId).containsExactly(1L, 2L);
         assertThat(row(rows, 1L).getRecentTransactionCount()).isEqualTo(2);
+        assertThat(row(rows, 1L).getRecentYearAverageJeonseDepositAmount()).isEqualTo(400_000_000L);
         assertThat(row(rows, 2L).getRecentTransactionCount()).isZero();
     }
 
     @Test
-    void findMapPropertiesAveragesOnlyRecentSaleDealAmounts() {
+    void findMapPropertiesAveragesRecentSaleAndJeonseAmountsSeparately() {
         insertProperty(1L, PropertyType.APARTMENT, "역삼 A", "서울특별시", "강남구", "역삼동", "37.5000000", "127.0300000");
         insertTransaction(101L, 1L, TransactionType.SALE, 700_000_000L, null, LocalDate.of(2026, 1, 10));
         insertTransaction(102L, 1L, TransactionType.SALE, 900_000_000L, null, LocalDate.of(2026, 2, 10));
         insertTransaction(103L, 1L, TransactionType.JEONSE, null, 2_000_000_000L, LocalDate.of(2026, 3, 10));
+        insertTransaction(105L, 1L, TransactionType.JEONSE, null, 1_000_000_000L, LocalDate.of(2026, 2, 20));
         insertTransaction(104L, 1L, TransactionType.SALE, 500_000_000L, null, LocalDate.of(2025, 1, 10));
 
         var rows = propertyMapper.findMapProperties(mapRequest(7, allTransactionTypes()), RECENT_SINCE);
@@ -102,8 +104,9 @@ class PropertyMapperMyBatisTest {
 
         assertThat(yeoksam.getLatestTransactionType()).isEqualTo(TransactionType.JEONSE);
         assertThat(yeoksam.getLatestDealAmount()).isEqualTo(2_000_000_000L);
-        assertThat(yeoksam.getRecentTransactionCount()).isEqualTo(3);
+        assertThat(yeoksam.getRecentTransactionCount()).isEqualTo(4);
         assertThat(yeoksam.getRecentYearAverageDealAmount()).isEqualTo(800_000_000L);
+        assertThat(yeoksam.getRecentYearAverageJeonseDepositAmount()).isEqualTo(1_500_000_000L);
     }
 
     @Test

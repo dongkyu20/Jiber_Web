@@ -31,7 +31,8 @@ export interface KakaoMapLike {
   getLevel(): number
   getProjection?(): KakaoProjectionLike
   setCenter?(latLng: unknown): void
-  setLevel?(level: number): void
+  setBounds?(bounds: unknown): void
+  setLevel?(level: number, options?: unknown): void
   panTo?(latLng: unknown): void
   relayout?(): void
 }
@@ -58,14 +59,17 @@ export interface KakaoMarkerLike {
 
 export interface KakaoOverlayLike {
   setMap(map: KakaoMapLike | null): void
+  setZIndex?(zIndex: number): void
 }
 
 export interface KakaoClusterLike {
   getMarkers(): KakaoMarkerLike[]
   getClusterMarker(): {
-    setContent(content: string): void
+    setContent(content: string | HTMLElement): void
   }
+  getBounds?(): unknown
   getCenter?(): unknown
+  getSize?(): number
 }
 
 export interface KakaoMarkerClustererLike {
@@ -90,12 +94,14 @@ export interface KakaoMapsApi {
     averageCenter: boolean
     minLevel: number
     gridSize: number
+    disableClickZoom?: boolean
   }) => KakaoMarkerClustererLike
   CustomOverlay?: new (options: {
     map: KakaoMapLike
     position: unknown
     content: string | HTMLElement
     yAnchor?: number
+    zIndex?: number
   }) => KakaoOverlayLike
   MarkerImage?: new (src: string, size: unknown, options?: { offset?: unknown }) => unknown
   Size?: new (width: number, height: number) => unknown
@@ -122,6 +128,12 @@ export const SEOUL_SEED_VIEWPORT: MapViewport = {
 
 const ADMINISTRATIVE_OVERLAY_MIN_X_DISTANCE_PX = 154
 const ADMINISTRATIVE_OVERLAY_MIN_Y_DISTANCE_PX = 86
+const PROPERTY_MARKER_MIN_X_DISTANCE_PX = 132
+const PROPERTY_MARKER_MIN_Y_DISTANCE_PX = 64
+const PROPERTY_MARKER_MINIMIZED_Z_INDEX = 10
+const PROPERTY_MARKER_DETAILED_Z_INDEX = 20
+const PROPERTY_MARKER_SELECTED_Z_INDEX = 30
+const PROPERTY_MARKER_ACTIVE_Z_INDEX = 40
 
 export function boundsFromKakao(bounds: KakaoBoundsLike, zoomLevel: number): MapViewport {
   const southWest = bounds.getSouthWest()
@@ -215,8 +227,10 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
       base: PropertyMapItem
       latestTransaction: PropertyMapItem['latestTransaction']
       recentSaleDealAmounts: number[]
+      recentJeonseDepositAmounts: number[]
       recentTransactionRows: number
-      providedAverage: number | null
+      providedSaleAverage: number | null
+      providedJeonseAverage: number | null
       maxDealCount: number
       maxRecentTransactionCount: number
       rowCount: number
@@ -225,12 +239,22 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
 
   items.forEach((item) => {
     const current = grouped.get(item.propertyId)
-    const providedAverage =
+    const providedSaleAverage =
       typeof item.recentYearAverageDealAmount === 'number' ? item.recentYearAverageDealAmount : null
+    const providedJeonseAverage =
+      typeof item.recentYearAverageJeonseDepositAmount === 'number'
+        ? item.recentYearAverageJeonseDepositAmount
+        : null
     const recentTransactionRows = isRecentYearTransaction(item.latestTransaction, referenceDate) ? 1 : 0
     const recentSaleDealAmounts =
       recentTransactionRows > 0 &&
       item.latestTransaction?.transactionType === 'SALE' &&
+      typeof item.latestTransaction.dealAmount === 'number'
+        ? [item.latestTransaction.dealAmount]
+        : []
+    const recentJeonseDepositAmounts =
+      recentTransactionRows > 0 &&
+      item.latestTransaction?.transactionType === 'JEONSE' &&
       typeof item.latestTransaction.dealAmount === 'number'
         ? [item.latestTransaction.dealAmount]
         : []
@@ -240,8 +264,10 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
         base: item,
         latestTransaction: item.latestTransaction ?? null,
         recentSaleDealAmounts,
+        recentJeonseDepositAmounts,
         recentTransactionRows,
-        providedAverage,
+        providedSaleAverage,
+        providedJeonseAverage,
         maxDealCount: item.dealCount ?? 0,
         maxRecentTransactionCount: item.recentTransactionCount ?? 0,
         rowCount: 1
@@ -251,11 +277,15 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
 
     current.rowCount += 1
     current.recentSaleDealAmounts.push(...recentSaleDealAmounts)
+    current.recentJeonseDepositAmounts.push(...recentJeonseDepositAmounts)
     current.recentTransactionRows += recentTransactionRows
     current.maxDealCount = Math.max(current.maxDealCount, item.dealCount ?? 0)
     current.maxRecentTransactionCount = Math.max(current.maxRecentTransactionCount, item.recentTransactionCount ?? 0)
-    if (providedAverage !== null) {
-      current.providedAverage = providedAverage
+    if (providedSaleAverage !== null) {
+      current.providedSaleAverage = providedSaleAverage
+    }
+    if (providedJeonseAverage !== null) {
+      current.providedJeonseAverage = providedJeonseAverage
     }
     if (transactionTime(item.latestTransaction) > transactionTime(current.latestTransaction)) {
       current.latestTransaction = item.latestTransaction ?? null
@@ -267,7 +297,9 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
     latestTransaction: group.latestTransaction,
     dealCount: Math.max(group.maxDealCount, group.rowCount),
     recentTransactionCount: Math.max(group.maxRecentTransactionCount, group.recentTransactionRows),
-    recentYearAverageDealAmount: group.providedAverage ?? average(group.recentSaleDealAmounts)
+    recentYearAverageDealAmount: group.providedSaleAverage ?? average(group.recentSaleDealAmounts),
+    recentYearAverageJeonseDepositAmount:
+      group.providedJeonseAverage ?? average(group.recentJeonseDepositAmounts)
   }))
 }
 
@@ -280,46 +312,59 @@ export function formatAdministrativeClusterLabel(cluster: AdministrativeCluster)
   return `${cluster.label}\n${averageLabel}\n거래 ${cluster.transactionCount.toLocaleString('ko-KR')}건`
 }
 
-function propertyClusterBadgeContent(count: number): string {
+function propertyClusterBadgeContent(count: number, onClick?: () => void): HTMLElement {
   const formattedCount = count.toLocaleString('ko-KR')
+  const markerButton = document.createElement('button')
+  markerButton.type = 'button'
+  markerButton.className = 'map-property-cluster'
+  markerButton.setAttribute('aria-label', `부동산 클러스터 ${formattedCount}건`)
 
-  return [
-    '<div class="map-property-cluster" aria-label="부동산 수 클러스터">',
-    '<span class="map-property-cluster-label">부동산 수</span>',
-    `<strong class="map-property-cluster-count">${formattedCount}</strong>`,
-    '</div>'
-  ].join('')
-}
+  const label = document.createElement('span')
+  label.className = 'map-property-cluster-label'
+  label.textContent = '부동산 수'
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => {
-    switch (character) {
-      case '&':
-        return '&amp;'
-      case '<':
-        return '&lt;'
-      case '>':
-        return '&gt;'
-      case '"':
-        return '&quot;'
-      case "'":
-        return '&#39;'
-      default:
-        return character
-    }
+  const countLabel = document.createElement('strong')
+  countLabel.className = 'map-property-cluster-count'
+  countLabel.textContent = formattedCount
+
+  markerButton.append(label, countLabel)
+  markerButton.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    onClick?.()
   })
+
+  return markerButton
 }
 
-function administrativeClusterContent(cluster: AdministrativeCluster): string {
+function administrativeClusterContent(
+  cluster: AdministrativeCluster,
+  onClick?: (cluster: AdministrativeCluster) => void
+): HTMLElement {
   const [areaLabel, averageLabel, countLabel] = formatAdministrativeClusterLabel(cluster).split('\n')
+  const markerButton = document.createElement('button')
+  markerButton.type = 'button'
+  markerButton.className = 'map-admin-cluster'
+  markerButton.dataset.clusterId = cluster.clusterId
+  markerButton.setAttribute('aria-label', formatAdministrativeClusterLabel(cluster).replace(/\n/g, ', '))
 
-  return [
-    `<div class="map-admin-cluster" data-cluster-id="${escapeHtml(cluster.clusterId)}">`,
-    `<strong>${escapeHtml(areaLabel)}</strong>`,
-    `<span>${escapeHtml(averageLabel)}</span>`,
-    `<span>${escapeHtml(countLabel)}</span>`,
-    '</div>'
-  ].join('')
+  const label = document.createElement('strong')
+  label.textContent = areaLabel
+
+  const average = document.createElement('span')
+  average.textContent = averageLabel
+
+  const count = document.createElement('span')
+  count.textContent = countLabel
+
+  markerButton.append(label, average, count)
+  markerButton.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    onClick?.(cluster)
+  })
+
+  return markerButton
 }
 
 function pointCoordinate(point: KakaoPointLike, axis: 'x' | 'y'): number | null {
@@ -362,6 +407,14 @@ function administrativeClusterPoint(
   return screenPointFromCoords(map, new kakaoMaps.LatLng(cluster.centerLat, cluster.centerLng))
 }
 
+function propertyMarkerPoint(
+  kakaoMaps: KakaoMapsApi,
+  map: KakaoMapLike,
+  item: PropertyMapItem
+): MapScreenPoint | null {
+  return screenPointFromCoords(map, new kakaoMaps.LatLng(item.lat, item.lng))
+}
+
 export function screenPointsFromKakaoClusters(map: KakaoMapLike, clusters: KakaoClusterLike[]): MapScreenPoint[] {
   return clusters.reduce<MapScreenPoint[]>((points, cluster) => {
     const center = cluster.getCenter?.()
@@ -384,6 +437,68 @@ function pointsOverlap(first: MapScreenPoint, second: MapScreenPoint): boolean {
     Math.abs(first.x - second.x) < ADMINISTRATIVE_OVERLAY_MIN_X_DISTANCE_PX &&
     Math.abs(first.y - second.y) < ADMINISTRATIVE_OVERLAY_MIN_Y_DISTANCE_PX
   )
+}
+
+function propertyMarkersOverlap(first: MapScreenPoint, second: MapScreenPoint): boolean {
+  return (
+    Math.abs(first.x - second.x) < PROPERTY_MARKER_MIN_X_DISTANCE_PX &&
+    Math.abs(first.y - second.y) < PROPERTY_MARKER_MIN_Y_DISTANCE_PX
+  )
+}
+
+function propertyMarkerPriority(item: PropertyMapItem): number {
+  return (item.recentTransactionCount ?? 0) * 100000 + (item.dealCount ?? 0)
+}
+
+function minimizedPropertyMarkerIds(
+  kakaoMaps: KakaoMapsApi,
+  map: KakaoMapLike,
+  items: PropertyMapItem[],
+  selectedPropertyId: number | null
+): Set<number> {
+  const positionedItems = items.map((item, index) => ({
+    item,
+    index,
+    point: propertyMarkerPoint(kakaoMaps, map, item)
+  }))
+
+  if (positionedItems.some(({ point }) => point === null)) {
+    return new Set()
+  }
+
+  const detailed: typeof positionedItems = []
+  const minimizedIds = new Set<number>()
+  const byPriority = [...positionedItems].sort((first, second) => {
+    const selectedGap =
+      Number(second.item.propertyId === selectedPropertyId) - Number(first.item.propertyId === selectedPropertyId)
+    if (selectedGap) {
+      return selectedGap
+    }
+
+    const priorityGap = propertyMarkerPriority(second.item) - propertyMarkerPriority(first.item)
+    return priorityGap || first.index - second.index
+  })
+
+  byPriority.forEach((candidate) => {
+    const candidatePoint = candidate.point
+    if (!candidatePoint) {
+      return
+    }
+
+    const overlapsDetailed = detailed.some((detailedMarker) => {
+      const detailedPoint = detailedMarker.point
+      return detailedPoint ? propertyMarkersOverlap(candidatePoint, detailedPoint) : false
+    })
+
+    if (overlapsDetailed && candidate.item.propertyId !== selectedPropertyId) {
+      minimizedIds.add(candidate.item.propertyId)
+      return
+    }
+
+    detailed.push(candidate)
+  })
+
+  return minimizedIds
 }
 
 function nonOverlappingAdministrativeClusters(
@@ -429,35 +544,96 @@ function nonOverlappingAdministrativeClusters(
   return selected.sort((first, second) => first.index - second.index).map(({ cluster }) => cluster)
 }
 
-function propertyAverageLabel(item: PropertyMapItem): string {
-  return typeof item.recentYearAverageDealAmount === 'number'
-    ? `최근 1년 평균 ${formatKrw(item.recentYearAverageDealAmount)}`
-    : '최근 1년 평균 정보 없음'
+function propertyAverageLabels(item: PropertyMapItem): string[] {
+  const saleAverageLabel =
+    typeof item.recentYearAverageDealAmount === 'number'
+      ? `매매 평균 ${formatKrw(item.recentYearAverageDealAmount)}`
+      : '매매 정보 없음'
+  const jeonseAverageLabel =
+    typeof item.recentYearAverageJeonseDepositAmount === 'number'
+      ? `전세 평균 ${formatKrw(item.recentYearAverageJeonseDepositAmount)}`
+      : '전세 정보 없음'
+
+  return [saleAverageLabel, jeonseAverageLabel]
 }
 
 function propertyMarkerContent(
   item: PropertyMapItem,
   selected: boolean,
+  minimized: boolean,
   onClick: (propertyId: number) => void
 ): HTMLElement {
   const markerButton = document.createElement('button')
   markerButton.type = 'button'
-  markerButton.className = selected ? 'map-property-marker is-selected' : 'map-property-marker'
-  markerButton.setAttribute('aria-label', `${item.name}, ${propertyAverageLabel(item)}`)
+  markerButton.className = [
+    'map-property-marker',
+    selected ? 'is-selected' : '',
+    minimized ? 'is-minimized' : ''
+  ]
+    .filter(Boolean)
+    .join(' ')
+  markerButton.setAttribute('aria-label', `${item.name}, ${propertyAverageLabels(item).join(', ')}`)
 
   const name = document.createElement('strong')
   name.textContent = item.name
 
-  const averageLabel = document.createElement('span')
-  averageLabel.textContent = propertyAverageLabel(item)
+  const priceList = document.createElement('span')
+  priceList.className = 'map-property-marker-prices'
 
-  markerButton.append(name, averageLabel)
+  propertyAverageLabels(item).forEach((label) => {
+    const priceLabel = document.createElement('span')
+    priceLabel.className = 'map-property-marker-price'
+    priceLabel.textContent = label
+    priceList.append(priceLabel)
+  })
+
+  if (minimized) {
+    const dot = document.createElement('span')
+    dot.className = 'map-property-marker-dot'
+    dot.setAttribute('aria-hidden', 'true')
+
+    const details = document.createElement('span')
+    details.className = 'map-property-marker-detail'
+    details.append(name, priceList)
+
+    markerButton.append(dot, details)
+  } else {
+    markerButton.append(name, priceList)
+  }
+
   markerButton.addEventListener('click', (event) => {
     event.preventDefault()
     onClick(item.propertyId)
   })
 
   return markerButton
+}
+
+function propertyMarkerZIndex(selected: boolean, minimized: boolean): number {
+  if (selected) {
+    return PROPERTY_MARKER_SELECTED_Z_INDEX
+  }
+
+  return minimized ? PROPERTY_MARKER_MINIMIZED_Z_INDEX : PROPERTY_MARKER_DETAILED_Z_INDEX
+}
+
+function syncMinimizedMarkerActiveZIndex(
+  overlay: KakaoOverlayLike,
+  content: HTMLElement,
+  baseZIndex: number,
+  minimized: boolean
+) {
+  if (!minimized || !overlay.setZIndex) {
+    return
+  }
+
+  const raise = () => overlay.setZIndex?.(PROPERTY_MARKER_ACTIVE_Z_INDEX)
+  const lower = () => overlay.setZIndex?.(baseZIndex)
+
+  content.addEventListener('mouseenter', raise)
+  content.addEventListener('focusin', raise)
+  content.addEventListener('mouseleave', lower)
+  content.addEventListener('focusout', lower)
 }
 
 function markerSvg(fill: string, stroke: string): string {
@@ -533,16 +709,35 @@ export function syncPropertyMarkerOverlays(options: {
   }
 
   const CustomOverlay = options.kakaoMaps.CustomOverlay
+  const minimizedIds = minimizedPropertyMarkerIds(
+    options.kakaoMaps,
+    options.map,
+    options.items,
+    options.selectedPropertyId
+  )
 
   return options.items.map((item) => {
-    const content = propertyMarkerContent(item, options.selectedPropertyId === item.propertyId, options.onClick)
+    const selected = options.selectedPropertyId === item.propertyId
+    const minimized = minimizedIds.has(item.propertyId)
+    const zIndex = propertyMarkerZIndex(selected, minimized)
+    const content = propertyMarkerContent(
+      item,
+      selected,
+      minimized,
+      options.onClick
+    )
 
-    return new CustomOverlay({
+    const overlay = new CustomOverlay({
       map: options.map,
       position: new options.kakaoMaps.LatLng(item.lat, item.lng),
       content,
-      yAnchor: 1
+      yAnchor: 1,
+      zIndex
     })
+
+    syncMinimizedMarkerActiveZIndex(overlay, content, zIndex, minimized)
+
+    return overlay
   })
 }
 
@@ -552,6 +747,7 @@ export function syncKakaoPropertyClusters(options: {
   previousClusterer: KakaoMarkerClustererLike | null
   items: PropertyMapItem[]
   onClustered?: (clusters: KakaoClusterLike[]) => void
+  onClusterClick?: (cluster: KakaoClusterLike) => void
 }): KakaoMarkerClustererLike | null {
   clearKakaoPropertyClusterer(options.previousClusterer)
 
@@ -573,7 +769,8 @@ export function syncKakaoPropertyClusters(options: {
     map: options.map,
     averageCenter: true,
     minLevel: 4,
-    gridSize: 80
+    gridSize: 80,
+    disableClickZoom: true
   })
 
   options.kakaoMaps.event.addListener(clusterer, 'clustered', (clusters: unknown) => {
@@ -584,9 +781,17 @@ export function syncKakaoPropertyClusters(options: {
     const kakaoClusters = clusters as KakaoClusterLike[]
 
     kakaoClusters.forEach((kakaoCluster) => {
-      kakaoCluster.getClusterMarker().setContent(propertyClusterBadgeContent(kakaoCluster.getMarkers().length))
+      kakaoCluster
+        .getClusterMarker()
+        .setContent(
+          propertyClusterBadgeContent(kakaoCluster.getMarkers().length, () => options.onClusterClick?.(kakaoCluster))
+        )
     })
     options.onClustered?.(kakaoClusters)
+  })
+
+  options.kakaoMaps.event.addListener(clusterer, 'clusterclick', (cluster: unknown) => {
+    options.onClusterClick?.(cluster as KakaoClusterLike)
   })
 
   clusterer.addMarkers(markers)
@@ -600,6 +805,7 @@ export function syncAdministrativeClusterOverlays(options: {
   previousOverlays: KakaoOverlayLike[]
   clusters: AdministrativeCluster[]
   reservedPoints?: MapScreenPoint[]
+  onClick?: (cluster: AdministrativeCluster) => void
 }): KakaoOverlayLike[] {
   clearOverlayMarkers(options.previousOverlays)
 
@@ -621,7 +827,7 @@ export function syncAdministrativeClusterOverlays(options: {
       new CustomOverlay({
         map: options.map,
         position: new options.kakaoMaps.LatLng(cluster.centerLat, cluster.centerLng),
-        content: administrativeClusterContent(cluster),
+        content: administrativeClusterContent(cluster, options.onClick),
         yAnchor: 0.5
       })
   )

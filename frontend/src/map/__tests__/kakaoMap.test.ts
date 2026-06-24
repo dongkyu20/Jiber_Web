@@ -87,6 +87,7 @@ describe('kakaoMap utilities', () => {
     expect(normalized[0].latestTransaction?.dealDate).toBe('2026-06-01')
     expect(normalized[0].recentTransactionCount).toBe(2)
     expect(normalized[0].recentYearAverageDealAmount).toBe(1000000000)
+    expect(normalized[0].recentYearAverageJeonseDepositAmount).toBe(1200000000)
     expect(normalized[1].propertyId).toBe(1002)
   })
 
@@ -115,7 +116,8 @@ describe('kakaoMap utilities', () => {
         {
           ...property(1001, 37.5, 127.03),
           name: '경희궁롯데캐슬',
-          recentYearAverageDealAmount: 1100000000
+          recentYearAverageDealAmount: 1100000000,
+          recentYearAverageJeonseDepositAmount: 780000000
         }
       ],
       selectedPropertyId: 1001,
@@ -128,16 +130,73 @@ describe('kakaoMap utilities', () => {
       map,
       position: { lat: 37.5, lng: 127.03 },
       content: createdOverlays[0].content,
-      yAnchor: 1
+      yAnchor: 1,
+      zIndex: 30
     })
     expect(createdOverlays[0].content.className).toContain('map-property-marker')
     expect(createdOverlays[0].content.className).toContain('is-selected')
     expect(createdOverlays[0].content.textContent).toContain('경희궁롯데캐슬')
-    expect(createdOverlays[0].content.textContent).toContain('최근 1년 평균 11억 원')
+    expect(createdOverlays[0].content.textContent).toContain('매매 평균 11억 원')
+    expect(createdOverlays[0].content.textContent).toContain('전세 평균 7.8억 원')
 
     createdOverlays[0].content.dispatchEvent(new MouseEvent('click'))
 
     expect(onClick).toHaveBeenCalledWith(1001)
+  })
+
+  it('minimizes overlapping unselected property overlays while keeping the selected marker detailed', () => {
+    const createdOverlays: Array<{
+      content: HTMLElement
+      setMap: ReturnType<typeof vi.fn>
+      setZIndex: ReturnType<typeof vi.fn>
+      zIndex?: number
+    }> = []
+    const map = {
+      getProjection: () => ({
+        containerPointFromCoords: (latLng: { lat: number; lng: number }) => ({
+          x: (latLng.lng - 127) * 10000,
+          y: (37.6 - latLng.lat) * 10000
+        })
+      })
+    }
+    const kakaoMaps = {
+      LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
+      CustomOverlay: vi.fn((options: { content: HTMLElement; zIndex?: number }) => {
+        const overlay = { content: options.content, setMap: vi.fn(), setZIndex: vi.fn(), zIndex: options.zIndex }
+        createdOverlays.push(overlay)
+        return overlay
+      })
+    }
+
+    syncPropertyMarkerOverlays({
+      kakaoMaps,
+      map,
+      previousOverlays: [],
+      items: [
+        property(1001, 37.5, 127.03),
+        property(1002, 37.5001, 127.0301),
+        property(1003, 37.5, 127.06)
+      ],
+      selectedPropertyId: 1002,
+      onClick: vi.fn()
+    })
+
+    expect(createdOverlays).toHaveLength(3)
+    expect(createdOverlays[0].zIndex).toBe(10)
+    expect(createdOverlays[0].content.className).toContain('is-minimized')
+    expect(createdOverlays[0].content.querySelector('.map-property-marker-dot')).not.toBeNull()
+    expect(createdOverlays[0].content.querySelector('.map-property-marker-detail')?.textContent).toContain(
+      '테스트 단지 1001'
+    )
+    createdOverlays[0].content.dispatchEvent(new MouseEvent('mouseenter'))
+    expect(createdOverlays[0].setZIndex).toHaveBeenCalledWith(40)
+    createdOverlays[0].content.dispatchEvent(new MouseEvent('mouseleave'))
+    expect(createdOverlays[0].setZIndex).toHaveBeenCalledWith(10)
+    expect(createdOverlays[1].zIndex).toBe(30)
+    expect(createdOverlays[1].content.className).toContain('is-selected')
+    expect(createdOverlays[1].content.className).not.toContain('is-minimized')
+    expect(createdOverlays[2].zIndex).toBe(20)
+    expect(createdOverlays[2].content.className).not.toContain('is-minimized')
   })
 
   it('clears old markers, renders new markers, and wires marker clicks to property selection', () => {
@@ -273,7 +332,9 @@ describe('kakaoMap utilities', () => {
   it('creates a MarkerClusterer and updates cluster marker content with property counts', () => {
     const oldClusterer = { clear: vi.fn() }
     const clusteredHandlers: Array<(clusters: unknown[]) => void> = []
+    const clusterClickHandlers: Array<(cluster: unknown) => void> = []
     const onClustered = vi.fn()
+    const onClusterClick = vi.fn()
     const clusterMarker = { setContent: vi.fn() }
     const createdMarkers: Array<{ setMap: ReturnType<typeof vi.fn> }> = []
     const markerOptions: Array<Record<string, unknown>> = []
@@ -299,6 +360,9 @@ describe('kakaoMap utilities', () => {
           if (eventName === 'clustered') {
             clusteredHandlers.push(handler)
           }
+          if (eventName === 'clusterclick') {
+            clusterClickHandlers.push(handler)
+          }
         })
       }
     }
@@ -311,7 +375,8 @@ describe('kakaoMap utilities', () => {
         { ...property(1001, 37.5, 127.03), recentTransactionCount: 3 },
         { ...property(1002, 37.51, 127.04), recentTransactionCount: 5 }
       ],
-      onClustered
+      onClustered,
+      onClusterClick
     })
 
     expect(oldClusterer.clear).toHaveBeenCalled()
@@ -320,7 +385,8 @@ describe('kakaoMap utilities', () => {
       map,
       averageCenter: true,
       minLevel: 4,
-      gridSize: expect.any(Number)
+      gridSize: expect.any(Number),
+      disableClickZoom: true
     })
     expect(markerOptions).toHaveLength(2)
     expect(markerOptions[0]).not.toHaveProperty('map')
@@ -355,21 +421,35 @@ describe('kakaoMap utilities', () => {
     ])
 
     const clusterContent = clusterMarker.setContent.mock.calls[0][0]
-    expect(clusterContent).toContain('map-property-cluster')
-    expect(clusterContent).toContain('map-property-cluster-count')
-    expect(clusterContent).toContain('부동산 수')
-    expect(clusterContent).toContain('>2<')
-    expect(clusterContent).not.toContain('곳')
+    expect(clusterContent).toBeInstanceOf(HTMLElement)
+    expect(clusterContent.className).toContain('map-property-cluster')
+    expect(clusterContent.querySelector('.map-property-cluster-count')?.textContent).toBe('2')
+    expect(clusterContent.textContent).toContain('부동산 수')
+    expect(clusterContent.textContent).not.toContain('곳')
+    clusterContent.dispatchEvent(new MouseEvent('click'))
+    expect(onClusterClick).toHaveBeenCalledWith(
+      expect.objectContaining({
+        getMarkers: expect.any(Function),
+        getClusterMarker: expect.any(Function)
+      })
+    )
+    const clickedCluster = {
+      getMarkers: () => createdMarkers,
+      getClusterMarker: () => clusterMarker
+    }
+    clusterClickHandlers[0](clickedCluster)
+    expect(onClusterClick).toHaveBeenCalledWith(clickedCluster)
   })
 
   it('clears old administrative overlays and creates Korean cluster content', () => {
     const oldOverlay = { setMap: vi.fn() }
-    const createdOverlays: Array<{ content: string; setMap: ReturnType<typeof vi.fn> }> = []
+    const createdOverlays: Array<{ content: HTMLElement; setMap: ReturnType<typeof vi.fn> }> = []
+    const onClick = vi.fn()
     const map = { id: 'map' }
     const kakaoMaps = {
       LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
       Marker: vi.fn(),
-      CustomOverlay: vi.fn((options: { content: string }) => {
+      CustomOverlay: vi.fn((options: { content: HTMLElement }) => {
         const overlay = { content: options.content, setMap: vi.fn() }
         createdOverlays.push(overlay)
         return overlay
@@ -396,7 +476,8 @@ describe('kakaoMap utilities', () => {
       kakaoMaps,
       map,
       previousOverlays: [oldOverlay],
-      clusters: [cluster]
+      clusters: [cluster],
+      onClick
     })
 
     expect(oldOverlay.setMap).toHaveBeenCalledWith(null)
@@ -404,20 +485,22 @@ describe('kakaoMap utilities', () => {
     expect(kakaoMaps.CustomOverlay).toHaveBeenCalledWith({
       map,
       position: { lat: 37.5, lng: 127.03 },
-      content: expect.stringContaining(
-        'data-cluster-id="legal-dong-1168010100&quot;&gt;&lt;img src=x onerror=alert(1)&gt;"'
-      ),
+      content: createdOverlays[0].content,
       yAnchor: 0.5
     })
-    expect(createdOverlays[0].content).toContain('map-admin-cluster')
-    expect(createdOverlays[0].content).toContain('&lt;img src=x onerror=alert(1)&gt;')
-    expect(createdOverlays[0].content).not.toContain('<img')
-    expect(createdOverlays[0].content).toContain('평균 15억 원')
-    expect(createdOverlays[0].content).toContain('거래 1,234건')
+    expect(createdOverlays[0].content.className).toContain('map-admin-cluster')
+    expect(createdOverlays[0].content.dataset.clusterId).toBe('legal-dong-1168010100"><img src=x onerror=alert(1)>')
+    expect(createdOverlays[0].content.textContent).toContain('<img src=x onerror=alert(1)>')
+    expect(createdOverlays[0].content.querySelector('img')).toBeNull()
+    expect(createdOverlays[0].content.textContent).toContain('평균 15억 원')
+    expect(createdOverlays[0].content.textContent).toContain('거래 1,234건')
+
+    createdOverlays[0].content.dispatchEvent(new MouseEvent('click'))
+    expect(onClick).toHaveBeenCalledWith(cluster)
   })
 
   it('skips lower-priority administrative overlays that would overlap on the map', () => {
-    const createdOverlays: Array<{ content: string; setMap: ReturnType<typeof vi.fn> }> = []
+    const createdOverlays: Array<{ content: HTMLElement; setMap: ReturnType<typeof vi.fn> }> = []
     const map = {
       id: 'map',
       getProjection: () => ({
@@ -430,7 +513,7 @@ describe('kakaoMap utilities', () => {
     const kakaoMaps = {
       LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
       Marker: vi.fn(),
-      CustomOverlay: vi.fn((options: { content: string }) => {
+      CustomOverlay: vi.fn((options: { content: HTMLElement }) => {
         const overlay = { content: options.content, setMap: vi.fn() }
         createdOverlays.push(overlay)
         return overlay
@@ -481,16 +564,16 @@ describe('kakaoMap utilities', () => {
     })
 
     expect(overlays).toHaveLength(2)
-    expect(createdOverlays.map((overlay) => overlay.content)).toEqual(
+    expect(createdOverlays.map((overlay) => overlay.content.textContent)).toEqual(
       expect.arrayContaining([expect.stringContaining('높은동'), expect.stringContaining('먼동')])
     )
-    expect(createdOverlays.map((overlay) => overlay.content)).not.toEqual(
+    expect(createdOverlays.map((overlay) => overlay.content.textContent)).not.toEqual(
       expect.arrayContaining([expect.stringContaining('낮은동')])
     )
   })
 
   it('skips administrative overlays that would overlap Kakao property cluster markers', () => {
-    const createdOverlays: Array<{ content: string; setMap: ReturnType<typeof vi.fn> }> = []
+    const createdOverlays: Array<{ content: HTMLElement; setMap: ReturnType<typeof vi.fn> }> = []
     const map = {
       id: 'map',
       getProjection: () => ({
@@ -503,7 +586,7 @@ describe('kakaoMap utilities', () => {
     const kakaoMaps = {
       LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
       Marker: vi.fn(),
-      CustomOverlay: vi.fn((options: { content: string }) => {
+      CustomOverlay: vi.fn((options: { content: HTMLElement }) => {
         const overlay = { content: options.content, setMap: vi.fn() }
         createdOverlays.push(overlay)
         return overlay
@@ -543,7 +626,7 @@ describe('kakaoMap utilities', () => {
     })
 
     expect(overlays).toHaveLength(1)
-    expect(createdOverlays[0].content).toContain('논현동')
-    expect(createdOverlays[0].content).not.toContain('역삼동')
+    expect(createdOverlays[0].content.textContent).toContain('논현동')
+    expect(createdOverlays[0].content.textContent).not.toContain('역삼동')
   })
 })

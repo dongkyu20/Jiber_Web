@@ -14,6 +14,7 @@ import {
   syncPropertyMarkerOverlays,
   viewportFromMap,
   type LatLngPoint,
+  type KakaoClusterLike,
   type KakaoMapLike,
   type KakaoMapsApi,
   type KakaoMarkerClustererLike,
@@ -61,6 +62,10 @@ let idleTimer: number | null = null
 let renderQueued = false
 let disposed = false
 let lastRenderedModeKey: string | null = null
+
+function targetLevelForAdministrativeCluster(cluster: AdministrativeCluster): number {
+  return cluster.level === 'SIGUNGU' ? 5 : 3
+}
 
 function emitViewport(eventName: 'ready' | 'boundsChanged') {
   if (!map) {
@@ -147,10 +152,12 @@ function renderMapLayers(options: { force?: boolean } = {}) {
             map,
             previousOverlays: administrativeOverlays,
             clusters: props.administrativeClusters,
-            reservedPoints: propertyClusterReservedPoints
+            reservedPoints: propertyClusterReservedPoints,
+            onClick: zoomToAdministrativeCluster
           })
         }
-      }
+      },
+      onClusterClick: zoomToPropertyCluster
     })
   } else {
     clearKakaoPropertyClusterer(propertyClusterer)
@@ -164,7 +171,8 @@ function renderMapLayers(options: { force?: boolean } = {}) {
       map,
       previousOverlays: administrativeOverlays,
       clusters: props.administrativeClusters,
-      reservedPoints: propertyClusterReservedPoints
+      reservedPoints: propertyClusterReservedPoints,
+      onClick: zoomToAdministrativeCluster
     })
   } else {
     clearOverlayMarkers(administrativeOverlays)
@@ -204,6 +212,48 @@ function focusMap(target: LatLngPoint | null) {
   }
 
   map.setCenter?.(latLng)
+}
+
+function zoomToLatLng(latLng: unknown, level: number) {
+  if (disposed || !map) {
+    return
+  }
+
+  map.setLevel?.(level, { anchor: latLng, animate: true })
+
+  if (map.panTo) {
+    map.panTo(latLng)
+    return
+  }
+
+  map.setCenter?.(latLng)
+}
+
+function zoomToPropertyCluster(cluster: KakaoClusterLike) {
+  if (disposed || !map) {
+    return
+  }
+
+  const currentLevel = map.getLevel()
+  const bounds = cluster.getBounds?.()
+  if (bounds && map.setBounds) {
+    map.setBounds(bounds)
+  }
+
+  const center = cluster.getCenter?.()
+  if (center) {
+    const targetLevel = Math.max(1, Math.min(map.getLevel(), currentLevel - 1))
+    zoomToLatLng(center, targetLevel)
+  }
+}
+
+function zoomToAdministrativeCluster(cluster: AdministrativeCluster) {
+  if (disposed || !kakaoMaps) {
+    return
+  }
+
+  const latLng = new kakaoMaps.LatLng(cluster.centerLat, cluster.centerLng)
+  zoomToLatLng(latLng, targetLevelForAdministrativeCluster(cluster))
 }
 
 onMounted(async () => {

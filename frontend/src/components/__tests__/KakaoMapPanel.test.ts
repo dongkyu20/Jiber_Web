@@ -9,6 +9,7 @@ const kakaoMock = vi.hoisted(() => {
     hasKey: false,
     idleHandler: null as null | (() => void),
     clusteredHandlers: [] as Array<(clusters: unknown[]) => void>,
+    clusterClickHandlers: [] as Array<(cluster: unknown) => void>,
     markerClickHandlers: [] as Array<() => void>,
     mapInstance: {
       getBounds: vi.fn(() => ({
@@ -29,6 +30,7 @@ const kakaoMock = vi.hoisted(() => {
         })
       })),
       panTo: vi.fn(),
+      setBounds: vi.fn(),
       setLevel: vi.fn(),
       setCenter: vi.fn()
     },
@@ -38,7 +40,7 @@ const kakaoMock = vi.hoisted(() => {
       clear: ReturnType<typeof vi.fn>
       setMap: ReturnType<typeof vi.fn>
     }>,
-    overlays: [] as Array<{ setMap: ReturnType<typeof vi.fn>; content: string }>
+    overlays: [] as Array<{ setMap: ReturnType<typeof vi.fn>; content: string | HTMLElement }>
   }
 
   const maps = {
@@ -83,6 +85,10 @@ const kakaoMock = vi.hoisted(() => {
           state.clusteredHandlers.push(handler as (clusters: unknown[]) => void)
         }
 
+        if (eventName === 'clusterclick') {
+          state.clusterClickHandlers.push(handler as (cluster: unknown) => void)
+        }
+
         if (eventName === 'click') {
           state.markerClickHandlers.push(handler)
         }
@@ -123,6 +129,7 @@ function property(propertyId: number): PropertyMapItem {
     dealCount: 1,
     recentTransactionCount: propertyId,
     recentYearAverageDealAmount: 1100000000,
+    recentYearAverageJeonseDepositAmount: 780000000,
     aiAvailable: true
   }
 }
@@ -147,17 +154,23 @@ function administrativeCluster(
   }
 }
 
+function overlayText(content: string | HTMLElement) {
+  return typeof content === 'string' ? content : (content.textContent ?? '')
+}
+
 describe('KakaoMapPanel', () => {
   beforeEach(() => {
     kakaoMock.state.hasKey = false
     kakaoMock.state.idleHandler = null
     kakaoMock.state.clusteredHandlers = []
+    kakaoMock.state.clusterClickHandlers = []
     kakaoMock.state.markerClickHandlers = []
     kakaoMock.state.markers = []
     kakaoMock.state.mapInstance.getBounds.mockClear()
     kakaoMock.state.mapInstance.getLevel.mockClear()
     kakaoMock.state.mapInstance.getProjection.mockClear()
     kakaoMock.state.mapInstance.panTo.mockClear()
+    kakaoMock.state.mapInstance.setBounds.mockClear()
     kakaoMock.state.mapInstance.setLevel.mockClear()
     kakaoMock.state.mapInstance.setCenter.mockClear()
     kakaoMock.state.mapInstance.getLevel.mockReturnValue(5)
@@ -229,7 +242,8 @@ describe('KakaoMapPanel', () => {
       expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
       expect(kakaoMock.state.overlays[0].content).toBeInstanceOf(HTMLElement)
       expect(kakaoMock.state.overlays[0].content.textContent).toContain('테스트 단지 1001')
-      expect(kakaoMock.state.overlays[0].content.textContent).toContain('최근 1년 평균 11억 원')
+      expect(kakaoMock.state.overlays[0].content.textContent).toContain('매매 평균 11억 원')
+      expect(kakaoMock.state.overlays[0].content.textContent).toContain('전세 평균 7.8억 원')
 
       kakaoMock.state.idleHandler?.()
       vi.advanceTimersByTime(180)
@@ -303,8 +317,9 @@ describe('KakaoMapPanel', () => {
       ])
     )
     expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
-    expect(kakaoMock.state.overlays[0].content).toContain('map-admin-cluster')
-    expect(kakaoMock.state.overlays[0].content).toContain('역삼동')
+    expect(kakaoMock.state.overlays[0].content).toBeInstanceOf(HTMLElement)
+    expect((kakaoMock.state.overlays[0].content as HTMLElement).className).toContain('map-admin-cluster')
+    expect(overlayText(kakaoMock.state.overlays[0].content)).toContain('역삼동')
 
     const firstClusterer = kakaoMock.state.clusterers[0]
     const firstAdminOverlay = kakaoMock.state.overlays[0]
@@ -320,6 +335,64 @@ describe('KakaoMapPanel', () => {
     expect(firstAdminOverlay.setMap).toHaveBeenCalledWith(null)
     expect(kakaoMock.maps.MarkerClusterer).toHaveBeenCalledTimes(2)
     expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(2)
+  })
+
+  it('zooms to the clicked Kakao property cluster bounds', async () => {
+    kakaoMock.state.hasKey = true
+    kakaoMock.state.mapInstance.getLevel.mockReturnValue(5)
+
+    mount(KakaoMapPanel, {
+      props: {
+        items: [property(1001), property(1002)],
+        selectedPropertyId: null,
+        administrativeClusters: []
+      }
+    })
+
+    await flushPromises()
+
+    const clusterBounds = { id: 'cluster-bounds' }
+    const clusterMarker = { setContent: vi.fn() }
+    const clickedCluster = {
+      getBounds: () => clusterBounds,
+      getCenter: () => ({ lat: 37.5, lng: 127.03 }),
+      getMarkers: () => kakaoMock.state.markers,
+      getClusterMarker: () => clusterMarker
+    }
+    kakaoMock.state.clusteredHandlers[0]([clickedCluster])
+    const clusterContent = clusterMarker.setContent.mock.calls[0][0] as HTMLElement
+    clusterContent.dispatchEvent(new MouseEvent('click'))
+
+    expect(kakaoMock.state.mapInstance.setBounds).toHaveBeenCalledWith(clusterBounds)
+    expect(kakaoMock.state.mapInstance.setLevel).toHaveBeenCalledWith(4, {
+      anchor: { lat: 37.5, lng: 127.03 },
+      animate: true
+    })
+    expect(kakaoMock.state.mapInstance.panTo).toHaveBeenCalledWith({ lat: 37.5, lng: 127.03 })
+  })
+
+  it('zooms to the clicked administrative cluster level and center', async () => {
+    kakaoMock.state.hasKey = true
+    kakaoMock.state.mapInstance.getLevel.mockReturnValue(7)
+
+    mount(KakaoMapPanel, {
+      props: {
+        items: [property(2001)],
+        selectedPropertyId: null,
+        administrativeClusters: [administrativeCluster('sigungu-11680', 'SIGUNGU', '강남구')]
+      }
+    })
+
+    await flushPromises()
+
+    const adminMarker = kakaoMock.state.overlays[0].content as HTMLElement
+    adminMarker.dispatchEvent(new MouseEvent('click'))
+
+    expect(kakaoMock.state.mapInstance.setLevel).toHaveBeenCalledWith(5, {
+      anchor: { lat: 37.5, lng: 127.03 },
+      animate: true
+    })
+    expect(kakaoMock.state.mapInstance.panTo).toHaveBeenCalledWith({ lat: 37.5, lng: 127.03 })
   })
 
   it('removes administrative overlays that overlap Kakao property cluster markers after clustering', async () => {
@@ -410,8 +483,8 @@ describe('KakaoMapPanel', () => {
 
     expect(kakaoMock.maps.MarkerClusterer).not.toHaveBeenCalled()
     expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
-    expect(kakaoMock.state.overlays[0].content).toContain('강남구')
-    expect(kakaoMock.state.overlays[0].content).toContain('map-admin-cluster')
+    expect(overlayText(kakaoMock.state.overlays[0].content)).toContain('강남구')
+    expect((kakaoMock.state.overlays[0].content as HTMLElement).className).toContain('map-admin-cluster')
 
     wrapper.unmount()
 
