@@ -1,12 +1,17 @@
 package com.jiber.backend.favorite;
 
+import com.jiber.backend.favorite.controller.*;
+import com.jiber.backend.favorite.dto.*;
+import com.jiber.backend.favorite.mapper.*;
+import com.jiber.backend.favorite.service.*;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jiber.backend.common.error.ApiException;
 import com.jiber.backend.common.error.ErrorCode;
-import com.jiber.backend.property.PropertyType;
-import com.jiber.backend.property.TransactionType;
+import com.jiber.backend.property.dto.PropertyType;
+import com.jiber.backend.property.dto.TransactionType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;

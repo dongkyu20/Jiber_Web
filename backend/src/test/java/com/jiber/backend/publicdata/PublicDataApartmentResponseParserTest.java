@@ -1,8 +1,14 @@
 package com.jiber.backend.publicdata;
 
+import com.jiber.backend.publicdata.client.*;
+import com.jiber.backend.publicdata.config.*;
+import com.jiber.backend.publicdata.dto.*;
+import com.jiber.backend.publicdata.mapper.*;
+import com.jiber.backend.publicdata.service.*;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.jiber.backend.property.TransactionType;
+import com.jiber.backend.property.dto.TransactionType;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 

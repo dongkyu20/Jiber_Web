@@ -2,8 +2,8 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.jiber.backend.auth.PendingSocialSessionMapper">
-    <resultMap id="PendingSocialSessionRecordMap" type="com.jiber.backend.auth.PendingSocialSessionRecord">
+<mapper namespace="com.jiber.backend.auth.mapper.PendingSocialSessionMapper">
+    <resultMap id="PendingSocialSessionRecordMap" type="com.jiber.backend.auth.mapper.PendingSocialSessionRecord">
         <constructor>
             <idArg column="pending_social_session_id" javaType="java.lang.Long"/>
             <arg column="pending_token_hash" javaType="java.lang.String"/>
@@ -19,7 +19,7 @@
         </constructor>
     </resultMap>
 
-    <insert id="insert" parameterType="com.jiber.backend.auth.PendingSocialSessionInsertCommand">
+    <insert id="insert" parameterType="com.jiber.backend.auth.mapper.PendingSocialSessionInsertCommand">
         INSERT INTO oauth_pending_social_sessions (
             pending_token_hash,
             oauth_provider,

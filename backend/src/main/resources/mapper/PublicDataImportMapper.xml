@@ -2,7 +2,7 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.jiber.backend.publicdata.PublicDataImportMapper">
+<mapper namespace="com.jiber.backend.publicdata.mapper.PublicDataImportMapper">
     <insert id="insertImportRun" useGeneratedKeys="true" keyProperty="importRunId">
         INSERT INTO public_data_import_runs (
             status,
@@ -130,7 +130,7 @@
             updated_at = CURRENT_TIMESTAMP(6)
     </insert>
 
-    <select id="findGeocodingByAddressKey" resultType="com.jiber.backend.publicdata.GeocodingCacheRecord">
+    <select id="findGeocodingByAddressKey" resultType="com.jiber.backend.publicdata.mapper.GeocodingCacheRecord">
         SELECT
             address_key AS addressKey,
             full_address AS fullAddress,
@@ -178,7 +178,7 @@
             updated_at = CURRENT_TIMESTAMP(6)
     </insert>
 
-    <select id="findCanonicalUpsertCandidates" resultType="com.jiber.backend.publicdata.CanonicalApartmentRawRow">
+    <select id="findCanonicalUpsertCandidates" resultType="com.jiber.backend.publicdata.dto.CanonicalApartmentRawRow">
         SELECT
             r.raw_transaction_id AS rawTransactionId,
             r.source_key AS sourceKey,

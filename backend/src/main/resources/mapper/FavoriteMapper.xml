@@ -2,7 +2,7 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.jiber.backend.favorite.FavoriteMapper">
+<mapper namespace="com.jiber.backend.favorite.mapper.FavoriteMapper">
     <sql id="FavoriteApartmentColumns">
         fa.favorite_id,
         fa.property_id,
@@ -35,13 +35,13 @@
         fa.created_at
     </sql>
 
-    <select id="findPropertyTypeById" resultType="com.jiber.backend.property.PropertyType">
+    <select id="findPropertyTypeById" resultType="com.jiber.backend.property.dto.PropertyType">
         SELECT property_type
         FROM properties
         WHERE property_id = #{propertyId}
     </select>
 
-    <select id="findFavoriteApartments" resultType="com.jiber.backend.favorite.FavoriteApartmentRow">
+    <select id="findFavoriteApartments" resultType="com.jiber.backend.favorite.mapper.FavoriteApartmentRow">
         SELECT
             <include refid="FavoriteApartmentColumns"/>
         FROM favorite_apartments fa
@@ -50,7 +50,7 @@
         ORDER BY fa.created_at DESC, fa.favorite_id DESC
     </select>
 
-    <select id="findFavoriteApartment" resultType="com.jiber.backend.favorite.FavoriteApartmentRow">
+    <select id="findFavoriteApartment" resultType="com.jiber.backend.favorite.mapper.FavoriteApartmentRow">
         SELECT
             <include refid="FavoriteApartmentColumns"/>
         FROM favorite_apartments fa
@@ -98,7 +98,7 @@
         created_at
     </sql>
 
-    <select id="findFavoriteAreas" resultType="com.jiber.backend.favorite.FavoriteAreaRow">
+    <select id="findFavoriteAreas" resultType="com.jiber.backend.favorite.mapper.FavoriteAreaRow">
         SELECT
             <include refid="FavoriteAreaColumns"/>
         FROM favorite_areas
@@ -106,7 +106,7 @@
         ORDER BY created_at DESC, favorite_area_id DESC
     </select>
 
-    <select id="findFavoriteAreaByNormalizedKey" resultType="com.jiber.backend.favorite.FavoriteAreaRow">
+    <select id="findFavoriteAreaByNormalizedKey" resultType="com.jiber.backend.favorite.mapper.FavoriteAreaRow">
         SELECT
             <include refid="FavoriteAreaColumns"/>
         FROM favorite_areas

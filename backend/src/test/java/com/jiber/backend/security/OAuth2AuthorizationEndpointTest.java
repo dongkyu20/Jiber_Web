@@ -1,5 +1,13 @@
 package com.jiber.backend.security;
 
+import com.jiber.backend.auth.config.*;
+import com.jiber.backend.auth.controller.*;
+import com.jiber.backend.auth.dto.*;
+import com.jiber.backend.auth.mapper.*;
+import com.jiber.backend.auth.service.*;
+import com.jiber.backend.chat.controller.*;
+import com.jiber.backend.property.dto.*;
+
 import static org.hamcrest.Matchers.startsWith;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
@@ -10,31 +18,31 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jiber.backend.auth.AuthController;
-import com.jiber.backend.auth.AuthService;
-import com.jiber.backend.auth.AuthUserMapper;
-import com.jiber.backend.auth.AuthUserRecord;
-import com.jiber.backend.auth.FrontendProperties;
-import com.jiber.backend.auth.JwtAuthenticationFilter;
-import com.jiber.backend.auth.JwtTokenProperties;
-import com.jiber.backend.auth.JwtTokenService;
-import com.jiber.backend.auth.OAuth2ClientRegistrationProperties;
-import com.jiber.backend.auth.OAuth2LoginSuccessHandler;
-import com.jiber.backend.auth.OAuth2ProviderUserResolver;
-import com.jiber.backend.auth.EmailNormalizer;
-import com.jiber.backend.auth.PendingSocialCookieService;
-import com.jiber.backend.auth.PendingSocialProperties;
-import com.jiber.backend.auth.PendingSocialSessionInsertCommand;
-import com.jiber.backend.auth.PendingSocialSessionMapper;
-import com.jiber.backend.auth.PendingSocialSessionRecord;
-import com.jiber.backend.auth.PendingSocialSessionService;
-import com.jiber.backend.auth.RefreshTokenCookieService;
-import com.jiber.backend.auth.RefreshTokenProperties;
-import com.jiber.backend.auth.RefreshTokenService;
-import com.jiber.backend.auth.SocialAccountInsertCommand;
-import com.jiber.backend.auth.SocialAccountMapper;
-import com.jiber.backend.auth.SocialAccountRecord;
-import com.jiber.backend.auth.SocialLoginService;
+import com.jiber.backend.auth.controller.AuthController;
+import com.jiber.backend.auth.service.AuthService;
+import com.jiber.backend.auth.mapper.AuthUserMapper;
+import com.jiber.backend.auth.mapper.AuthUserRecord;
+import com.jiber.backend.auth.config.FrontendProperties;
+import com.jiber.backend.auth.service.JwtAuthenticationFilter;
+import com.jiber.backend.auth.config.JwtTokenProperties;
+import com.jiber.backend.auth.service.JwtTokenService;
+import com.jiber.backend.auth.config.OAuth2ClientRegistrationProperties;
+import com.jiber.backend.auth.service.OAuth2LoginSuccessHandler;
+import com.jiber.backend.auth.service.OAuth2ProviderUserResolver;
+import com.jiber.backend.auth.service.EmailNormalizer;
+import com.jiber.backend.auth.service.PendingSocialCookieService;
+import com.jiber.backend.auth.config.PendingSocialProperties;
+import com.jiber.backend.auth.mapper.PendingSocialSessionInsertCommand;
+import com.jiber.backend.auth.mapper.PendingSocialSessionMapper;
+import com.jiber.backend.auth.mapper.PendingSocialSessionRecord;
+import com.jiber.backend.auth.service.PendingSocialSessionService;
+import com.jiber.backend.auth.service.RefreshTokenCookieService;
+import com.jiber.backend.auth.config.RefreshTokenProperties;
+import com.jiber.backend.auth.service.RefreshTokenService;
+import com.jiber.backend.auth.mapper.SocialAccountInsertCommand;
+import com.jiber.backend.auth.mapper.SocialAccountMapper;
+import com.jiber.backend.auth.mapper.SocialAccountRecord;
+import com.jiber.backend.auth.service.SocialLoginService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -175,20 +183,20 @@ class OAuth2AuthorizationEndpointTest {
             );
         }
 
-        private static class FakeRefreshSessionMapper implements com.jiber.backend.auth.RefreshSessionMapper {
+        private static class FakeRefreshSessionMapper implements com.jiber.backend.auth.mapper.RefreshSessionMapper {
 
             @Override
-            public int insert(com.jiber.backend.auth.RefreshSessionInsertCommand command) {
+            public int insert(com.jiber.backend.auth.mapper.RefreshSessionInsertCommand command) {
                 return 1;
             }
 
             @Override
-            public com.jiber.backend.auth.RefreshSessionRecord findByTokenHash(String refreshTokenHash) {
+            public com.jiber.backend.auth.mapper.RefreshSessionRecord findByTokenHash(String refreshTokenHash) {
                 return null;
             }
 
             @Override
-            public com.jiber.backend.auth.RefreshSessionRecord findActiveByTokenHash(String refreshTokenHash, OffsetDateTime now) {
+            public com.jiber.backend.auth.mapper.RefreshSessionRecord findActiveByTokenHash(String refreshTokenHash, OffsetDateTime now) {
                 return null;
             }
 
