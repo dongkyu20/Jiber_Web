@@ -37,9 +37,21 @@ export const router = createRouter({
       meta: { requiresAuth: true, roles: ['USER', 'ADMIN'] }
     },
     {
+      path: '/community',
+      name: 'community',
+      component: () => import('@/views/CommunityView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/community/:id',
+      name: 'community-post',
+      component: () => import('@/views/CommunityPostView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
       path: '/notices',
       name: 'notices',
-      component: () => import('@/views/NoticesView.vue'),
+      redirect: '/community',
       meta: { requiresAuth: false }
     },
     {

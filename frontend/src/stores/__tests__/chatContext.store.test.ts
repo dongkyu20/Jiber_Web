@@ -5,7 +5,7 @@ import type { PropertyDetail, ShapValue, ValuationResponse } from '@/api/types'
 import { useChatContextStore } from '@/stores/chatContext'
 
 const property: PropertyDetail = {
-  propertyId: 1912,
+  propertyId: 1001,
   propertyType: 'APARTMENT',
   name: '경희궁롯데캐슬',
   address: {
@@ -36,7 +36,7 @@ const property: PropertyDetail = {
 }
 
 const valuation: ValuationResponse = {
-  propertyId: 1912,
+  propertyId: 1001,
   supported: true,
   estimatedPrice: 1100000000,
   currency: 'KRW',

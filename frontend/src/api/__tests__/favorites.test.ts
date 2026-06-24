@@ -20,28 +20,28 @@ describe('favoritesApi apartment endpoints', () => {
     const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
       data: {
         favoriteId: 10,
-        propertyId: 1912,
+        propertyId: 1001,
         createdAt: '2026-06-19T10:00:00+09:00',
         message: '저장했습니다.'
       }
     })
 
-    await favoritesApi.addApartment(1912)
+    await favoritesApi.addApartment(1001)
 
-    expect(postSpy).toHaveBeenCalledWith('/favorites/apartments', { propertyId: 1912 })
+    expect(postSpy).toHaveBeenCalledWith('/favorites/apartments', { propertyId: 1001 })
   })
 
   it('deletes an apartment favorite by property id', async () => {
     const deleteSpy = vi.spyOn(apiClient, 'delete').mockResolvedValueOnce({
       data: {
-        propertyId: 1912,
+        propertyId: 1001,
         message: '삭제했습니다.'
       }
     })
 
-    await favoritesApi.removeApartment(1912)
+    await favoritesApi.removeApartment(1001)
 
-    expect(deleteSpy).toHaveBeenCalledWith('/favorites/apartments/1912')
+    expect(deleteSpy).toHaveBeenCalledWith('/favorites/apartments/1001')
   })
 })
 

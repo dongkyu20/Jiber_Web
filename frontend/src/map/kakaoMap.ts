@@ -33,6 +33,7 @@ export interface KakaoMapLike {
   setCenter?(latLng: unknown): void
   setLevel?(level: number): void
   panTo?(latLng: unknown): void
+  relayout?(): void
 }
 
 export interface KakaoPointLike {

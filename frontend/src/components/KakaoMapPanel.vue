@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { AdministrativeCluster, PropertyMapItem } from '@/api/types'
 import {
@@ -234,6 +234,8 @@ onMounted(async () => {
 
     ready.value = true
     message.value = '지도를 움직이면 현재 화면 범위로 검색합니다.'
+    await nextTick()
+    map?.relayout?.()
     emitViewport('ready')
     renderMapLayers({ force: true })
     focusMap(props.focusTarget)
