@@ -25,15 +25,15 @@ const vReveal = {
 }
 
 const activeFilter = ref('전체')
-const filters = ['전체', '아파트', '펜트하우스', '빌라']
+const filters = ['전체', '실거래', 'AI 분석', '안전 정보']
 
 const allListings = [
-  { location: '용산 · 한남동', name: '한남 더힐 펜트하우스', desc: '전용 84m² · 침실 3 · 한강 파노라마', price: '₩28억', type: '펜트하우스' },
-  { location: '성동 · 성수동', name: '성수 트라이베카', desc: '전용 59m² · 침실 2 · 복층 구조', price: '₩19억', type: '아파트' },
-  { location: '강남 · 청담동', name: '청담 빌라드제니스', desc: '전용 112m² · 침실 4 · 프라이빗 테라스', price: '₩42억', type: '빌라' },
-  { location: '서초 · 반포동', name: '반포 아크로리버파크', desc: '전용 78m² · 침실 3 · 리버뷰', price: '₩35억', type: '아파트' },
-  { location: '강남 · 압구정동', name: '압구정 갤러리아 포레', desc: '전용 95m² · 침실 4 · 코너 세대', price: '₩52억', type: '아파트' },
-  { location: '용산 · 이태원동', name: '이태원 더 프라임', desc: '전용 68m² · 침실 2 · 남산 조망', price: '₩24억', type: '빌라' },
+  { location: '지도 탐색', name: '서울 아파트 실거래 위치 확인', desc: '지도 이동과 검색어로 단지별 최근 거래를 빠르게 확인합니다.', price: '지도 열기', type: '실거래' },
+  { location: '상세 분석', name: '단지별 최근 실거래 내역', desc: '거래일, 전용면적, 층, 거래금액을 한 화면에서 비교합니다.', price: '상세보기', type: '실거래' },
+  { location: '가격예측', name: '아파트 적정가 추정', desc: '학습된 가격예측 모델로 최근 거래 조건 기반 추정가를 계산합니다.', price: 'AI 실행', type: 'AI 분석' },
+  { location: 'XAI', name: 'SHAP 기반 가격 요인 설명', desc: '면적, 층, 입지 등 어떤 요소가 추정가에 영향을 줬는지 보여줍니다.', price: '요인 확인', type: 'AI 분석' },
+  { location: '문서 챗봇', name: '부동산 제도·시장 문서 질의', desc: 'RAG 문서를 바탕으로 전세 체크리스트와 주택 동향 질문에 답합니다.', price: '질문하기', type: '안전 정보' },
+  { location: '관심목록', name: '관심 단지와 관심 지역 저장', desc: '로그인 후 자주 보는 단지와 지도 영역을 따로 모아 확인합니다.', price: '저장하기', type: '안전 정보' },
 ]
 
 const filteredListings = computed(() =>
@@ -52,7 +52,7 @@ const filteredListings = computed(() =>
           <img class="brand-logo-img brand-logo-img--header" :src="brandLogoUrl" alt="집er estate real" />
         </RouterLink>
         <nav class="lp-nav">
-          <a href="#listings">추천 매물</a>
+          <a href="#listings">주요 기능</a>
           <a href="#services">서비스</a>
           <a href="#community">커뮤니티</a>
         </nav>
@@ -67,26 +67,26 @@ const filteredListings = computed(() =>
       <section class="page">
         <div class="lp-container hero-inner">
           <div class="hero-content">
-            <p class="eyebrow-tag" v-reveal="{ delay: 0 }">♦ PREMIUM RESIDENTIAL COLLECTION</p>
-            <h1 class="hero-heading" v-reveal="{ delay: 100 }">당신의 일상이<br>작품이 되는 공간</h1>
+            <p class="eyebrow-tag" v-reveal="{ delay: 0 }">REAL TRANSACTION DATA PLATFORM</p>
+            <h1 class="hero-heading" v-reveal="{ delay: 100 }">부동산 거래 정보를<br>데이터로 확인하는 곳</h1>
             <p class="hero-desc" v-reveal="{ delay: 200 }">
-              실거래가 분석부터 AI 적정가 추정, 설명가능한 XAI까지 — 데이터로
-              검증된 부동산 의사결정을 집er에서 시작하세요.
+              지도 기반 실거래 탐색부터 아파트 가격예측, SHAP 기반 설명,
+              문서 근거 챗봇까지 집er에서 한 번에 확인하세요.
             </p>
             <div class="hero-search" v-reveal="{ delay: 300 }">
               <div class="search-field">
                 <label>지역</label>
-                <span>강남 · 성수</span>
+                <span>서울 전역</span>
               </div>
               <div class="search-sep" />
               <div class="search-field">
                 <label>유형</label>
-                <span>아파트</span>
+                <span>아파트 중심</span>
               </div>
               <div class="search-sep" />
               <div class="search-field">
-                <label>가격대</label>
-                <span>20억 ~</span>
+                <label>분석</label>
+                <span>실거래 · AI</span>
               </div>
               <RouterLink to="/map" class="search-btn">검색</RouterLink>
             </div>
@@ -100,12 +100,12 @@ const filteredListings = computed(() =>
               <div class="arch-d arch-d-2" />
             </div>
             <div class="hero-badge">
-              <p class="badge-label">이번 주 추천</p>
-              <h3 class="badge-name">성수 트라이베카</h3>
-              <p class="badge-desc">전용 59m² · 복층 · 한강 조망</p>
+              <p class="badge-label">상세보기에서 바로 확인</p>
+              <h3 class="badge-name">AI 적정가 · SHAP 설명</h3>
+              <p class="badge-desc">최근 실거래 조건 기반 가격예측과 요인 분석</p>
               <div class="badge-row">
-                <span class="badge-price">₩19억</span>
-                <a href="#" class="badge-link">상세 →</a>
+                <span class="badge-price">아파트 지원</span>
+                <RouterLink to="/map" class="badge-link">지도에서 보기 →</RouterLink>
               </div>
             </div>
           </div>
@@ -116,23 +116,23 @@ const filteredListings = computed(() =>
       <section class="page page-dark-alt">
         <div class="lp-container stats-page-inner">
           <div class="stat-big" v-reveal="{ delay: 0 }">
-            <p class="stat-big-num">2.3<em>만</em></p>
-            <p class="stat-big-label">학습 실거래 데이터</p>
+            <p class="stat-big-num">25<em>구</em></p>
+            <p class="stat-big-label">서울 자치구 탐색</p>
           </div>
           <div class="stat-sep-v" />
           <div class="stat-big" v-reveal="{ delay: 100 }">
-            <p class="stat-big-num">0.91</p>
-            <p class="stat-big-label">적정가 모델 R²</p>
+            <p class="stat-big-num">AI</p>
+            <p class="stat-big-label">아파트 적정가 추정</p>
           </div>
           <div class="stat-sep-v" />
           <div class="stat-big" v-reveal="{ delay: 200 }">
-            <p class="stat-big-num">25<em>구</em></p>
-            <p class="stat-big-label">서울 전 자치구</p>
+            <p class="stat-big-num">SHAP</p>
+            <p class="stat-big-label">가격 요인 설명</p>
           </div>
           <div class="stat-sep-v" />
           <div class="stat-big" v-reveal="{ delay: 300 }">
-            <p class="stat-big-num">24<em>h</em></p>
-            <p class="stat-big-label">실거래가 갱신</p>
+            <p class="stat-big-num">RAG</p>
+            <p class="stat-big-label">문서 근거 챗봇</p>
           </div>
         </div>
       </section>
@@ -142,8 +142,8 @@ const filteredListings = computed(() =>
         <div class="lp-container">
           <div class="sec-header" v-reveal>
             <div>
-              <p class="sec-eyebrow">FEATURED LISTINGS</p>
-              <h2 class="sec-title">이번 달 추천 매물</h2>
+              <p class="sec-eyebrow">CORE FEATURES</p>
+              <h2 class="sec-title">집er에서 확인할 수 있는 것</h2>
             </div>
             <div class="filter-group">
               <button
@@ -166,7 +166,7 @@ const filteredListings = computed(() =>
               <p class="listing-desc">{{ item.desc }}</p>
               <div class="listing-foot">
                 <span class="listing-price">{{ item.price }}</span>
-                <a href="#" class="listing-link">상세보기 →</a>
+                <RouterLink to="/map" class="listing-link">시작하기 →</RouterLink>
               </div>
             </div>
           </div>
@@ -181,38 +181,38 @@ const filteredListings = computed(() =>
               <p class="sec-eyebrow">WHAT 집ER DOES</p>
               <h2 class="sec-title">데이터가 답하는<br>부동산 의사결정 플랫폼</h2>
             </div>
-            <a href="#" class="text-arrow-link">서비스 시작하기 →</a>
+            <RouterLink to="/map" class="text-arrow-link">서비스 시작하기 →</RouterLink>
           </div>
           <div class="services-grid">
             <div class="svc-card" v-reveal="{ delay: 0 }">
               <span class="svc-num">01</span>
-              <h3>지도 기반 실시간 검색</h3>
-              <p>지도를 움직이면 화면 영역 내 단지와 실거래가가 자동 갱신됩니다.</p>
+              <h3>지도 기반 실거래 검색</h3>
+              <p>지도 영역과 검색어, 주거 유형, 거래방식 조건으로 실거래 정보를 탐색합니다.</p>
             </div>
             <div class="svc-card" v-reveal="{ delay: 70 }">
               <span class="svc-num">02</span>
-              <h3>실거래가 &amp; 시세 분석</h3>
-              <p>기간별 실거래 추이, 면적별 평균가, 유사 단지 비교까지 한 화면에서.</p>
+              <h3>상세 거래 정보</h3>
+              <p>단지 기본 정보와 최근 실거래 내역을 상세보기 화면에서 함께 확인합니다.</p>
             </div>
             <div class="svc-card" v-reveal="{ delay: 140 }">
               <span class="svc-num">03</span>
               <h3>AI 적정가 추정</h3>
-              <p>Hedonic Price Model로 적정가를 추정하고 호가와의 괴리를 보여줍니다.</p>
+              <p>아파트 상세보기에서 최근 거래 조건을 바탕으로 가격예측 모델을 실행합니다.</p>
             </div>
             <div class="svc-card" v-reveal="{ delay: 70 }">
               <span class="svc-num">04</span>
               <h3>설명가능한 AI · SHAP</h3>
-              <p>면적·조망·입지 등 가격 요인을 SHAP 기반 XAI로 직관적으로 설명합니다.</p>
+              <p>전용면적, 층, 입지 등 가격 추정에 영향을 준 요인을 차트로 확인합니다.</p>
             </div>
             <div class="svc-card" v-reveal="{ delay: 140 }">
               <span class="svc-num">05</span>
-              <h3>AI 챗봇 상담</h3>
-              <p>매물 분석 결과를 컨텍스트로, 적정가·요인을 대화로 물어볼 수 있습니다.</p>
+              <h3>문서 기반 AI 챗봇</h3>
+              <p>주택 동향, 전세 체크리스트, 법령 문서 등 근거 문서를 바탕으로 답변합니다.</p>
             </div>
             <div class="svc-card" v-reveal="{ delay: 210 }">
               <span class="svc-num">06</span>
               <h3>커뮤니티 &amp; 관심목록</h3>
-              <p>실거주 후기를 나누고 관심 단지·지역 시세 변동 알림을 받아보세요.</p>
+              <p>관심 단지와 지역을 저장하고, 공지와 커뮤니티 게시글을 함께 확인합니다.</p>
             </div>
           </div>
         </div>
@@ -224,29 +224,29 @@ const filteredListings = computed(() =>
           <div class="sec-header center-header" v-reveal>
             <div style="text-align:center">
               <p class="sec-eyebrow">HOW IT WORKS</p>
-              <h2 class="sec-title">4단계로 시작하는<br>스마트 부동산</h2>
+              <h2 class="sec-title">4단계로 확인하는<br>부동산 데이터</h2>
             </div>
           </div>
           <div class="how-grid">
             <div class="how-item" v-reveal="{ delay: 0 }">
               <span class="how-num">01</span>
               <h3>지도에서 검색</h3>
-              <p>관심 지역을 지도에서 탐색하고 유형·거래방식으로 필터링합니다.</p>
+              <p>관심 지역을 지도에서 탐색하고 유형과 거래방식으로 필터링합니다.</p>
             </div>
             <div class="how-item" v-reveal="{ delay: 120 }">
               <span class="how-num">02</span>
-              <h3>실거래·시세 분석</h3>
-              <p>기간별 실거래 추이와 면적별·주변 단지 시세를 비교합니다.</p>
+              <h3>최근 거래 확인</h3>
+              <p>상세보기에서 단지 기본 정보와 최근 실거래 내역을 확인합니다.</p>
             </div>
             <div class="how-item" v-reveal="{ delay: 240 }">
               <span class="how-num">03</span>
               <h3>AI 적정가 · XAI</h3>
-              <p>Hedonic 모델 적정가와 SHAP 기반 가격 형성 요인을 확인합니다.</p>
+              <p>아파트라면 가격예측과 SHAP 기반 가격 형성 요인을 확인합니다.</p>
             </div>
             <div class="how-item" v-reveal="{ delay: 360 }">
               <span class="how-num">04</span>
-              <h3>AI 챗봇 상담</h3>
-              <p>분석 결과를 컨텍스트로 챗봇에 묻고 합리적으로 결정합니다.</p>
+              <h3>챗봇에 질문</h3>
+              <p>전세, 주택 동향, 실거래 관련 궁금한 점을 문서 기반 챗봇에 질문합니다.</p>
             </div>
           </div>
         </div>
@@ -258,73 +258,73 @@ const filteredListings = computed(() =>
           <div class="sec-header" v-reveal>
             <div>
               <p class="sec-eyebrow">COMMUNITY</p>
-              <h2 class="sec-title">실거주자가 만드는<br>부동산 이야기</h2>
+              <h2 class="sec-title">공지와 커뮤니티를<br>함께 확인하세요</h2>
             </div>
-            <a href="#" class="text-arrow-link">커뮤니티 바로가기 →</a>
+            <RouterLink to="/community" class="text-arrow-link">커뮤니티 바로가기 →</RouterLink>
           </div>
           <div class="community-grid">
             <div class="hot-posts" v-reveal="{ delay: 0 }">
               <div class="hot-header">
-                <span aria-hidden="true">🔥</span>
-                <strong>실시간 인기글</strong>
+                <span aria-hidden="true">•</span>
+                <strong>이런 주제를 다룹니다</strong>
               </div>
               <ol class="post-list">
-                <li><span class="post-rank">1</span><span class="post-tag">후기</span><span class="post-title">반포 아크로리버파크 84m² 실거주 1년 후기 (장단점 정리)</span><span class="post-cmts">댓글 42</span></li>
-                <li><span class="post-rank">2</span><span class="post-tag">자유</span><span class="post-title">요즘 마포 vs 성수 어디가 더 오를까요?</span><span class="post-cmts">댓글 88</span></li>
-                <li><span class="post-rank">3</span><span class="post-tag">Q&amp;A</span><span class="post-title">AI 적정가가 호가보다 낮으면 협상 가능한가요?</span><span class="post-cmts">댓글 31</span></li>
-                <li><span class="post-rank">4</span><span class="post-tag">자유</span><span class="post-title">경희궁자이 학군 관련 정보 공유합니다</span><span class="post-cmts">댓글 24</span></li>
-                <li><span class="post-rank">5</span><span class="post-tag">후기</span><span class="post-title">헬리오시티 전세 살아본 솔직 후기</span><span class="post-cmts">댓글 19</span></li>
+                <li><span class="post-rank">1</span><span class="post-tag">공지</span><span class="post-title">서비스 업데이트와 데이터 반영 내역을 확인합니다</span><span class="post-cmts">안내</span></li>
+                <li><span class="post-rank">2</span><span class="post-tag">Q&amp;A</span><span class="post-title">가격예측과 SHAP 결과를 어떻게 읽는지 질문합니다</span><span class="post-cmts">질문</span></li>
+                <li><span class="post-rank">3</span><span class="post-tag">정보</span><span class="post-title">전세 계약 전 체크리스트와 실거래 확인 팁을 공유합니다</span><span class="post-cmts">공유</span></li>
+                <li><span class="post-rank">4</span><span class="post-tag">지역</span><span class="post-title">관심 지역의 거래 흐름과 주변 단지 정보를 살펴봅니다</span><span class="post-cmts">토론</span></li>
+                <li><span class="post-rank">5</span><span class="post-tag">문의</span><span class="post-title">서비스 사용 중 불편한 점이나 개선 의견을 남깁니다</span><span class="post-cmts">피드백</span></li>
               </ol>
             </div>
             <div class="comm-stats" v-reveal="{ delay: 150 }">
               <div class="comm-cat">
-                <div><p class="cat-name">매매후기</p><p class="cat-desc">실거주 경험을 나눠요</p></div>
-                <span class="cat-count">1,240</span>
+                <div><p class="cat-name">공지사항</p><p class="cat-desc">운영 안내와 변경 내역</p></div>
+                <span class="cat-count">운영</span>
               </div>
               <div class="comm-cat">
-                <div><p class="cat-name">자유게시판</p><p class="cat-desc">시세 전망 · 지역 분석</p></div>
-                <span class="cat-count">8,530</span>
+                <div><p class="cat-name">질문 / 답변</p><p class="cat-desc">서비스와 데이터 질문</p></div>
+                <span class="cat-count">Q&amp;A</span>
               </div>
               <div class="comm-cat">
-                <div><p class="cat-name">질문 / 답변</p><p class="cat-desc">전문가와 이웃이 답해요</p></div>
-                <span class="cat-count">3,140</span>
+                <div><p class="cat-name">관심목록</p><p class="cat-desc">단지와 지역 저장</p></div>
+                <span class="cat-count">회원</span>
               </div>
               <div class="comm-meta">
-                <p class="meta-label">커뮤니티 현황</p>
-                <div class="meta-row"><span>오늘 작성글</span><span>128</span></div>
-                <div class="meta-row"><span>전체 게시글</span><span>24,910</span></div>
-                <div class="meta-row"><span>활동 회원</span><span>8,402</span></div>
+                <p class="meta-label">로그인하면 가능한 기능</p>
+                <div class="meta-row"><span>관심 단지 저장</span><span>지원</span></div>
+                <div class="meta-row"><span>관심 지역 저장</span><span>지원</span></div>
+                <div class="meta-row"><span>챗봇 컨텍스트</span><span>지원</span></div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- PAGE 7: Client Stories -->
+      <!-- PAGE 7: Data Sources -->
       <section class="page page-dark-alt">
         <div class="lp-container">
           <div v-reveal style="text-align:center; margin-bottom: 48px;">
-            <p class="sec-eyebrow">CLIENT STORIES</p>
-            <h2 class="sec-title">고객이 전하는 집er</h2>
+            <p class="sec-eyebrow">DATA & AI</p>
+            <h2 class="sec-title">실거래 데이터와 AI 결과를<br>구분해서 보여줍니다</h2>
           </div>
           <div class="review-grid">
             <div class="review-card" v-reveal="{ delay: 0 }">
-              <p class="review-quote">"원하던 한남동 펜트하우스를 집er를 통해 만났습니다. 권리관계까지 투명하게 짚어줘서 마음 편히 계약했어요."</p>
+              <p class="review-quote">실거래 정보는 지도와 상세보기에서 확인하고, AI 가격예측은 아파트 상세보기의 별도 버튼으로 실행합니다.</p>
               <div class="review-author">
                 <div class="author-avatar" />
                 <div>
-                  <p class="author-name">김도윤 고객님</p>
-                  <p class="author-loc">용산 한남동 · 2025</p>
+                  <p class="author-name">실거래 기반 탐색</p>
+                  <p class="author-loc">지도 · 상세보기 · 최근 거래</p>
                 </div>
               </div>
             </div>
             <div class="review-card" v-reveal="{ delay: 150 }">
-              <p class="review-quote">"바쁜 일정에도 전담 컨설턴트가 모든 과정을 챙겨줬습니다. 분양 단지 관람부터 계약까지 군더더기가 없었어요."</p>
+              <p class="review-quote">챗봇 답변은 프로젝트 문서와 부동산 관련 공개 문서를 근거로 제공되며, 계약 판단은 참고용으로만 사용합니다.</p>
               <div class="review-author">
                 <div class="author-avatar" />
                 <div>
-                  <p class="author-name">이서연 고객님</p>
-                  <p class="author-loc">성동 성수동 · 2025</p>
+                  <p class="author-name">RAG 문서 기반 답변</p>
+                  <p class="author-loc">전세 · 주택 동향 · 법령 문서</p>
                 </div>
               </div>
             </div>
@@ -337,16 +337,16 @@ const filteredListings = computed(() =>
         <div class="lp-container">
           <div class="contact-card" v-reveal>
             <div class="contact-left">
-              <p class="sec-eyebrow" style="color:#8a7060">GET IN TOUCH</p>
-              <h2 class="contact-heading">원하는 집,<br>집er가 찾아드립니다</h2>
-              <p class="contact-desc">상담을 신청하시면 조건에 맞는 매물을 24시간 안에 제안해 드립니다.</p>
-              <p class="contact-phone">02 · 1234 · 5678</p>
+              <p class="sec-eyebrow" style="color:#8a7060">START EXPLORING</p>
+              <h2 class="contact-heading">지도에서 시작해<br>AI 설명까지 확인하세요</h2>
+              <p class="contact-desc">집er는 중개나 투자 판단 대신, 실거래와 모델 설명을 이해하기 쉽게 모아 보여주는 데이터 서비스입니다.</p>
+              <p class="contact-phone">Jiber Web</p>
             </div>
             <form class="contact-form" @submit.prevent>
-              <input type="text" placeholder="이름" />
-              <input type="text" placeholder="연락처" />
-              <input type="text" placeholder="관심 지역 (예: 강남 · 청담)" />
-              <button type="submit" class="contact-submit">무료 상담 신청</button>
+              <input type="text" value="지도 기반 실거래 탐색" readonly />
+              <input type="text" value="아파트 가격예측 모델" readonly />
+              <input type="text" value="SHAP 기반 XAI 설명" readonly />
+              <RouterLink to="/map" class="contact-submit">지도 열기</RouterLink>
             </form>
           </div>
         </div>
@@ -357,20 +357,20 @@ const filteredListings = computed(() =>
               <RouterLink to="/" class="lp-brand">
                 <img class="brand-logo-img brand-logo-img--footer" :src="brandLogoUrl" alt="집er estate real" />
               </RouterLink>
-              <p>프리미엄 부동산 매매 · 분양</p>
-              <p>서울특별시 강남구 청담동 · 02-1234-5678</p>
+              <p>지도 기반 부동산 거래 정보 플랫폼</p>
+              <p>실거래 분석 · 가격예측 · XAI · 문서 기반 챗봇</p>
             </div>
             <nav class="footer-nav">
               <p class="footer-nav-title">EXPLORE</p>
-              <a href="#">전체 매물</a>
-              <a href="#">분양 정보</a>
-              <a href="#">지역별 검색</a>
+              <RouterLink to="/map">지도 검색</RouterLink>
+              <RouterLink to="/chat">AI 챗봇</RouterLink>
+              <RouterLink to="/favorites">관심목록</RouterLink>
             </nav>
             <nav class="footer-nav">
               <p class="footer-nav-title">COMPANY</p>
-              <a href="#">회사 소개</a>
-              <a href="#">고객 후기</a>
-              <a href="#">상담 신청</a>
+              <RouterLink to="/community">커뮤니티</RouterLink>
+              <RouterLink to="/community">공지사항</RouterLink>
+              <RouterLink to="/login">로그인</RouterLink>
             </nav>
           </div>
           <div class="lp-container footer-copy">
@@ -896,11 +896,15 @@ const filteredListings = computed(() =>
 .contact-form input::placeholder { color: #9a8060; }
 .contact-form input:focus { border-color: rgba(100,80,50,.6); }
 .contact-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #1a1208;
   color: var(--cream);
   border: none;
   border-radius: 9px;
   padding: 14px;
+  text-decoration: none;
   font-size: 0.92rem;
   font-weight: 700;
   font-family: inherit;
@@ -962,6 +966,9 @@ const filteredListings = computed(() =>
 @media (max-width: 640px) {
   .lp-container { width: calc(100% - 32px); }
   .lp-nav { gap: 20px; font-size: 0.8rem; }
+  .hero-search { flex-wrap: wrap; }
+  .search-field { min-width: 42%; }
+  .search-btn { min-height: 46px; justify-content: center; flex: 1 0 100%; }
   .listings-grid, .services-grid, .how-grid, .review-grid { grid-template-columns: 1fr; }
   .how-item { border-right: none; }
   .sec-header { flex-direction: column; align-items: flex-start; }
