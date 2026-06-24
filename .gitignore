@@ -51,6 +51,8 @@ venv/
 
 # Model and local data artifacts
 artifacts/
+data/valuation/
+data/xai/
 model-artifacts/
 model-server/artifacts/
 model-server/cache/
@@ -74,6 +76,7 @@ model-server/documents/**/.DS_Store
 
 # Local database files
 mysql-data/
+db/dumps/
 *.sql.gz
 
 # Local git worktrees

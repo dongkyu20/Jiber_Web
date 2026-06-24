@@ -680,4 +680,54 @@ describe('PropertyDetailView transaction summary', () => {
     expect(wrapper.text()).toContain('이미 삭제된 관심 아파트입니다.')
     expect(wrapper.text()).toContain('관심 아파트 추가')
   })
+
+  it('requests valuation and SHAP from the selected transaction input', async () => {
+    propertyApiMock.requestValuation.mockResolvedValueOnce({
+      propertyId: 1001,
+      supported: true,
+      estimatedPrice: 1200000000,
+      currency: 'KRW',
+      modelVersion: 'model-v1',
+      baselineDate: '2026-06-24',
+      featureSetVersion: 'features-v1',
+      message: '추정가를 계산했습니다.'
+    })
+    propertyApiMock.requestShap.mockResolvedValueOnce({
+      propertyId: 1001,
+      supported: true,
+      baseValue: 1000000000,
+      prediction: 1200000000,
+      currency: 'KRW',
+      values: [
+        {
+          feature: 'area',
+          labelKo: '면적',
+          value: 84.8792,
+          shapValue: 120000000,
+          direction: 'UP'
+        }
+      ],
+      modelVersion: 'model-v1',
+      baselineDate: '2026-06-24',
+      featureSetVersion: 'features-v1',
+      message: '요인을 계산했습니다.'
+    })
+    const wrapper = await mountPropertyDetailView({ authenticated: true })
+
+    await wrapper.get('[data-test="property-ai-button"]').trigger('click')
+    await flushPromises()
+
+    expect(propertyApiMock.requestValuation).toHaveBeenCalledWith('1001', {
+      exclusiveAreaM2: 84.8792,
+      floor: 10,
+      asOfDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+    })
+    expect(propertyApiMock.requestShap).toHaveBeenCalledWith('1001', {
+      exclusiveAreaM2: 84.8792,
+      floor: 10,
+      asOfDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+    })
+    expect(wrapper.text()).toContain('추정가 12억 원')
+    expect(wrapper.text()).toContain('요인을 계산했습니다.')
+  })
 })

@@ -1,5 +1,13 @@
 package com.jiber.backend.security;
 
+import com.jiber.backend.auth.config.*;
+import com.jiber.backend.auth.controller.*;
+import com.jiber.backend.auth.dto.*;
+import com.jiber.backend.auth.mapper.*;
+import com.jiber.backend.auth.service.*;
+import com.jiber.backend.chat.controller.*;
+import com.jiber.backend.property.dto.*;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -13,44 +21,44 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jiber.backend.auth.AuthController;
-import com.jiber.backend.auth.AuthService;
-import com.jiber.backend.auth.AuthUserPrincipal;
-import com.jiber.backend.auth.AuthUserMapper;
-import com.jiber.backend.auth.AuthUserRecord;
-import com.jiber.backend.auth.EmailNormalizer;
-import com.jiber.backend.auth.JwtAuthenticationFilter;
-import com.jiber.backend.auth.JwtTokenProperties;
-import com.jiber.backend.auth.JwtTokenService;
-import com.jiber.backend.auth.PasswordPolicy;
-import com.jiber.backend.auth.PendingSocialCookieService;
-import com.jiber.backend.auth.PendingSocialProperties;
-import com.jiber.backend.auth.PendingSocialSessionInsertCommand;
-import com.jiber.backend.auth.PendingSocialSessionMapper;
-import com.jiber.backend.auth.PendingSocialSessionRecord;
-import com.jiber.backend.auth.RefreshSessionInsertCommand;
-import com.jiber.backend.auth.RefreshSessionMapper;
-import com.jiber.backend.auth.RefreshSessionRecord;
-import com.jiber.backend.auth.RefreshTokenCookieService;
-import com.jiber.backend.auth.RefreshTokenProperties;
-import com.jiber.backend.auth.RefreshTokenService;
-import com.jiber.backend.auth.SocialAccountInsertCommand;
-import com.jiber.backend.auth.SocialAccountMapper;
-import com.jiber.backend.auth.SocialAccountRecord;
-import com.jiber.backend.auth.SocialLoginService;
-import com.jiber.backend.chat.ChatController;
-import com.jiber.backend.chat.ChatResponse;
-import com.jiber.backend.chat.ChatService;
-import com.jiber.backend.chat.RagConfigResponse;
-import com.jiber.backend.favorite.FavoriteAreaInsertCommand;
-import com.jiber.backend.favorite.FavoriteAreaRow;
-import com.jiber.backend.favorite.FavoriteApartmentRow;
-import com.jiber.backend.favorite.FavoriteController;
-import com.jiber.backend.favorite.FavoriteMapper;
-import com.jiber.backend.favorite.FavoriteService;
-import com.jiber.backend.notice.AdminNoticeController;
-import com.jiber.backend.notice.NoticeService;
-import com.jiber.backend.property.PropertyType;
+import com.jiber.backend.auth.controller.AuthController;
+import com.jiber.backend.auth.service.AuthService;
+import com.jiber.backend.auth.dto.AuthUserPrincipal;
+import com.jiber.backend.auth.mapper.AuthUserMapper;
+import com.jiber.backend.auth.mapper.AuthUserRecord;
+import com.jiber.backend.auth.service.EmailNormalizer;
+import com.jiber.backend.auth.service.JwtAuthenticationFilter;
+import com.jiber.backend.auth.config.JwtTokenProperties;
+import com.jiber.backend.auth.service.JwtTokenService;
+import com.jiber.backend.auth.service.PasswordPolicy;
+import com.jiber.backend.auth.service.PendingSocialCookieService;
+import com.jiber.backend.auth.config.PendingSocialProperties;
+import com.jiber.backend.auth.mapper.PendingSocialSessionInsertCommand;
+import com.jiber.backend.auth.mapper.PendingSocialSessionMapper;
+import com.jiber.backend.auth.mapper.PendingSocialSessionRecord;
+import com.jiber.backend.auth.mapper.RefreshSessionInsertCommand;
+import com.jiber.backend.auth.mapper.RefreshSessionMapper;
+import com.jiber.backend.auth.mapper.RefreshSessionRecord;
+import com.jiber.backend.auth.service.RefreshTokenCookieService;
+import com.jiber.backend.auth.config.RefreshTokenProperties;
+import com.jiber.backend.auth.service.RefreshTokenService;
+import com.jiber.backend.auth.mapper.SocialAccountInsertCommand;
+import com.jiber.backend.auth.mapper.SocialAccountMapper;
+import com.jiber.backend.auth.mapper.SocialAccountRecord;
+import com.jiber.backend.auth.service.SocialLoginService;
+import com.jiber.backend.chat.controller.ChatController;
+import com.jiber.backend.chat.dto.ChatResponse;
+import com.jiber.backend.chat.service.ChatService;
+import com.jiber.backend.chat.dto.RagConfigResponse;
+import com.jiber.backend.favorite.mapper.FavoriteAreaInsertCommand;
+import com.jiber.backend.favorite.mapper.FavoriteAreaRow;
+import com.jiber.backend.favorite.mapper.FavoriteApartmentRow;
+import com.jiber.backend.favorite.controller.FavoriteController;
+import com.jiber.backend.favorite.mapper.FavoriteMapper;
+import com.jiber.backend.favorite.service.FavoriteService;
+import com.jiber.backend.notice.controller.AdminNoticeController;
+import com.jiber.backend.notice.service.NoticeService;
+import com.jiber.backend.property.dto.PropertyType;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -516,7 +524,7 @@ class SecurityRulesTest {
                     ),
                     authUserMapper,
                     new SecuritySocialAccountMapper(),
-                    new com.jiber.backend.auth.PendingSocialSessionService(
+                    new com.jiber.backend.auth.service.PendingSocialSessionService(
                             pendingProperties,
                             new SecurityPendingSocialSessionMapper(),
                             emailNormalizer

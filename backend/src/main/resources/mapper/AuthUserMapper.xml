@@ -2,8 +2,8 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.jiber.backend.auth.AuthUserMapper">
-    <resultMap id="AuthUserRecordMap" type="com.jiber.backend.auth.AuthUserRecord">
+<mapper namespace="com.jiber.backend.auth.mapper.AuthUserMapper">
+    <resultMap id="AuthUserRecordMap" type="com.jiber.backend.auth.mapper.AuthUserRecord">
         <constructor>
             <idArg column="user_id" javaType="java.lang.Long"/>
             <arg column="email" javaType="java.lang.String"/>

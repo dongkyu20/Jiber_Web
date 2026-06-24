@@ -1,6 +1,52 @@
 name: jiber
 
 services:
+  db-assets:
+    image: python:3.12-slim
+    container_name: jiber-db-assets
+    working_dir: /workspace
+    environment:
+      DB_DUMP_DRIVE_URL: ${DB_DUMP_DRIVE_URL:-https://drive.google.com/drive/folders/1G5HRQa7K-mPk8o5qguqqv2QaPGoFlGmJ?usp=drive_link}
+      DB_DUMP_DIR: /db-dumps
+      DB_DUMP_EXTRACT_DIR: /db-dumps/extracted
+      DB_DUMP_SELECTION: ${DB_DUMP_SELECTION:-latest}
+      DB_DUMP_FORCE_DOWNLOAD: ${DB_DUMP_FORCE_DOWNLOAD:-false}
+      DB_DUMP_SKIP_DOWNLOAD: ${DB_DUMP_SKIP_DOWNLOAD:-false}
+    volumes:
+      - .:/workspace:ro
+      - ./db/dumps:/db-dumps
+    command:
+      - sh
+      - -c
+      - python -m pip install --no-cache-dir 'gdown>=5,<6' && python scripts/download-db-dumps.py
+
+  model-assets:
+    image: python:3.12-slim
+    container_name: jiber-model-assets
+    working_dir: /workspace
+    environment:
+      VALUATION_DATA_DRIVE_URL: ${VALUATION_DATA_DRIVE_URL:-https://drive.google.com/drive/folders/1jdnBblDrBYiAWf1ZsXCz89tnLaTf4CiY?usp=drive_link}
+      VALUATION_MODEL_DRIVE_URL: ${VALUATION_MODEL_DRIVE_URL:-https://drive.google.com/file/d/19mv0MTkN03YA2cUUQqVGS6zhvar9dmf9/view?usp=drive_link}
+      XAI_DRIVE_URL: ${XAI_DRIVE_URL:-https://drive.google.com/drive/folders/1KMv9Lep73c6DLpTSYuVGwpaSW7YetdLP?usp=drive_link}
+      VALUATION_DATA_DIR: /assets/valuation-data
+      VALUATION_ARTIFACTS_DIR: /assets/valuation-artifacts
+      XAI_ARTIFACTS_DIR: /assets/xai-artifacts
+      MODEL_ASSETS_FORCE_DOWNLOAD: ${MODEL_ASSETS_FORCE_DOWNLOAD:-false}
+      MODEL_ASSETS_SKIP_DOWNLOAD: ${MODEL_ASSETS_SKIP_DOWNLOAD:-false}
+      MODEL_ASSETS_SKIP_DATASET: ${MODEL_ASSETS_SKIP_DATASET:-false}
+      MODEL_ASSETS_SKIP_MODEL: ${MODEL_ASSETS_SKIP_MODEL:-false}
+      MODEL_ASSETS_SKIP_XAI: ${MODEL_ASSETS_SKIP_XAI:-false}
+      MODEL_ASSETS_ALLOW_PARTIAL_DOWNLOAD: ${MODEL_ASSETS_ALLOW_PARTIAL_DOWNLOAD:-false}
+    volumes:
+      - .:/workspace:ro
+      - ./data/valuation:/assets/valuation-data
+      - ./model-server/artifacts/valuation:/assets/valuation-artifacts
+      - ./model-server/artifacts/xai:/assets/xai-artifacts
+    command:
+      - sh
+      - -c
+      - python -m pip install --no-cache-dir 'gdown>=5,<6' && python scripts/download-google-drive-assets.py
+
   mysql:
     image: mysql:8.4
     container_name: jiber-mysql
@@ -26,6 +72,60 @@ services:
       retries: 10
       start_period: 30s
 
+  db-import:
+    image: mysql:8.4
+    container_name: jiber-db-import
+    env_file:
+      - .env
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-jiber}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env for dump import}
+      DB_DUMP_EXTRACT_DIR: /dumps/extracted
+      DB_DUMP_SOURCE_DATABASE: ${DB_DUMP_SOURCE_DATABASE:-Jiber}
+      DB_DUMP_FORCE_IMPORT: ${DB_DUMP_FORCE_IMPORT:-false}
+      DB_DUMP_SKIP_IMPORT: ${DB_DUMP_SKIP_IMPORT:-false}
+    volumes:
+      - ./db/dumps:/dumps:ro
+      - ./scripts/import-db-dump.sh:/import-db-dump.sh:ro
+    command:
+      - sh
+      - /import-db-dump.sh
+    depends_on:
+      db-assets:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+
+  model-server:
+    build:
+      context: ./model-server
+    container_name: jiber-model-server
+    ports:
+      - "${MODEL_SERVER_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      VALUATION_DATA_DIR: /app/data/valuation
+      VALUATION_ARTIFACTS_DIR: /app/artifacts/valuation
+      XAI_ARTIFACTS_DIR: /app/artifacts/xai
+      RAG_DOCS_DIR: /app/documents/structured
+    volumes:
+      - ./data/valuation:/app/data/valuation:ro
+      - ./model-server/artifacts/valuation:/app/artifacts/valuation:ro
+      - ./model-server/artifacts/xai:/app/artifacts/xai:ro
+      - ./model-server/documents:/app/documents:ro
+    depends_on:
+      model-assets:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   backend:
     build:
       context: ./backend
@@ -38,9 +138,13 @@ services:
       BACKEND_PORT: 8080
       DB_HOST: mysql
       DB_PORT: 3306
-      MODEL_SERVER_BASE_URL: http://host.docker.internal:8000
+      MODEL_SERVER_BASE_URL: http://model-server:8000
     depends_on:
+      db-import:
+        condition: service_completed_successfully
       mysql:
+        condition: service_healthy
+      model-server:
         condition: service_healthy
 
 volumes:

@@ -150,6 +150,29 @@ def test_repository_selects_busan_artifact(tmp_path: Path) -> None:
     assert repository._models["busan"].rows[0]["district"] == "해운대구"
 
 
+def test_repository_finds_artifact_when_zip_extracts_nested_directory(tmp_path: Path) -> None:
+    model = FakePredictModel(math.log(700_000_000))
+    _write_artifact(tmp_path / "unzipped-model", "seoul", "nested-seoul-run", model)
+    repository = ValuationModelRepository(tmp_path)
+
+    prediction = repository.predict(
+        ApartmentFeatures(
+            sido="서울특별시",
+            sigungu="강남구",
+            legalDong="삼성동",
+            exclusiveAreaM2=84.95,
+            floor=15,
+            builtYear=2010,
+            dealYear=2026,
+            dealMonth=6,
+        )
+    )
+
+    assert prediction is not None
+    assert prediction.price_krw == 700_000_000
+    assert prediction.model_version == "nested-seoul-run"
+
+
 def test_service_uses_model_prediction_when_repository_can_predict() -> None:
     repository = StaticPredictionRepository(
         ModelPrediction(
@@ -229,7 +252,7 @@ def _write_artifact(
     model: FakePredictModel,
 ) -> None:
     artifact_dir = root / run_id
-    artifact_dir.mkdir()
+    artifact_dir.mkdir(parents=True)
     (artifact_dir / "run_manifest.json").write_text(
         f'{{"city_code": "{city_code}", "run_id": "{run_id}", "artifact_paths": {{"model": "model.pkl"}}}}',
         encoding="utf-8",

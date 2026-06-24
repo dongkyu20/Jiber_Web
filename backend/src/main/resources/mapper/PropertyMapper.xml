@@ -2,7 +2,7 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.jiber.backend.property.PropertyMapper">
+<mapper namespace="com.jiber.backend.property.mapper.PropertyMapper">
     <sql id="TransactionFilters">
         <if test="request.transactionTypes != null and request.transactionTypes.size() &gt; 0">
             AND t.transaction_type IN
@@ -206,7 +206,7 @@
         </if>
     </sql>
 
-    <select id="findMapProperties" resultType="com.jiber.backend.property.PropertyListRow">
+    <select id="findMapProperties" resultType="com.jiber.backend.property.mapper.PropertyListRow">
         SELECT
             <include refid="ListColumns"/>,
             NULL AS distance_m
@@ -215,7 +215,7 @@
         ORDER BY latest_deal_date DESC, p.property_id DESC
     </select>
 
-    <select id="findLegalDongClusters" resultType="com.jiber.backend.property.AdministrativeClusterRow">
+    <select id="findLegalDongClusters" resultType="com.jiber.backend.property.mapper.AdministrativeClusterRow">
         SELECT
             'LEGAL_DONG' AS level,
             p.sido,
@@ -244,7 +244,7 @@
         ORDER BY property_count DESC, transaction_count DESC, label ASC
     </select>
 
-    <select id="findSigunguClusters" resultType="com.jiber.backend.property.AdministrativeClusterRow">
+    <select id="findSigunguClusters" resultType="com.jiber.backend.property.mapper.AdministrativeClusterRow">
         SELECT
             'SIGUNGU' AS level,
             p.sido,
@@ -273,7 +273,7 @@
         ORDER BY property_count DESC, transaction_count DESC, label ASC
     </select>
 
-    <select id="searchProperties" resultType="com.jiber.backend.property.PropertyListRow">
+    <select id="searchProperties" resultType="com.jiber.backend.property.mapper.PropertyListRow">
         SELECT
             <include refid="ListColumns"/>,
             <choose>
@@ -337,7 +337,7 @@
         <include refid="SearchWhere"/>
     </select>
 
-    <select id="findDetailById" resultType="com.jiber.backend.property.PropertyDetailRow">
+    <select id="findDetailById" resultType="com.jiber.backend.property.mapper.PropertyDetailRow">
         SELECT
             p.property_id,
             p.property_type,
@@ -369,7 +369,7 @@
         WHERE p.property_id = #{propertyId}
     </select>
 
-    <select id="findTransactionsByPropertyId" resultType="com.jiber.backend.property.PropertyTransactionRow">
+    <select id="findTransactionsByPropertyId" resultType="com.jiber.backend.property.mapper.PropertyTransactionRow">
         SELECT
             transaction_id,
             transaction_type,
@@ -397,7 +397,7 @@
         ORDER BY apartment_name ASC
     </select>
 
-    <select id="findPropertyTypeById" resultType="com.jiber.backend.property.PropertyType">
+    <select id="findPropertyTypeById" resultType="com.jiber.backend.property.dto.PropertyType">
         SELECT property_type
         FROM properties
         WHERE property_id = #{propertyId}

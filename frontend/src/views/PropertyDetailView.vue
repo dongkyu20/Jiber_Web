@@ -5,7 +5,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { favoritesApi } from '@/api/favorites'
 import { propertyApi } from '@/api/property'
 import { getApiError } from '@/api/client'
-import type { PropertyDetail, PropertyTransaction, ShapValue, TransactionType, ValuationResponse } from '@/api/types'
+import type {
+  PropertyDetail,
+  PropertyTransaction,
+  ShapValue,
+  TransactionType,
+  ValuationRequest,
+  ValuationResponse
+} from '@/api/types'
 import ShapChart from '@/charts/ShapChart.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -27,6 +34,7 @@ const aiMessage = ref('')
 const favoriteMessage = ref('')
 const favoriteErrorMessage = ref('')
 const favoriteUpdating = ref(false)
+const aiLoading = ref(false)
 const valuation = ref<ValuationResponse | null>(null)
 const shapValues = ref<ShapValue[]>([])
 const transactionTypeOptions: TransactionType[] = ['SALE', 'JEONSE', 'MONTHLY_RENT']
@@ -63,11 +71,30 @@ const canRequestAi = computed(() => {
   return Boolean(
     authStore.isAuthenticated &&
       property.value?.propertyType === 'APARTMENT' &&
-      property.value.ai.valuationAvailable &&
-      property.value.ai.shapAvailable
+      (property.value.ai.valuationAvailable || property.value.ai.shapAvailable)
   )
 })
 const canAskChatAboutAnalysis = computed(() => Boolean(property.value && valuation.value && shapValues.value.length))
+const aiInputTransaction = computed(() => {
+  const transactions = property.value?.transactions ?? []
+  if (!transactions.length) {
+    return null
+  }
+
+  if (isUsableAiTransaction(latestTransaction.value)) {
+    return latestTransaction.value
+  }
+
+  return transactions.find(isUsableAiTransaction) ?? null
+})
+const aiInputSummary = computed(() => {
+  const transaction = aiInputTransaction.value
+  if (!transaction) {
+    return ''
+  }
+
+  return `${formatArea(transaction.exclusiveAreaM2)} · ${formatFloor(transaction.floor)} 기준`
+})
 
 function setTransactionSort(key: TransactionSortKey) {
   transactionSort.value =
@@ -144,6 +171,49 @@ function transactionSortValue(
 
 function representativeTransactionAmount(transaction: PropertyTransaction) {
   return transaction.dealAmount ?? transaction.depositAmount ?? null
+}
+
+function isUsableAiTransaction(transaction?: PropertyTransaction | null): transaction is PropertyTransaction {
+  return Boolean(
+    transaction &&
+      transaction.exclusiveAreaM2 !== undefined &&
+      transaction.exclusiveAreaM2 !== null &&
+      transaction.exclusiveAreaM2 > 0 &&
+      transaction.floor !== undefined &&
+      transaction.floor !== null
+  )
+}
+
+function buildAiRequestPayload(): ValuationRequest | null {
+  const transaction = aiInputTransaction.value
+  if (!transaction?.exclusiveAreaM2 || transaction.floor === undefined || transaction.floor === null) {
+    return null
+  }
+
+  return {
+    exclusiveAreaM2: transaction.exclusiveAreaM2,
+    floor: transaction.floor,
+    asOfDate: new Date().toISOString().slice(0, 10)
+  }
+}
+
+function aiRequestFailureMessage(error: unknown) {
+  const apiError = getApiError(error)
+
+  if (apiError?.code === 'AUTH_REQUIRED') {
+    return '로그인이 필요한 기능입니다.'
+  }
+  if (apiError?.code === 'VALUATION_INSUFFICIENT_DATA') {
+    return '추론에 필요한 단지 정보가 부족합니다. 면적, 층수, 준공연도, 위치 정보가 연결됐는지 확인해 주세요.'
+  }
+  if (apiError?.code === 'MODEL_SERVER_UNAVAILABLE') {
+    return '모델 서버가 응답하지 않습니다. docker compose에서 model-server 상태를 확인해 주세요.'
+  }
+  if (apiError?.code === 'PROPERTY_NOT_FOUND') {
+    return '부동산 정보를 찾을 수 없습니다.'
+  }
+
+  return '추정가와 SHAP 요인을 아직 불러오지 못했습니다. 로그인 상태와 백엔드 API를 확인해 주세요.'
 }
 
 function formatTransactionAmount(transaction: PropertyTransaction) {
@@ -275,19 +345,48 @@ async function requestAiExplanation() {
     return
   }
 
+  const payload = buildAiRequestPayload()
+  if (!payload) {
+    aiMessage.value = '추론에 사용할 거래의 전용면적과 층수 정보가 필요합니다.'
+    return
+  }
+
+  aiLoading.value = true
   try {
-    const payload = {
-      exclusiveAreaM2: 84.95,
-      floor: 15,
-      asOfDate: new Date().toISOString().slice(0, 10)
+    const messages: string[] = []
+    let firstError: unknown = null
+
+    if (currentProperty.ai.valuationAvailable) {
+      try {
+        valuation.value = await propertyApi.requestValuation(propertyId.value, payload)
+        messages.push(valuation.value.message)
+      } catch (error) {
+        firstError = error
+      }
     }
-    valuation.value = await propertyApi.requestValuation(propertyId.value, payload)
-    const shap = await propertyApi.requestShap(propertyId.value, payload)
-    shapValues.value = shap.values
-    aiMessage.value = valuation.value.message || shap.message
-    chatContextStore.setPropertyAnalysisContext(currentProperty, valuation.value, shapValues.value)
-  } catch {
-    aiMessage.value = '추정가와 SHAP 요인을 아직 불러오지 못했습니다. 로그인 상태와 백엔드 API를 확인해 주세요.'
+
+    if (currentProperty.ai.shapAvailable) {
+      try {
+        const shap = await propertyApi.requestShap(propertyId.value, payload)
+        shapValues.value = shap.values
+        messages.push(shap.message)
+      } catch (error) {
+        firstError ??= error
+      }
+    }
+
+    if (valuation.value && shapValues.value.length) {
+      chatContextStore.setPropertyAnalysisContext(currentProperty, valuation.value, shapValues.value)
+    }
+
+    if (messages.length) {
+      aiMessage.value = messages.join(' ')
+      return
+    }
+
+    aiMessage.value = aiRequestFailureMessage(firstError)
+  } finally {
+    aiLoading.value = false
   }
 }
 
@@ -413,8 +512,19 @@ onMounted(fetchProperty)
       <h2>AI 분석</h2>
       <p v-if="!authStore.isAuthenticated" class="muted">추정가와 SHAP 요인은 로그인 후 확인할 수 있습니다.</p>
       <p v-else-if="!canRequestAi" class="muted">{{ aiUnavailableMessage }}</p>
-      <p v-else class="muted">아파트 실거래 데이터를 바탕으로 계산한 추정과 주요 요인 설명을 요청합니다.</p>
-      <button class="primary-button" type="button" @click="requestAiExplanation">추정가와 요인 보기</button>
+      <p v-else class="muted">
+        아파트 실거래 데이터를 바탕으로 계산한 추정과 주요 요인 설명을 요청합니다.
+        <span v-if="aiInputSummary">{{ aiInputSummary }}</span>
+      </p>
+      <button
+        class="primary-button"
+        data-test="property-ai-button"
+        type="button"
+        :disabled="aiLoading"
+        @click="requestAiExplanation"
+      >
+        {{ aiLoading ? '분석 중입니다' : '추정가와 요인 보기' }}
+      </button>
       <p v-if="aiMessage" class="helper-text">{{ aiMessage }}</p>
       <p v-if="valuation?.estimatedPrice" class="estimate-text">
         추정가 {{ formatKrw(valuation.estimatedPrice) }}

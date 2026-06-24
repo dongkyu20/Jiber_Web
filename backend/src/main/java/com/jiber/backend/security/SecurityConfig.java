@@ -2,8 +2,8 @@ package com.jiber.backend.security;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
-import com.jiber.backend.auth.JwtAuthenticationFilter;
-import com.jiber.backend.auth.OAuth2LoginSuccessHandler;
+import com.jiber.backend.auth.service.JwtAuthenticationFilter;
+import com.jiber.backend.auth.service.OAuth2LoginSuccessHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.beans.factory.ObjectProvider;

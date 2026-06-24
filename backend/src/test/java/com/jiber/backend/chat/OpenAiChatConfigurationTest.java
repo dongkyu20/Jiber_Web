@@ -1,5 +1,10 @@
 package com.jiber.backend.chat;
 
+import com.jiber.backend.chat.client.*;
+import com.jiber.backend.chat.controller.*;
+import com.jiber.backend.chat.dto.*;
+import com.jiber.backend.chat.service.*;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Properties;

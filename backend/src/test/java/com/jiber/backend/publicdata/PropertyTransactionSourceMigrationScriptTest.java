@@ -1,5 +1,11 @@
 package com.jiber.backend.publicdata;
 
+import com.jiber.backend.publicdata.client.*;
+import com.jiber.backend.publicdata.config.*;
+import com.jiber.backend.publicdata.dto.*;
+import com.jiber.backend.publicdata.mapper.*;
+import com.jiber.backend.publicdata.service.*;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
