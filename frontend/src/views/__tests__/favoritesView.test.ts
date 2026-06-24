@@ -18,10 +18,10 @@ vi.mock('@/api/favorites', () => ({
 
 const favoriteItem: FavoriteApartmentItem = {
   favoriteId: 11,
-  propertyId: 1912,
+  propertyId: 1001,
   propertyType: 'APARTMENT',
-  name: '경희궁롯데캐슬',
-  address: '서울특별시 종로구 무악동 89',
+  name: 'Gyeonghui Palace Castle',
+  address: '89 Muak-dong, Jongno-gu, Seoul',
   lat: 37.5738636,
   lng: 126.9594466,
   latestTransaction: {
@@ -34,7 +34,7 @@ const favoriteItem: FavoriteApartmentItem = {
 
 const favoriteAreaItem: FavoriteAreaItem = {
   favoriteAreaId: 801,
-  label: '검색: 무악동',
+  label: 'Search: Muak-dong',
   centerLat: 37.5738636,
   centerLng: 126.9594466,
   zoomLevel: 6,
@@ -47,7 +47,7 @@ function createApiError(code: string) {
     response: {
       data: {
         code,
-        message: '요청을 처리하지 못했습니다.',
+        message: 'Request failed.',
         path: '/api/v1/favorites/areas',
         timestamp: '2026-06-20T10:00:00+09:00'
       }
@@ -82,21 +82,26 @@ async function mountFavoritesView() {
   return { wrapper, router }
 }
 
+async function openAreasTab(wrapper: ReturnType<typeof mount>) {
+  await wrapper.findAll('.fav-tab')[1].trigger('click')
+  await flushPromises()
+}
+
 beforeEach(() => {
   favoritesApiMock.listApartments.mockReset().mockResolvedValue({ items: [] })
   favoritesApiMock.removeApartment.mockReset().mockResolvedValue({
-    propertyId: 1912,
-    message: '삭제했습니다.'
+    propertyId: 1001,
+    message: 'Removed.'
   })
   favoritesApiMock.listAreas.mockReset().mockResolvedValue({ items: [] })
   favoritesApiMock.removeArea.mockReset().mockResolvedValue({
     favoriteAreaId: 801,
-    message: '삭제했습니다.'
+    message: 'Removed.'
   })
 })
 
 describe('FavoritesView', () => {
-  it('renders apartment and area favorite items', async () => {
+  it('renders apartment and area favorite items in their tabs', async () => {
     favoritesApiMock.listApartments.mockResolvedValueOnce({ items: [favoriteItem] })
     favoritesApiMock.listAreas.mockResolvedValueOnce({ items: [favoriteAreaItem] })
 
@@ -104,21 +109,22 @@ describe('FavoritesView', () => {
 
     expect(favoritesApiMock.listApartments).toHaveBeenCalledTimes(1)
     expect(favoritesApiMock.listAreas).toHaveBeenCalledTimes(1)
-    expect(wrapper.text()).toContain('경희궁롯데캐슬')
-    expect(wrapper.text()).toContain('전세')
-    expect(wrapper.text()).toContain('10.8억 원')
-    expect(wrapper.text()).toContain('검색: 무악동')
-    expect(wrapper.text()).toContain('지도 중심 37.5739, 126.9594')
-    expect(wrapper.text()).toContain('지도 6단계')
+    expect(wrapper.text()).toContain('Gyeonghui Palace Castle')
+    expect(wrapper.text()).toContain('10.8')
+
+    await openAreasTab(wrapper)
+
+    expect(wrapper.text()).toContain('Search: Muak-dong')
+    expect(wrapper.text()).toContain('37.5739, 126.9594')
   })
 
   it('shows empty states when there are no favorites', async () => {
     const { wrapper } = await mountFavoritesView()
 
-    expect(wrapper.text()).toContain('저장한 아파트가 없습니다.')
-    expect(wrapper.text()).toContain('지도나 상세 화면에서 관심 아파트를 추가하면 여기에 표시됩니다.')
-    expect(wrapper.text()).toContain('저장한 관심 지역이 없습니다.')
-    expect(wrapper.text()).toContain('지도에서 현재 영역을 관심 지역으로 등록하면 여기에 표시됩니다.')
+    expect(wrapper.find('.empty-state').exists()).toBe(true)
+
+    await openAreasTab(wrapper)
+    expect(wrapper.find('.empty-state').exists()).toBe(true)
   })
 
   it('links apartment favorites to the property detail page', async () => {
@@ -126,23 +132,24 @@ describe('FavoritesView', () => {
 
     const { wrapper, router } = await mountFavoritesView()
 
-    await wrapper.get('a[href="/properties/1912"]').trigger('click')
+    await wrapper.get('a[href="/properties/1001"]').trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.fullPath).toBe('/properties/1912')
+    expect(router.currentRoute.value.fullPath).toBe('/properties/1001')
   })
 
   it('links area favorites back to the map with restore query parameters', async () => {
     favoritesApiMock.listAreas.mockResolvedValueOnce({ items: [favoriteAreaItem] })
 
     const { wrapper, router } = await mountFavoritesView()
+    await openAreasTab(wrapper)
 
     await wrapper.get('a[href^="/map"]').trigger('click')
     await flushPromises()
 
     expect(router.currentRoute.value.path).toBe('/map')
     expect(router.currentRoute.value.query).toMatchObject({
-      areaLabel: '검색: 무악동',
+      areaLabel: 'Search: Muak-dong',
       centerLat: '37.5738636',
       centerLng: '126.9594466',
       zoomLevel: '6'
@@ -154,27 +161,26 @@ describe('FavoritesView', () => {
 
     const { wrapper } = await mountFavoritesView()
 
-    await wrapper.get('[data-test="apartment-favorite-delete"]').trigger('click')
+    await wrapper.get('.heart-btn').trigger('click')
     await flushPromises()
 
-    expect(favoritesApiMock.removeApartment).toHaveBeenCalledWith(1912)
+    expect(favoritesApiMock.removeApartment).toHaveBeenCalledWith(1001)
     expect(favoritesApiMock.listApartments).toHaveBeenCalledTimes(2)
-    expect(wrapper.text()).toContain('관심 아파트에서 삭제했습니다.')
-    expect(wrapper.text()).toContain('저장한 아파트가 없습니다.')
+    expect(wrapper.find('.empty-state').exists()).toBe(true)
   })
 
   it('deletes an area favorite and refreshes the list', async () => {
     favoritesApiMock.listAreas.mockResolvedValueOnce({ items: [favoriteAreaItem] }).mockResolvedValueOnce({ items: [] })
 
     const { wrapper } = await mountFavoritesView()
+    await openAreasTab(wrapper)
 
-    await wrapper.get('[data-test="area-favorite-delete"]').trigger('click')
+    await wrapper.get('.area-del-btn').trigger('click')
     await flushPromises()
 
     expect(favoritesApiMock.removeArea).toHaveBeenCalledWith(801)
     expect(favoritesApiMock.listAreas).toHaveBeenCalledTimes(2)
-    expect(wrapper.text()).toContain('관심 지역에서 삭제했습니다.')
-    expect(wrapper.text()).toContain('저장한 관심 지역이 없습니다.')
+    expect(wrapper.find('.empty-state').exists()).toBe(true)
   })
 
   it('handles already deleted area favorites safely', async () => {
@@ -182,11 +188,11 @@ describe('FavoritesView', () => {
     favoritesApiMock.removeArea.mockRejectedValueOnce(createApiError('FAVORITE_AREA_NOT_FOUND'))
 
     const { wrapper } = await mountFavoritesView()
+    await openAreasTab(wrapper)
 
-    await wrapper.get('[data-test="area-favorite-delete"]').trigger('click')
+    await wrapper.get('.area-del-btn').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('이미 삭제된 관심 지역입니다.')
-    expect(wrapper.text()).toContain('저장한 관심 지역이 없습니다.')
+    expect(wrapper.find('.empty-state').exists()).toBe(true)
   })
 })

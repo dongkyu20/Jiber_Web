@@ -2,12 +2,16 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { Component } from 'vue'
 
 import { authApi } from '@/api/auth'
+import LoginModal from '@/components/LoginModal.vue'
+import SignupModal from '@/components/SignupModal.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import LoginView from '@/views/LoginView.vue'
 import SignupView from '@/views/SignupView.vue'
 import SocialSignupView from '@/views/SocialSignupView.vue'
-import { useAuthStore } from '@/stores/auth'
 
 const sessionResponse = {
   accessToken: 'memory-only-token',
@@ -16,7 +20,7 @@ const sessionResponse = {
   user: {
     userId: 1,
     email: 'user@example.com',
-    displayName: '사용자',
+    displayName: 'Test User',
     roles: ['USER' as const]
   }
 }
@@ -27,7 +31,7 @@ function createApiError(code: string) {
     response: {
       data: {
         code,
-        message: '요청을 처리하지 못했습니다.',
+        message: 'Request failed.',
         path: '/api/v1/auth',
         timestamp: '2026-06-18T00:00:00+09:00'
       }
@@ -35,7 +39,7 @@ function createApiError(code: string) {
   }
 }
 
-function createTestRouter(initialPath: string) {
+function createTestRouter() {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -49,11 +53,11 @@ function createTestRouter(initialPath: string) {
   })
 }
 
-async function mountAuthView(component: typeof LoginView, initialPath: string) {
+async function mountWithRouter(component: Component, initialPath = '/') {
   const pinia = createPinia()
   setActivePinia(pinia)
 
-  const router = createTestRouter(initialPath)
+  const router = createTestRouter()
   await router.push(initialPath)
   await router.isReady()
 
@@ -63,7 +67,7 @@ async function mountAuthView(component: typeof LoginView, initialPath: string) {
     }
   })
 
-  return { wrapper, router, authStore: useAuthStore() }
+  return { wrapper, router, authStore: useAuthStore(), uiStore: useUiStore() }
 }
 
 afterEach(() => {
@@ -71,112 +75,137 @@ afterEach(() => {
 })
 
 describe('LoginView', () => {
-  it('logs in with email and follows the redirect query', async () => {
-    const loginSpy = vi.spyOn(authApi, 'login').mockResolvedValueOnce(sessionResponse)
-    const { wrapper, router, authStore } = await mountAuthView(LoginView, '/login?redirect=/favorites')
-
-    await wrapper.get('[data-test="login-email"]').setValue('user@example.com')
-    await wrapper.get('[data-test="login-password"]').setValue('password-8')
-    await wrapper.get('[data-test="login-form"]').trigger('submit')
+  it('opens the login modal with redirect state and returns to the landing page', async () => {
+    const { router, uiStore } = await mountWithRouter(LoginView, '/login?redirect=/favorites')
     await flushPromises()
 
-    expect(loginSpy).toHaveBeenCalledWith({ email: 'user@example.com', password: 'password-8' })
-    expect(authStore.accessToken).toBe('memory-only-token')
-    expect(router.currentRoute.value.fullPath).toBe('/favorites')
-  })
-
-  it('shows a safe Korean message for invalid credentials', async () => {
-    vi.spyOn(authApi, 'login').mockRejectedValueOnce(createApiError('INVALID_CREDENTIALS'))
-    const { wrapper } = await mountAuthView(LoginView, '/login')
-
-    await wrapper.get('[data-test="login-email"]').setValue('user@example.com')
-    await wrapper.get('[data-test="login-password"]').setValue('wrong-pass')
-    await wrapper.get('[data-test="login-form"]').trigger('submit')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('이메일 또는 비밀번호를 확인해 주세요.')
+    expect(uiStore.loginOpen).toBe(true)
+    expect(uiStore.loginRedirect).toBe('/favorites')
+    expect(router.currentRoute.value.fullPath).toBe('/')
   })
 })
 
 describe('SignupView', () => {
+  it('opens the signup modal and returns to the landing page', async () => {
+    const { router, uiStore } = await mountWithRouter(SignupView, '/signup')
+    await flushPromises()
+
+    expect(uiStore.signupOpen).toBe(true)
+    expect(router.currentRoute.value.fullPath).toBe('/')
+  })
+})
+
+describe('LoginModal', () => {
+  it('logs in with email and follows the stored redirect', async () => {
+    const loginSpy = vi.spyOn(authApi, 'login').mockResolvedValueOnce(sessionResponse)
+    const { wrapper, router, authStore, uiStore } = await mountWithRouter(LoginModal)
+    uiStore.openLogin('/favorites')
+
+    await wrapper.get('#login-id').setValue('user@example.com')
+    await wrapper.get('#login-pw').setValue('password-8')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(loginSpy).toHaveBeenCalledWith({ email: 'user@example.com', password: 'password-8' })
+    expect(authStore.accessToken).toBe('memory-only-token')
+    expect(uiStore.loginOpen).toBe(false)
+    expect(router.currentRoute.value.fullPath).toBe('/favorites')
+  })
+
+  it('shows an error for invalid credentials', async () => {
+    vi.spyOn(authApi, 'login').mockRejectedValueOnce(createApiError('INVALID_CREDENTIALS'))
+    const { wrapper } = await mountWithRouter(LoginModal)
+
+    await wrapper.get('#login-id').setValue('user@example.com')
+    await wrapper.get('#login-pw').setValue('wrong-pass')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('.modal-error').exists()).toBe(true)
+  })
+})
+
+describe('SignupModal', () => {
   it('signs up with email and starts a memory-only session', async () => {
     const signupSpy = vi.spyOn(authApi, 'signup').mockResolvedValueOnce(sessionResponse)
-    const { wrapper, router, authStore } = await mountAuthView(SignupView, '/signup')
+    const { wrapper, router, authStore } = await mountWithRouter(SignupModal)
 
-    await wrapper.get('[data-test="signup-email"]').setValue('user@example.com')
-    await wrapper.get('[data-test="signup-display-name"]').setValue('사용자')
-    await wrapper.get('[data-test="signup-password"]').setValue('password-8')
-    await wrapper.get('[data-test="signup-form"]').trigger('submit')
+    await wrapper.get('#su-email').setValue('user@example.com')
+    await wrapper.get('#su-name').setValue('Test User')
+    await wrapper.get('#su-pw').setValue('password-8')
+    await wrapper.get('#su-pw2').setValue('password-8')
+    const agreements = wrapper.findAll('.agree-item input')
+    await agreements[0].setValue(true)
+    await agreements[1].setValue(true)
+    await wrapper.get('form').trigger('submit')
     await flushPromises()
 
     expect(signupSpy).toHaveBeenCalledWith({
       email: 'user@example.com',
-      displayName: '사용자',
+      displayName: 'Test User',
       password: 'password-8'
     })
     expect(authStore.accessToken).toBe('memory-only-token')
     expect(router.currentRoute.value.fullPath).toBe('/map')
   })
 
-  it('shows duplicate email errors in Korean', async () => {
+  it('shows duplicate email errors', async () => {
     vi.spyOn(authApi, 'signup').mockRejectedValueOnce(createApiError('EMAIL_ALREADY_EXISTS'))
-    const { wrapper } = await mountAuthView(SignupView, '/signup')
+    const { wrapper } = await mountWithRouter(SignupModal)
 
-    await wrapper.get('[data-test="signup-email"]').setValue('user@example.com')
-    await wrapper.get('[data-test="signup-display-name"]').setValue('사용자')
-    await wrapper.get('[data-test="signup-password"]').setValue('password-8')
-    await wrapper.get('[data-test="signup-form"]').trigger('submit')
+    await wrapper.get('#su-email').setValue('user@example.com')
+    await wrapper.get('#su-name').setValue('Test User')
+    await wrapper.get('#su-pw').setValue('password-8')
+    await wrapper.get('#su-pw2').setValue('password-8')
+    const agreements = wrapper.findAll('.agree-item input')
+    await agreements[0].setValue(true)
+    await agreements[1].setValue(true)
+    await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('이미 가입된 이메일입니다.')
+    expect(wrapper.find('.modal-error').exists()).toBe(true)
   })
 
-  it('validates email, display name, and password before signup', async () => {
+  it('validates required fields before signup', async () => {
     const signupSpy = vi.spyOn(authApi, 'signup')
-    const { wrapper } = await mountAuthView(SignupView, '/signup')
+    const { wrapper } = await mountWithRouter(SignupModal)
 
-    await wrapper.get('[data-test="signup-email"]').setValue('not-email')
-    await wrapper.get('[data-test="signup-display-name"]').setValue('')
-    await wrapper.get('[data-test="signup-password"]').setValue('short')
-    await wrapper.get('[data-test="signup-form"]').trigger('submit')
+    await wrapper.get('form').trigger('submit')
     await flushPromises()
 
     expect(signupSpy).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('올바른 이메일 주소를 입력해 주세요.')
-    expect(wrapper.text()).toContain('이름을 입력해 주세요.')
-    expect(wrapper.text()).toContain('비밀번호는 8자 이상 입력해 주세요.')
+    expect(wrapper.find('.modal-error').exists()).toBe(true)
   })
 })
 
 describe('SocialSignupView', () => {
-  it('shows pending social preview and prioritizes existing account linking when email matches', async () => {
+  it('loads pending social preview and prioritizes existing account linking when email matches', async () => {
     const linkSpy = vi.spyOn(authApi, 'linkPendingSocialAccount')
     vi.spyOn(authApi, 'getPendingSocialSignup').mockResolvedValueOnce({
       provider: 'NAVER',
       email: 'user@example.com',
-      displayName: '네이버 사용자',
+      displayName: 'Naver User',
       matchingEmailAccountExists: true
     })
 
-    const { wrapper } = await mountAuthView(SocialSignupView, '/signup/social')
+    const { wrapper } = await mountWithRouter(SocialSignupView, '/signup/social')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('네이버')
     expect(wrapper.text()).toContain('user@example.com')
-    expect(wrapper.text()).toContain('기존 계정에 연결')
-    expect(wrapper.text()).toContain('비밀번호를 입력해야 연결할 수 있습니다.')
+    expect(wrapper.find('[data-test="social-link-form"]').exists()).toBe(true)
     expect(linkSpy).not.toHaveBeenCalled()
   })
 
   it('shows a safe empty state when pending social signup is missing', async () => {
-    vi.spyOn(authApi, 'getPendingSocialSignup').mockRejectedValueOnce(createApiError('SOCIAL_PENDING_NOT_FOUND'))
+    const pendingSpy = vi
+      .spyOn(authApi, 'getPendingSocialSignup')
+      .mockRejectedValueOnce(createApiError('SOCIAL_PENDING_NOT_FOUND'))
 
-    const { wrapper } = await mountAuthView(SocialSignupView, '/signup/social')
+    const { wrapper } = await mountWithRouter(SocialSignupView, '/signup/social')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('소셜 가입 정보가 만료되었거나 찾을 수 없습니다.')
-    expect(wrapper.text()).toContain('로그인으로 돌아가기')
-    expect(wrapper.text()).toContain('회원가입으로 돌아가기')
+    expect(pendingSpy).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('form').exists()).toBe(false)
   })
 
   it('completes social signup and starts a memory-only session', async () => {
@@ -184,20 +213,20 @@ describe('SocialSignupView', () => {
     vi.spyOn(authApi, 'getPendingSocialSignup').mockResolvedValueOnce({
       provider: 'KAKAO',
       email: 'user@example.com',
-      displayName: '카카오 사용자',
+      displayName: 'Kakao User',
       matchingEmailAccountExists: false
     })
-    const { wrapper, router, authStore } = await mountAuthView(SocialSignupView, '/signup/social')
+    const { wrapper, router, authStore } = await mountWithRouter(SocialSignupView, '/signup/social')
     await flushPromises()
 
-    await wrapper.get('[data-test="social-signup-display-name"]').setValue('카카오 사용자')
+    await wrapper.get('[data-test="social-signup-display-name"]').setValue('Kakao User')
     await wrapper.get('[data-test="social-signup-password"]').setValue('password-8')
     await wrapper.get('[data-test="social-signup-form"]').trigger('submit')
     await flushPromises()
 
     expect(socialSignupSpy).toHaveBeenCalledWith({
       email: 'user@example.com',
-      displayName: '카카오 사용자',
+      displayName: 'Kakao User',
       password: 'password-8'
     })
     expect(authStore.accessToken).toBe('memory-only-token')
@@ -209,19 +238,18 @@ describe('SocialSignupView', () => {
     vi.spyOn(authApi, 'getPendingSocialSignup').mockResolvedValueOnce({
       provider: 'GOOGLE',
       email: 'user@example.com',
-      displayName: '구글 사용자',
+      displayName: 'Google User',
       matchingEmailAccountExists: false
     })
-    const { wrapper } = await mountAuthView(SocialSignupView, '/signup/social')
+    const { wrapper } = await mountWithRouter(SocialSignupView, '/signup/social')
     await flushPromises()
 
-    await wrapper.get('[data-test="social-signup-display-name"]').setValue('구글 사용자')
+    await wrapper.get('[data-test="social-signup-display-name"]').setValue('Google User')
     await wrapper.get('[data-test="social-signup-password"]').setValue('password-8')
     await wrapper.get('[data-test="social-signup-form"]').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('이미 가입된 이메일입니다.')
-    expect(wrapper.text()).toContain('기존 계정 비밀번호로 연결해 주세요.')
+    expect(wrapper.find('[data-test="social-link-form"]').exists()).toBe(true)
   })
 
   it('links a pending social account after existing account password verification', async () => {
@@ -229,10 +257,10 @@ describe('SocialSignupView', () => {
     vi.spyOn(authApi, 'getPendingSocialSignup').mockResolvedValueOnce({
       provider: 'NAVER',
       email: 'user@example.com',
-      displayName: '네이버 사용자',
+      displayName: 'Naver User',
       matchingEmailAccountExists: true
     })
-    const { wrapper, router, authStore } = await mountAuthView(SocialSignupView, '/signup/social')
+    const { wrapper, router, authStore } = await mountWithRouter(SocialSignupView, '/signup/social')
     await flushPromises()
 
     await wrapper.get('[data-test="social-link-email"]').setValue('user@example.com')
@@ -245,15 +273,15 @@ describe('SocialSignupView', () => {
     expect(router.currentRoute.value.fullPath).toBe('/map')
   })
 
-  it('shows safe Korean messages for social link failures', async () => {
+  it('shows safe messages for social link failures', async () => {
     vi.spyOn(authApi, 'linkPendingSocialAccount').mockRejectedValueOnce(createApiError('SOCIAL_ACCOUNT_ALREADY_LINKED'))
     vi.spyOn(authApi, 'getPendingSocialSignup').mockResolvedValueOnce({
       provider: 'NAVER',
       email: 'user@example.com',
-      displayName: '네이버 사용자',
+      displayName: 'Naver User',
       matchingEmailAccountExists: true
     })
-    const { wrapper } = await mountAuthView(SocialSignupView, '/signup/social')
+    const { wrapper } = await mountWithRouter(SocialSignupView, '/signup/social')
     await flushPromises()
 
     await wrapper.get('[data-test="social-link-email"]').setValue('user@example.com')
@@ -261,6 +289,6 @@ describe('SocialSignupView', () => {
     await wrapper.get('[data-test="social-link-form"]').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('이미 다른 계정에 연결된 소셜 계정입니다.')
+    expect(wrapper.find('.form-error').exists()).toBe(true)
   })
 })

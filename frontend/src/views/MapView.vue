@@ -15,6 +15,7 @@ import type {
 } from '@/api/types'
 import KakaoMapPanel from '@/components/KakaoMapPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import FloatingChat from '@/components/FloatingChat.vue'
 import { SEOUL_SEED_VIEWPORT, normalizePropertyMapItems, type LatLngPoint, type MapViewport } from '@/map/kakaoMap'
 import { hasKakaoMapKey } from '@/map/kakaoLoader'
 import { useAuthStore } from '@/stores/auth'
@@ -47,7 +48,7 @@ const isKeywordSearch = computed(() => activeSearchKeyword.value.length > 0)
 const mapRuntimeMessage = computed(() =>
   hasMapKey
     ? '지도 SDK가 준비되면 현재 화면 범위로 다시 검색합니다.'
-    : '지도 SDK 키가 없어도 목록 검색은 계속 사용할 수 있습니다. root .env 또는 frontend 실행 환경에 VITE_KAKAO_MAP_APP_KEY를 설정하세요.'
+    : '지도 SDK 키가 없어도 목록 검색은 계속 사용할 수 있습니다. VITE_KAKAO_MAP_APP_KEY를 설정하면 실제 지도를 불러올 수 있습니다.'
 )
 const currentAreaLabel = computed(() => {
   const keyword = activeSearchKeyword.value.trim()
@@ -206,6 +207,8 @@ async function saveCurrentAreaFavorite() {
     areaFavoriteMessage.value = '관심 지역에 추가했습니다.'
   } catch (error) {
     setAreaFavoriteFailure(error)
+    errorMessage.value =
+      '실거래 데이터 API 연결에 실패했습니다. 백엔드 서버 실행 상태와 VITE_API_BASE_URL, DB_PORT 설정을 확인해 주세요.'
   } finally {
     areaFavoriteLoading.value = false
   }
@@ -259,8 +262,7 @@ async function searchVisibleArea(viewport: MapViewport = currentViewport.value) 
   } catch {
     items.value = []
     administrativeClusters.value = []
-    errorMessage.value =
-      '실거래 데이터 API 연결에 실패했습니다. 백엔드 서버 실행 상태와 VITE_API_BASE_URL, DB_PORT 설정을 확인해 주세요.'
+    errorMessage.value = '현재 지도 범위의 실거래 정보를 불러오지 못했습니다. 백엔드 서버 상태를 확인해 주세요.'
   } finally {
     loading.value = false
   }
@@ -369,89 +371,135 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="page-heading">
-    <p class="eyebrow">지도 검색</p>
-    <h1>지역과 거래 조건을 선택해 실거래 위치를 확인하세요.</h1>
-    <div class="button-row">
-      <RouterLink class="secondary-button" to="/chat">챗봇에 질문하기</RouterLink>
-    </div>
-  </section>
-
-  <section class="map-layout">
-    <aside class="filter-panel" aria-label="지도 검색 조건">
-      <h2>검색 조건</h2>
+  <div class="map-shell">
+    <!-- Left panel -->
+    <aside class="map-left" aria-label="지도 검색 조건">
+      <!-- Search -->
       <form class="map-search-form" data-test="map-search-form" @submit.prevent="handleKeywordSubmit">
-        <label class="field-label" for="map-search-keyword">단지명 또는 지역 검색</label>
-        <div class="search-row compact">
+        <label class="sr-only" for="map-search-keyword">단지명 또는 지역 검색</label>
+        <div class="map-search-row">
           <input
             id="map-search-keyword"
             v-model="searchKeyword"
             data-test="map-search-keyword"
             type="search"
             autocomplete="off"
-            placeholder="경희궁롯데캐슬, 무악동, 종로구"
+            placeholder="경희궁롯데캐슬 · 동 · 구 검색"
+            class="map-input"
           />
-          <button class="primary-button" type="submit" :disabled="loading">
-            {{ loading && searchKeyword.trim() ? '검색 중' : '검색' }}
+          <button class="map-search-btn" type="submit" aria-label="검색">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+              <path stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M21 21l-4.35-4.35"/>
+            </svg>
           </button>
         </div>
         <button
           v-if="isKeywordSearch"
           class="text-button full-width"
           type="button"
+          style="font-size:0.8rem; margin-top:4px;"
           :disabled="loading"
           @click="resetToVisibleArea"
-        >
-          검색어 지우고 지도 범위 보기
-        </button>
+        >× 검색어 초기화</button>
       </form>
 
-      <fieldset>
-        <legend>부동산 유형</legend>
-        <label v-for="type in propertyTypeOptions" :key="type" class="check-row">
-          <input v-model="selectedPropertyTypes" :value="type" type="checkbox" />
-          <span>{{ propertyTypeLabel(type) }}</span>
-        </label>
-      </fieldset>
+      <!-- Quick region chips -->
+      <div class="region-chips">
+        <button class="region-chip active">서울 전체</button>
+        <button class="region-chip">강남3구</button>
+        <button class="region-chip">마포·은평</button>
+        <button class="region-chip">성동·광진</button>
+        <button class="region-chip">용산</button>
+      </div>
 
-      <fieldset>
-        <legend>거래 유형</legend>
-        <label v-for="type in transactionTypeOptions" :key="type" class="check-row">
-          <input v-model="selectedTransactionTypes" :value="type" type="checkbox" />
-          <span>{{ transactionTypeLabel(type) }}</span>
-        </label>
-      </fieldset>
+      <!-- Filters -->
+      <div class="filter-section">
+        <fieldset>
+          <legend>부동산 유형</legend>
+          <div class="check-group">
+            <label v-for="type in propertyTypeOptions" :key="type" class="check-row">
+              <input v-model="selectedPropertyTypes" :value="type" type="checkbox" />
+              <span>{{ propertyTypeLabel(type) }}</span>
+            </label>
+          </div>
+        </fieldset>
 
-      <label class="field-label" for="zoom-level">지도 확대 단계</label>
-      <input id="zoom-level" v-model.number="zoomLevel" min="1" max="14" type="range" />
-      <span class="range-value">{{ zoomLevel }}단계</span>
+        <fieldset>
+          <legend>거래 유형</legend>
+          <div class="check-group">
+            <label v-for="type in transactionTypeOptions" :key="type" class="check-row">
+              <input v-model="selectedTransactionTypes" :value="type" type="checkbox" />
+              <span>{{ transactionTypeLabel(type) }}</span>
+            </label>
+          </div>
+        </fieldset>
 
-      <button class="primary-button full-width" type="button" :disabled="loading" @click="resetToVisibleArea">
-        {{ loading ? '검색 중입니다' : '현재 지도 범위로 검색' }}
+        <label class="field-label" for="zoom-level">지도 확대 단계 ({{ zoomLevel }})</label>
+        <input id="zoom-level" v-model.number="zoomLevel" min="1" max="14" type="range" />
+      </div>
+
+      <button class="search-area-btn" type="button" :disabled="loading" @click="resetToVisibleArea">
+        {{ loading ? '검색 중...' : '현재 화면 범위 검색' }}
       </button>
 
-      <div class="favorite-actions map-favorite-actions">
+      <!-- Area favorite -->
+      <div class="area-fav">
         <button
-          class="secondary-button full-width"
+          class="area-fav-btn"
           data-test="area-favorite-button"
           type="button"
           :disabled="areaFavoriteLoading"
           @click="saveCurrentAreaFavorite"
         >
-          {{ areaFavoriteLoading ? '저장 중입니다' : '이 지역 관심 등록' }}
+          ♥ {{ areaFavoriteLoading ? '저장 중...' : '이 지역 관심 등록' }}
         </button>
-        <p v-if="areaFavoriteMessage" class="helper-text">{{ areaFavoriteMessage }}</p>
-        <p v-if="areaFavoriteErrorMessage" class="inline-error">{{ areaFavoriteErrorMessage }}</p>
+        <p v-if="areaFavoriteMessage" class="helper-text" style="font-size:0.78rem; margin-top:6px;">{{ areaFavoriteMessage }}</p>
+        <p v-if="areaFavoriteErrorMessage" class="inline-error" style="font-size:0.78rem; margin-top:6px;">{{ areaFavoriteErrorMessage }}</p>
       </div>
 
-      <div class="map-runtime-status" data-test="map-runtime-status" aria-live="polite">
-        <p class="helper-text">{{ mapRuntimeMessage }}</p>
-        <p v-if="errorMessage" class="inline-error" data-test="map-data-error">{{ errorMessage }}</p>
-        <p v-else class="helper-text">실거래 데이터 API가 연결되면 현재 조건에 맞춰 검색합니다.</p>
+      <p class="helper-text" style="font-size:0.78rem; margin-top:8px;">{{ mapRuntimeMessage }}</p>
+      <p v-if="errorMessage" class="inline-error" style="font-size:0.8rem; margin-top:8px;">{{ errorMessage }}</p>
+      <p v-if="errorMessage" class="helper-text" style="font-size:0.78rem; padding:0 16px;">
+        실거래 데이터 API 연결에 실패했습니다. VITE_API_BASE_URL, DB_PORT 설정을 확인해 주세요.
+      </p>
+
+      <!-- Results list -->
+      <div class="result-divider">
+        <span>검색 결과 {{ items.length }}건</span>
       </div>
+
+      <p class="helper-text" style="font-size:0.78rem; padding: 0 16px 8px;">{{ resultDescription }}</p>
+
+      <ul v-if="items.length" class="map-result-list result-list">
+        <li
+          v-for="item in items"
+          :id="`property-result-${item.propertyId}`"
+          :key="item.propertyId"
+          :class="{ 'is-selected': selectedPropertyId === item.propertyId }"
+          @mouseenter="selectedPropertyId = item.propertyId"
+          @focusin="selectedPropertyId = item.propertyId"
+        >
+          <RouterLink :to="`/properties/${item.propertyId}`" @click="selectedPropertyId = item.propertyId" class="map-result-link">
+            <span class="prop-type-badge">{{ propertyTypeLabel(item.propertyType) }}</span>
+            <strong class="result-name">{{ item.name }}</strong>
+            <span class="result-addr">{{ item.address }}</span>
+            <span v-if="item.latestTransaction" class="result-price">
+              {{ transactionTypeLabel(item.latestTransaction.transactionType) }} · {{ formatKrw(item.latestTransaction.dealAmount) }}
+            </span>
+          </RouterLink>
+        </li>
+      </ul>
+
+      <EmptyState
+        v-else-if="!loading"
+        title="검색 결과 없음"
+        :description="isKeywordSearch ? '검색어나 조건을 변경해 보세요.' : '지도를 이동하거나 조건을 조정해 보세요.'"
+      />
     </aside>
 
-    <div class="map-workspace">
+    <!-- Map -->
+    <div class="map-right">
       <KakaoMapPanel
         :items="items"
         :administrative-clusters="administrativeClusters"
@@ -463,44 +511,228 @@ onBeforeUnmount(() => {
         @property-selected="selectProperty"
         @load-error="handleMapLoadError"
       />
-
-      <section class="result-panel" aria-label="검색 결과">
-        <div class="section-title">
-          <h2>검색 결과</h2>
-          <span>{{ items.length }}건</span>
-        </div>
-        <p class="helper-text">{{ resultDescription }}</p>
-
-        <ul v-if="items.length" class="result-list">
-          <li
-            v-for="item in items"
-            :id="`property-result-${item.propertyId}`"
-            :key="item.propertyId"
-            :class="{ 'is-selected': selectedPropertyId === item.propertyId }"
-            @mouseenter="selectedPropertyId = item.propertyId"
-            @focusin="selectedPropertyId = item.propertyId"
-          >
-            <RouterLink :to="`/properties/${item.propertyId}`" @click="selectedPropertyId = item.propertyId">
-              <strong>{{ item.name }}</strong>
-              <span>{{ propertyTypeLabel(item.propertyType) }} · {{ item.address }}</span>
-              <small v-if="item.latestTransaction">
-                {{ transactionTypeLabel(item.latestTransaction.transactionType) }}
-                {{ formatKrw(item.latestTransaction.dealAmount) }}
-              </small>
-            </RouterLink>
-          </li>
-        </ul>
-
-        <EmptyState
-          v-else
-          title="검색 결과가 없습니다."
-          :description="
-            isKeywordSearch
-              ? '단지명이나 지역명을 다시 입력하거나 거래 유형 조건을 조정해 보세요.'
-              : '지도를 이동하거나 부동산 유형과 거래 유형 조건을 조정해 보세요.'
-          "
-        />
-      </section>
     </div>
-  </section>
+  </div>
+
+  <FloatingChat />
 </template>
+
+<style scoped>
+.map-shell {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: calc(100vh - var(--header-h));
+  overflow: hidden;
+}
+
+/* Left panel */
+.map-left {
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(200,160,100,0.2) transparent;
+}
+
+.map-search-form { padding: 14px 14px 0; flex-shrink: 0; }
+
+.map-search-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.map-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  color: var(--cream);
+  font-size: 0.86rem;
+  min-width: 0;
+  width: 100%;
+}
+.map-input:focus { border-color: var(--border-strong); outline: none; }
+.map-input::placeholder { color: rgba(154,128,96,0.6); }
+
+.map-search-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cream-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.map-search-btn:hover { color: var(--cream); border-color: var(--border-strong); }
+
+/* Region chips */
+.region-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.region-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cream-muted);
+  font-size: 0.76rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.region-chip:hover { color: var(--cream); border-color: var(--border-strong); }
+.region-chip.active { background: rgba(200,160,100,0.12); color: var(--gold); border-color: rgba(200,160,100,0.3); }
+
+/* Filter section */
+.filter-section {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.filter-section fieldset {
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+}
+
+.filter-section legend {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--cream-muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.check-group { display: grid; gap: 4px; }
+
+.filter-section .field-label {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--cream-muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.search-area-btn {
+  margin: 10px 14px;
+  width: calc(100% - 28px);
+  padding: 10px;
+  background: var(--gold);
+  color: #1a1208;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.search-area-btn:hover:not(:disabled) { background: var(--gold-light); }
+.search-area-btn:disabled { opacity: 0.6; }
+
+.area-fav {
+  padding: 8px 14px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.area-fav-btn {
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--cream-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.area-fav-btn:hover:not(:disabled) { color: var(--gold); border-color: rgba(200,160,100,0.3); }
+.area-fav-btn:disabled { opacity: 0.5; }
+
+.result-divider {
+  padding: 12px 14px 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--cream-muted);
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+
+/* Result list */
+.map-result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.map-result-list li {
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.map-result-list li:hover, .map-result-list li.is-selected { background: rgba(200,160,100,0.08); }
+.map-result-list li.is-selected { border-left: 2px solid var(--gold); }
+
+.map-result-link {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  color: var(--cream);
+}
+.map-result-link:hover { color: var(--cream); }
+
+.prop-type-badge {
+  font-size: 0.68rem;
+  background: rgba(200,160,100,0.12);
+  color: var(--gold);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  display: inline-block;
+  margin-bottom: 2px;
+}
+
+.result-name { font-size: 0.9rem; font-weight: 700; color: var(--cream); }
+.result-addr { font-size: 0.78rem; color: var(--cream-muted); }
+.result-price { font-size: 0.82rem; color: var(--gold); font-weight: 600; }
+
+/* Map right */
+.map-right {
+  position: relative;
+  height: calc(100vh - var(--header-h));
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .map-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
+  .map-left { max-height: 320px; }
+  .map-right { height: 60vh; }
+}
+</style>

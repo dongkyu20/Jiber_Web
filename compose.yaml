@@ -26,5 +26,22 @@ services:
       retries: 10
       start_period: 30s
 
+  backend:
+    build:
+      context: ./backend
+    container_name: jiber-backend
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      BACKEND_PORT: 8080
+      DB_HOST: mysql
+      DB_PORT: 3306
+      MODEL_SERVER_BASE_URL: http://host.docker.internal:8000
+    depends_on:
+      mysql:
+        condition: service_healthy
+
 volumes:
   mysql-data:
