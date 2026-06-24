@@ -1,6 +1,6 @@
 # Jiber Model Server
 
-FastAPI 기반 Phase 1 모델 서버 skeleton입니다. 아파트 전용 valuation과 SHAP 설명 internal API 형태를 검증하기 위한 서비스이며, 실제 모델 artifact를 로드하지 않습니다.
+FastAPI 기반 모델 서버입니다. 아파트 전용 valuation과 SHAP 설명 internal API 형태를 제공하며, `VALUATION_ARTIFACTS_DIR`에 가격예측 모델 artifact가 있으면 이를 로드하고 없으면 deterministic skeleton 응답으로 fallback합니다.
 
 이 서버의 결과는 실거래 데이터 기반 추정/설명 API의 계약 확인용입니다. 감정평가서, 투자 조언, 매수/매도 판단, 수익률 보장, 특정 부동산 추천이 아닙니다.
 
@@ -63,6 +63,21 @@ root 기준 import는 `.venv/bin/python -m pip install -e .`가 만든 editable 
 | `MODEL_VERSION` | no | 비어 있으면 `hedonic-skeleton-v1`을 사용합니다. |
 | `MODEL_BASELINE_DATE` | no | 비어 있으면 요청의 `asOfDate`를 응답 `baselineDate`로 사용합니다. |
 | `MODEL_FEATURE_SET_VERSION` | no | 비어 있으면 `apartment-basic-skeleton-v1`을 사용합니다. |
+| `VALUATION_DATA_DIR` | no | 가격예측 feature dataset 디렉터리입니다. Docker Compose에서는 Google Drive folder가 이 경로에 자동 다운로드됩니다. |
+| `VALUATION_ARTIFACTS_DIR` | no | 가격예측 모델 artifact 디렉터리입니다. `run_manifest.json`을 재귀적으로 탐색합니다. |
+| `XAI_ARTIFACTS_DIR` | no | XAI 산출물 디렉터리입니다. 현재 런타임 계산에는 직접 사용하지 않지만 Compose가 Google Drive folder를 자동 다운로드합니다. |
+
+## Google Drive Assets
+
+루트 `compose.yaml`의 `model-assets` 서비스는 공개 Google Drive 링크에서 다음 자산을 로컬 artifact 디렉터리로 다운로드합니다.
+
+- 가격예측모델 dataset folder: `VALUATION_DATA_DRIVE_URL`
+- 가격예측모델 zip file: `VALUATION_MODEL_DRIVE_URL`
+- XAI 산출물 folder: `XAI_DRIVE_URL`
+
+가격예측모델은 zip 링크를 그대로 사용해도 됩니다. `scripts/download-google-drive-assets.py`가 zip을 내려받고 `VALUATION_ARTIFACTS_DIR`에 압축해제합니다. 압축해제 결과가 한 단계 폴더 안에 들어가도 모델 서버는 `run_manifest.json`을 재귀적으로 찾아 로드합니다.
+
+주의: Google Drive 폴더가 공유되어 있어도 내부 파일 각각의 다운로드 권한이 막혀 있으면 자동 다운로드가 실패합니다. 폴더와 파일 권한을 모두 `링크가 있는 모든 사용자`로 맞춘 뒤 실행해야 합니다. 브라우저에서는 다운로드되지만 `gdown` 단독으로 실패하는 파일은 스크립트가 Drive content URL fallback으로 내려받습니다.
 
 ## Internal API
 

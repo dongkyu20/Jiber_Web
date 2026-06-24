@@ -96,7 +96,7 @@ class ValuationModelRepository:
 
         manifests: dict[str, dict[str, Any]] = {}
         if self.artifacts_dir.is_dir():
-            for manifest_path in self.artifacts_dir.glob("*/run_manifest.json"):
+            for manifest_path in self.artifacts_dir.rglob("run_manifest.json"):
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 city_code = str(manifest.get("city_code", "")).strip().lower()
                 if city_code:

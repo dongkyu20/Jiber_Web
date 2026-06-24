@@ -47,6 +47,18 @@ Phase 1 로컬 개발 흐름은 다음 순서입니다.
 7. `model-server/`에서 FastAPI 모델 서버를 실행합니다.
 8. 프론트엔드는 Spring Boot API의 `/api/v1/**`만 호출하고, Spring Boot가 내부적으로 모델 서버를 호출합니다.
 
+Docker Compose로 전체 백엔드 스택을 띄우면 공개 Google Drive 자산도 자동으로 내려받습니다.
+
+```bash
+cp .env.example .env
+# .env에서 DB_PASSWORD, DB_ROOT_PASSWORD 등 로컬 secret 값을 채웁니다.
+docker compose up --build
+```
+
+`model-assets` 서비스가 가격예측 feature dataset, 가격예측 모델 zip, XAI 산출물을 로컬 artifact 디렉터리에 저장한 뒤 `model-server`와 `backend`가 이어서 시작됩니다. 모델 zip은 Google Drive에 zip 파일 링크로 둬도 됩니다. Compose 실행 중 `scripts/download-google-drive-assets.py`가 zip을 내려받아 `VALUATION_ARTIFACTS_DIR`에 압축해제합니다.
+
+Google Drive 폴더 링크는 폴더만 보이는 상태로는 부족합니다. 폴더 안의 각 파일도 `링크가 있는 모든 사용자`가 다운로드할 수 있어야 compose 자동 다운로드가 끝까지 성공합니다. 스크립트는 Drive 폴더 목록은 `gdown`으로 읽고, 개별 파일은 Drive content URL로 직접 내려받아 브라우저에서는 되지만 `gdown` 단독으로는 실패하는 공개 파일도 처리합니다. 이미 받은 자산을 다시 받고 싶으면 `.env`에서 `MODEL_ASSETS_FORCE_DOWNLOAD=true`로 설정한 뒤 `docker compose up model-assets`를 실행합니다. 네트워크 없이 skeleton만 띄워야 하는 경우에는 `MODEL_ASSETS_SKIP_DOWNLOAD=true`를 사용할 수 있습니다. 특정 자산만 건너뛰려면 `MODEL_ASSETS_SKIP_DATASET`, `MODEL_ASSETS_SKIP_MODEL`, `MODEL_ASSETS_SKIP_XAI`를 사용할 수 있습니다.
+
 권장 dev 실행:
 
 ```bash
