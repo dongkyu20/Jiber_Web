@@ -1,6 +1,25 @@
 name: jiber
 
 services:
+  db-assets:
+    image: python:3.12-slim
+    container_name: jiber-db-assets
+    working_dir: /workspace
+    environment:
+      DB_DUMP_DRIVE_URL: ${DB_DUMP_DRIVE_URL:-https://drive.google.com/drive/folders/1G5HRQa7K-mPk8o5qguqqv2QaPGoFlGmJ?usp=drive_link}
+      DB_DUMP_DIR: /db-dumps
+      DB_DUMP_EXTRACT_DIR: /db-dumps/extracted
+      DB_DUMP_SELECTION: ${DB_DUMP_SELECTION:-latest}
+      DB_DUMP_FORCE_DOWNLOAD: ${DB_DUMP_FORCE_DOWNLOAD:-false}
+      DB_DUMP_SKIP_DOWNLOAD: ${DB_DUMP_SKIP_DOWNLOAD:-false}
+    volumes:
+      - .:/workspace:ro
+      - ./db/dumps:/db-dumps
+    command:
+      - sh
+      - -c
+      - python -m pip install --no-cache-dir 'gdown>=5,<6' && python scripts/download-db-dumps.py
+
   model-assets:
     image: python:3.12-slim
     container_name: jiber-model-assets
@@ -53,6 +72,32 @@ services:
       retries: 10
       start_period: 30s
 
+  db-import:
+    image: mysql:8.4
+    container_name: jiber-db-import
+    env_file:
+      - .env
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-jiber}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env for dump import}
+      DB_DUMP_EXTRACT_DIR: /dumps/extracted
+      DB_DUMP_SOURCE_DATABASE: ${DB_DUMP_SOURCE_DATABASE:-Jiber}
+      DB_DUMP_FORCE_IMPORT: ${DB_DUMP_FORCE_IMPORT:-false}
+      DB_DUMP_SKIP_IMPORT: ${DB_DUMP_SKIP_IMPORT:-false}
+    volumes:
+      - ./db/dumps:/dumps:ro
+      - ./scripts/import-db-dump.sh:/import-db-dump.sh:ro
+    command:
+      - sh
+      - /import-db-dump.sh
+    depends_on:
+      db-assets:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+
   model-server:
     build:
       context: ./model-server
@@ -93,6 +138,8 @@ services:
       DB_PORT: 3306
       MODEL_SERVER_BASE_URL: http://model-server:8000
     depends_on:
+      db-import:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       model-server:
