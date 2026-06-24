@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import AppHeader from '@/components/AppHeader.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 
 function createTestRouter() {
   return createRouter({
@@ -12,12 +13,9 @@ function createTestRouter() {
     routes: [
       { path: '/', component: { template: '<main />' } },
       { path: '/map', component: { template: '<main />' } },
+      { path: '/community', component: { template: '<main />' } },
       { path: '/favorites', component: { template: '<main />' } },
-      { path: '/chat', component: { template: '<main />' } },
-      { path: '/notices', component: { template: '<main />' } },
-      { path: '/admin', component: { template: '<main />' } },
-      { path: '/login', component: { template: '<main />' } },
-      { path: '/signup', component: { template: '<main />' } }
+      { path: '/admin', component: { template: '<main />' } }
     ]
   })
 }
@@ -37,37 +35,43 @@ async function mountHeader(authenticated = false) {
       user: {
         userId: 1,
         email: 'user@example.com',
-        displayName: '테스터',
+        displayName: 'Test User',
         roles: ['USER']
       }
     })
   }
 
-  return mount(AppHeader, {
+  const wrapper = mount(AppHeader, {
     global: {
       plugins: [pinia, router]
     }
   })
+
+  return { wrapper, uiStore: useUiStore() }
 }
 
 describe('AppHeader', () => {
-  it('renders clear login and signup entry points for guests', async () => {
-    const wrapper = await mountHeader()
+  it('opens login and signup modals for guests', async () => {
+    const { wrapper, uiStore } = await mountHeader()
+    const buttons = wrapper.findAll('.auth-actions button')
 
-    expect(wrapper.get('a[href="/login"]').text()).toBe('로그인')
-    expect(wrapper.get('a[href="/signup"]').text()).toBe('회원가입')
-    expect(wrapper.text()).not.toContain('카카오 로그인')
-    expect(wrapper.text()).not.toContain('구글 로그인')
-    expect(wrapper.text()).not.toContain('네이버 로그인')
+    expect(buttons).toHaveLength(2)
+
+    await buttons[0].trigger('click')
+    expect(uiStore.loginOpen).toBe(true)
+    expect(uiStore.signupOpen).toBe(false)
+
+    await buttons[1].trigger('click')
+    expect(uiStore.loginOpen).toBe(false)
+    expect(uiStore.signupOpen).toBe(true)
   })
 
-  it('hides guest auth links after login', async () => {
-    const wrapper = await mountHeader(true)
-    const buttonTexts = wrapper.findAll('button').map((button) => button.text())
+  it('hides guest auth buttons after login', async () => {
+    const { wrapper } = await mountHeader(true)
+    const buttons = wrapper.findAll('.auth-actions button')
 
-    expect(wrapper.text()).toContain('테스터님')
-    expect(buttonTexts).toEqual(['로그아웃'])
-    expect(wrapper.text()).not.toContain('로그인')
-    expect(wrapper.text()).not.toContain('회원가입')
+    expect(wrapper.text()).toContain('Test User')
+    expect(buttons).toHaveLength(1)
+    expect(wrapper.find('.user-avatar').exists()).toBe(true)
   })
 })

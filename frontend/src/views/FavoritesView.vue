@@ -80,7 +80,13 @@ async function removeArea(favoriteAreaId: number) {
     await favoritesApi.removeArea(favoriteAreaId)
     statusMessage.value = '관심 지역에서 삭제했습니다.'
     await fetchFavorites()
-  } catch {
+  } catch (error) {
+    const apiErr = getApiError(error)
+    if (apiErr?.code === 'FAVORITE_AREA_NOT_FOUND') {
+      areas.value = areas.value.filter(a => a.favoriteAreaId !== favoriteAreaId)
+      statusMessage.value = '이미 삭제된 관심 지역입니다.'
+      return
+    }
     errorMessage.value = '삭제하지 못했습니다.'
   } finally {
     deletingAreaId.value = null
