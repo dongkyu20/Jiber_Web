@@ -401,7 +401,7 @@ const filteredListings = computed(() =>
   inset: 0;
   z-index: 50;
   background: var(--bg);
-  font-family: 'Noto Serif KR', 'Nanum Myeongjo', 'Malgun Gothic', serif;
+  font-family: var(--font-body);
   color: var(--cream);
 }
 
@@ -451,6 +451,7 @@ const filteredListings = computed(() =>
   align-items: baseline;
   gap: 5px;
   text-decoration: none;
+  font-family: var(--font-logo);
 }
 
 .brand-ko { color: var(--cream); font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; }

@@ -152,6 +152,7 @@ async function submit() {
   justify-content: center;
   gap: 4px;
   margin-bottom: 20px;
+  font-family: var(--font-logo);
 }
 
 .modal-logo .brand-ko { color: #1a1208; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }

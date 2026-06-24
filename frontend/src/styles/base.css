@@ -1,5 +1,31 @@
 /* ── Dark Premium Design Tokens ── */
+@font-face {
+  font-family: 'ONE Mobile';
+  src: url('../assets/fonts/one-mobile-regular/ONE Mobile Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'ONE Mobile';
+  src: url('../assets/fonts/one-mobile-regular/ONE Mobile Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'ONE Mobile';
+  src: url('../assets/fonts/one-mobile-regular/ONE Mobile Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
+  --font-body: 'ONE Mobile', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  --font-logo: 'Noto Serif KR', 'Nanum Myeongjo', 'Malgun Gothic', 'Apple SD Gothic Neo', serif;
   --bg: #160d04;
   --bg-alt: #1a1007;
   --bg-card: #1e1208;
@@ -28,8 +54,9 @@
 
   color: var(--cream);
   background: var(--bg);
-  font-family: 'Noto Serif KR', 'Nanum Myeongjo', 'Malgun Gothic', 'Apple SD Gothic Neo', serif;
-  font-synthesis: none;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-synthesis: weight;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -71,6 +98,7 @@ a { color: inherit; text-decoration: none; }
   align-items: baseline;
   gap: 4px;
   text-decoration: none;
+  font-family: var(--font-logo);
 }
 
 .brand-ko {
