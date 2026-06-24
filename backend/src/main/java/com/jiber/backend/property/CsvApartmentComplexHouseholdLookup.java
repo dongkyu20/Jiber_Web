@@ -25,7 +25,12 @@ class CsvApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLoo
     private static final Logger log = LoggerFactory.getLogger(CsvApartmentComplexHouseholdLookup.class);
     private static final Integer AMBIGUOUS = Integer.MIN_VALUE;
     private static final int MIN_SCORED_MATCH = 7;
+    private static final int MIN_CONTAINS_NAME_LENGTH = 2;
+    private static final int MIN_CORE_OVERLAP_LENGTH = 4;
     private static final String APARTMENT_SUFFIX = "\uC544\uD30C\uD2B8";
+    private static final String RENTAL_MARKER = "\uC784\uB300";
+    private static final String NEW_TOWN_ALIAS = "\uC2E0\uC2DC\uAC00\uC9C0";
+    private static final List<String> OPTIONAL_BRAND_TOKENS = List.of("\uD478\uB974\uC9C0\uC624");
     private static final List<Path> DEFAULT_PATHS = List.of(
             Path.of("data", "apartment-complex-households-seoul-busan.csv"),
             Path.of("..", "data", "apartment-complex-households-seoul-busan.csv")
@@ -77,6 +82,7 @@ class CsvApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLoo
     private Optional<Integer> findBestScoredRecord(PropertyDetailRow property, Set<String> wantedNameKeys) {
         var bestScore = 0;
         var bestNameSpecificity = 0;
+        var bestPenalty = Integer.MAX_VALUE;
         Integer bestHouseholdCount = null;
         var ambiguous = false;
         for (var record : records) {
@@ -111,18 +117,29 @@ class CsvApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLoo
             if (score > bestScore) {
                 bestScore = score;
                 bestNameSpecificity = nameMatch.specificity();
+                bestPenalty = nameMatch.penalty();
                 bestHouseholdCount = record.householdCount();
                 ambiguous = false;
                 continue;
             }
             if (score == bestScore && nameMatch.specificity() > bestNameSpecificity) {
                 bestNameSpecificity = nameMatch.specificity();
+                bestPenalty = nameMatch.penalty();
                 bestHouseholdCount = record.householdCount();
                 ambiguous = false;
                 continue;
             }
             if (score == bestScore
                     && nameMatch.specificity() == bestNameSpecificity
+                    && nameMatch.penalty() < bestPenalty) {
+                bestPenalty = nameMatch.penalty();
+                bestHouseholdCount = record.householdCount();
+                ambiguous = false;
+                continue;
+            }
+            if (score == bestScore
+                    && nameMatch.specificity() == bestNameSpecificity
+                    && nameMatch.penalty() == bestPenalty
                     && !record.householdCount().equals(bestHouseholdCount)) {
                 ambiguous = true;
             }
@@ -274,11 +291,19 @@ class CsvApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLoo
             return Set.of();
         }
         var keys = new HashSet<String>();
-        keys.add(normalized);
-        if (normalized.endsWith(APARTMENT_SUFFIX)) {
-            keys.add(normalized.substring(0, normalized.length() - APARTMENT_SUFFIX.length()));
-        }
+        addNameKey(keys, normalized);
+        addNameKey(keys, normalizeBlockNotation(normalized));
         return keys;
+    }
+
+    private static void addNameKey(Set<String> keys, String key) {
+        if (!StringUtils.hasText(key)) {
+            return;
+        }
+        keys.add(key);
+        if (key.endsWith(APARTMENT_SUFFIX)) {
+            keys.add(key.substring(0, key.length() - APARTMENT_SUFFIX.length()));
+        }
     }
 
     private static Set<String> candidateNameKeys(PropertyDetailRow property, List<String> apartmentNameHints) {
@@ -289,15 +314,56 @@ class CsvApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLoo
         }
         var keys = new LinkedHashSet<String>();
         for (var name : names) {
-            keys.addAll(nameKeys(name));
+            keys.addAll(candidateKeysForName(name));
         }
         return keys;
+    }
+
+    private static Set<String> candidateKeysForName(String name) {
+        var keys = new LinkedHashSet<String>();
+        keys.addAll(nameKeys(name));
+        var withoutParentheses = removeParentheticalText(name);
+        if (!withoutParentheses.equals(name)) {
+            keys.addAll(nameKeys(withoutParentheses));
+        }
+        var expandedKeys = new LinkedHashSet<>(keys);
+        for (var key : keys) {
+            if (key.contains(NEW_TOWN_ALIAS)) {
+                expandedKeys.add(key.replace(NEW_TOWN_ALIAS, ""));
+            }
+            for (var brandToken : OPTIONAL_BRAND_TOKENS) {
+                if (key.contains(brandToken)) {
+                    addNameKey(expandedKeys, key.replace(brandToken, ""));
+                }
+            }
+        }
+        return expandedKeys;
+    }
+
+    private static String removeParentheticalText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value
+                .replaceAll("\\([^)]*\\)", "")
+                .replaceAll("\\[[^]]*\\]", "")
+                .replaceAll("\\{[^}]*\\}", "")
+                .replaceAll("\uFF08[^\uFF09]*\uFF09", "");
+    }
+
+    private static String normalizeBlockNotation(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.replaceAll("(\\d+)\uB2E8\uC9C0\uC81C(\\d+)", "$1$2\uB2E8\uC9C0");
     }
 
     private static NameMatch nameMatch(String recordName, Set<String> wantedNameKeys) {
         var recordNameKeys = nameKeys(recordName);
         var bestScore = 0;
         var bestSpecificity = 0;
+        var wantedRental = wantedNameKeys.stream().anyMatch(CsvApartmentComplexHouseholdLookup::containsRentalMarker);
+        var penalty = containsRentalMarker(normalize(recordName)) && !wantedRental ? 1 : 0;
         for (var wantedNameKey : wantedNameKeys) {
             for (var recordNameKey : recordNameKeys) {
                 var score = 0;
@@ -308,6 +374,12 @@ class CsvApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLoo
                 } else if (containsEither(wantedNameKey, recordNameKey)) {
                     score = 3;
                     specificity = Math.min(wantedNameKey.length(), recordNameKey.length());
+                } else {
+                    var commonName = longestCommonSubstring(wantedNameKey, recordNameKey);
+                    if (commonName.length() >= MIN_CORE_OVERLAP_LENGTH && containsLetter(commonName)) {
+                        score = 3;
+                        specificity = commonName.length();
+                    }
                 }
                 if (score > bestScore || (score == bestScore && specificity > bestSpecificity)) {
                     bestScore = score;
@@ -315,15 +387,56 @@ class CsvApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLoo
                 }
             }
         }
-        return new NameMatch(bestScore, bestSpecificity);
+        return new NameMatch(bestScore, bestSpecificity, penalty);
     }
 
     private static boolean containsEither(String left, String right) {
         return StringUtils.hasText(left)
                 && StringUtils.hasText(right)
-                && left.length() >= 3
-                && right.length() >= 3
+                && left.length() >= MIN_CONTAINS_NAME_LENGTH
+                && right.length() >= MIN_CONTAINS_NAME_LENGTH
                 && (left.contains(right) || right.contains(left));
+    }
+
+    private static String longestCommonSubstring(String left, String right) {
+        if (!StringUtils.hasText(left) || !StringUtils.hasText(right)) {
+            return "";
+        }
+        var previous = new int[right.length() + 1];
+        var bestLength = 0;
+        var bestEnd = 0;
+        for (var leftIndex = 1; leftIndex <= left.length(); leftIndex++) {
+            var current = new int[right.length() + 1];
+            for (var rightIndex = 1; rightIndex <= right.length(); rightIndex++) {
+                if (left.charAt(leftIndex - 1) == right.charAt(rightIndex - 1)) {
+                    current[rightIndex] = previous[rightIndex - 1] + 1;
+                    if (current[rightIndex] > bestLength) {
+                        bestLength = current[rightIndex];
+                        bestEnd = leftIndex;
+                    }
+                }
+            }
+            previous = current;
+        }
+        return left.substring(bestEnd - bestLength, bestEnd);
+    }
+
+    private static boolean containsLetter(String value) {
+        if (!StringUtils.hasText(value)) {
+            return false;
+        }
+        for (var offset = 0; offset < value.length();) {
+            var codePoint = value.codePointAt(offset);
+            if (Character.isLetter(codePoint)) {
+                return true;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return false;
+    }
+
+    private static boolean containsRentalMarker(String value) {
+        return StringUtils.hasText(value) && value.contains(RENTAL_MARKER);
     }
 
     private static boolean sameText(String left, String right) {
@@ -352,7 +465,7 @@ class CsvApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLoo
             return "";
         }
         var normalized = new StringBuilder();
-        var lower = value.toLowerCase(Locale.ROOT);
+        var lower = replaceRomanNumerals(value).toLowerCase(Locale.ROOT);
         for (var offset = 0; offset < lower.length();) {
             var codePoint = lower.codePointAt(offset);
             if (Character.isLetterOrDigit(codePoint)) {
@@ -360,7 +473,28 @@ class CsvApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLoo
             }
             offset += Character.charCount(codePoint);
         }
-        return normalized.toString();
+        return applyKnownAliases(normalized.toString());
+    }
+
+    private static String replaceRomanNumerals(String value) {
+        return value
+                .replace("\u2160", "1")
+                .replace("\u2170", "1")
+                .replace("\u2161", "2")
+                .replace("\u2171", "2")
+                .replace("\u2162", "3")
+                .replace("\u2172", "3")
+                .replace("\u2163", "4")
+                .replace("\u2173", "4")
+                .replace("\u2164", "5")
+                .replace("\u2174", "5");
+    }
+
+    private static String applyKnownAliases(String value) {
+        return value
+                .replace("e\uD3B8\uD55C", "\uC774\uD3B8\uD55C")
+                .replace("\uC5D0\uC2A4\uCF00\uC774", "sk")
+                .replace("ipark", "\uC544\uC774\uD30C\uD06C");
     }
 
     private static String join(String... values) {
@@ -378,6 +512,6 @@ class CsvApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLoo
     ) {
     }
 
-    private record NameMatch(int score, int specificity) {
+    private record NameMatch(int score, int specificity, int penalty) {
     }
 }
