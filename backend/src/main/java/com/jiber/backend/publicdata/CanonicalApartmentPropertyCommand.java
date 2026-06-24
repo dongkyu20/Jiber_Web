@@ -19,7 +19,7 @@ public class CanonicalApartmentPropertyCommand {
 
     public static CanonicalApartmentPropertyCommand from(CanonicalApartmentRawRow row) {
         var command = new CanonicalApartmentPropertyCommand();
-        command.propertyType = "APARTMENT";
+        command.propertyType = row.propertyType().name();
         command.name = row.apartmentName();
         command.sido = row.sido();
         command.sigungu = row.sigungu();

@@ -6,10 +6,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class SourceKeyGenerator {
 
-    public String generate(PublicDataApartmentItem item, TransactionType transactionType) {
+    public String generate(PublicDataApartmentItem item, PublicDataApiType apiType, TransactionType transactionType) {
         return String.join("|",
                 "PUBLIC_DATA",
-                "APT",
+                apiType.sourcePrefix(),
                 transactionType.name(),
                 safe(item.lawdCd()),
                 item.dealDate() == null ? "" : item.dealDate().toString(),

@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.jiber.backend.property.PropertyType;
 import com.jiber.backend.property.TransactionType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -20,6 +21,7 @@ import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class PublicDataImportServiceTest {
 
@@ -87,6 +89,7 @@ class PublicDataImportServiceTest {
         );
         var transaction = new ImportedApartmentTransaction(
                 "source-1",
+                PropertyType.APARTMENT,
                 TransactionType.SALE,
                 "11680",
                 "역삼동",
@@ -127,6 +130,145 @@ class PublicDataImportServiceTest {
         verify(importMapper, times(1)).markImportRunSucceeded(any(PublicDataImportRunRecord.class));
     }
 
+    @Test
+    void liveModeReusesGeocodingResultForDuplicateAddressInSameRun() {
+        var service = service(properties("public-data-key", "kakao-key"));
+        var lawdCode = new LawdCode(PublicDataTargetRegion.SEOUL, "11680", "Seoul", "Gangnam");
+        var firstItem = item("12-3", "1");
+        var secondItem = item("12-3", "2");
+        var address = new NormalizedAddress(
+                "Seoul",
+                "Gangnam",
+                "Yeoksam",
+                "12-3",
+                "Seoul Gangnam Yeoksam 12-3",
+                "Seoul Gangnam Yeoksam 12-3"
+        );
+        var firstTransaction = transaction("source-1", "12-3");
+        var secondTransaction = transaction("source-2", "12-3");
+        when(lawdCodeRegistry.findByRegions(List.of(PublicDataTargetRegion.SEOUL))).thenReturn(List.of(lawdCode));
+        when(publicDataApiClient.fetchApartmentPage(eq(PublicDataApiType.SALE), eq("11680"), any(YearMonth.class), eq(1), eq(100)))
+                .thenReturn(new PublicDataApartmentPage(1, 100, 2, List.of(firstItem, secondItem)));
+        when(transactionMapper.toImportedTransaction(firstItem, PublicDataApiType.SALE)).thenReturn(firstTransaction);
+        when(transactionMapper.toImportedTransaction(secondItem, PublicDataApiType.SALE)).thenReturn(secondTransaction);
+        when(addressNormalizer.normalize(eq("Seoul"), eq("Gangnam"), anyString(), eq("12-3"))).thenReturn(address);
+        when(importMapper.findGeocodingByAddressKey(address.addressKey())).thenReturn(Optional.empty());
+        when(kakaoGeocodingClient.geocode(address)).thenReturn(GeocodingResult.success(
+                address.fullAddress(),
+                new BigDecimal("37.5001000"),
+                new BigDecimal("127.0364000")
+        ));
+
+        var summary = service.importRecentApartmentTransactions(new PublicDataImportCommand(false, 2));
+
+        assertThat(summary.stagedCount()).isEqualTo(2);
+        assertThat(summary.geocodedCount()).isEqualTo(2);
+        var rawRecordCaptor = ArgumentCaptor.forClass(PublicDataRawTransactionRecord.class);
+        verify(importMapper, times(2)).upsertRawTransaction(rawRecordCaptor.capture());
+        assertThat(rawRecordCaptor.getAllValues())
+                .extracting(PublicDataRawTransactionRecord::geocodingStatus)
+                .containsOnly(GeocodingStatus.SUCCESS.name());
+        verify(importMapper, times(1)).findGeocodingByAddressKey(address.addressKey());
+        verify(kakaoGeocodingClient, times(1)).geocode(address);
+        verify(importMapper, never()).updateRawGeocodingStatus(anyString(), any());
+    }
+
+    @Test
+    void liveModeUsesOnlyConfiguredApiTypes() {
+        var service = service(properties("public-data-key", "kakao-key", List.of(PublicDataApiType.RENT)));
+        var lawdCode = new LawdCode(PublicDataTargetRegion.SEOUL, "11680", "Seoul", "Gangnam");
+        var rentItem = item("12-3", "rent-1");
+        var address = new NormalizedAddress(
+                "Seoul",
+                "Gangnam",
+                "Yeoksam",
+                "12-3",
+                "Seoul Gangnam Yeoksam 12-3",
+                "Seoul Gangnam Yeoksam 12-3"
+        );
+        var transaction = new ImportedApartmentTransaction(
+                "rent-source-1",
+                PropertyType.APARTMENT,
+                TransactionType.JEONSE,
+                "11680",
+                "Yeoksam",
+                "12-3",
+                "Example Apartment",
+                new BigDecimal("84.95"),
+                15,
+                2010,
+                LocalDate.of(2026, 5, 20),
+                null,
+                300_000_000L,
+                0L
+        );
+        when(lawdCodeRegistry.findByRegions(List.of(PublicDataTargetRegion.SEOUL))).thenReturn(List.of(lawdCode));
+        when(publicDataApiClient.fetchApartmentPage(eq(PublicDataApiType.RENT), eq("11680"), any(YearMonth.class), eq(1), eq(100)))
+                .thenReturn(new PublicDataApartmentPage(1, 100, 1, List.of(rentItem)));
+        when(transactionMapper.toImportedTransaction(rentItem, PublicDataApiType.RENT)).thenReturn(transaction);
+        when(addressNormalizer.normalize(eq("Seoul"), eq("Gangnam"), anyString(), eq("12-3"))).thenReturn(address);
+        when(importMapper.findGeocodingByAddressKey(address.addressKey())).thenReturn(Optional.empty());
+        when(kakaoGeocodingClient.geocode(address)).thenReturn(GeocodingResult.success(
+                address.fullAddress(),
+                new BigDecimal("37.5001000"),
+                new BigDecimal("127.0364000")
+        ));
+
+        var summary = service.importRecentApartmentTransactions(new PublicDataImportCommand(false, 1));
+
+        assertThat(summary.stagedCount()).isEqualTo(1);
+        verify(publicDataApiClient, times(1)).fetchApartmentPage(eq(PublicDataApiType.RENT), eq("11680"), any(YearMonth.class), eq(1), eq(100));
+        verify(publicDataApiClient, never()).fetchApartmentPage(eq(PublicDataApiType.SALE), anyString(), any(YearMonth.class), anyInt(), anyInt());
+    }
+
+    @Test
+    void liveModeStoresNonApartmentPropertyTypeOnRawTransactions() {
+        var service = service(properties("public-data-key", "kakao-key", List.of(PublicDataApiType.OFFICETEL_RENT)));
+        var lawdCode = new LawdCode(PublicDataTargetRegion.SEOUL, "11680", "Seoul", "Gangnam");
+        var rentItem = item("33-4", "officetel-rent-1");
+        var address = new NormalizedAddress(
+                "Seoul",
+                "Gangnam",
+                "Yeoksam",
+                "33-4",
+                "Seoul Gangnam Yeoksam 33-4",
+                "Seoul Gangnam Yeoksam 33-4"
+        );
+        var transaction = new ImportedApartmentTransaction(
+                "officetel-rent-source-1",
+                PropertyType.OFFICETEL,
+                TransactionType.JEONSE,
+                "11680",
+                "Yeoksam",
+                "33-4",
+                "Example Officetel",
+                new BigDecimal("29.70"),
+                8,
+                2020,
+                LocalDate.of(2026, 6, 12),
+                null,
+                300_000_000L,
+                0L
+        );
+        when(lawdCodeRegistry.findByRegions(List.of(PublicDataTargetRegion.SEOUL))).thenReturn(List.of(lawdCode));
+        when(publicDataApiClient.fetchApartmentPage(eq(PublicDataApiType.OFFICETEL_RENT), eq("11680"), any(YearMonth.class), eq(1), eq(100)))
+                .thenReturn(new PublicDataApartmentPage(1, 100, 1, List.of(rentItem)));
+        when(transactionMapper.toImportedTransaction(rentItem, PublicDataApiType.OFFICETEL_RENT)).thenReturn(transaction);
+        when(addressNormalizer.normalize(eq("Seoul"), eq("Gangnam"), anyString(), eq("33-4"))).thenReturn(address);
+        when(importMapper.findGeocodingByAddressKey(address.addressKey())).thenReturn(Optional.empty());
+        when(kakaoGeocodingClient.geocode(address)).thenReturn(GeocodingResult.success(
+                address.fullAddress(),
+                new BigDecimal("37.5001000"),
+                new BigDecimal("127.0364000")
+        ));
+
+        service.importRecentApartmentTransactions(new PublicDataImportCommand(false, 1));
+
+        var rawRecordCaptor = ArgumentCaptor.forClass(PublicDataRawTransactionRecord.class);
+        verify(importMapper).upsertRawTransaction(rawRecordCaptor.capture());
+        assertThat(rawRecordCaptor.getValue().propertyType()).isEqualTo(PropertyType.OFFICETEL);
+    }
+
     private PublicDataImportService service(PublicDataImportProperties properties) {
         return new PublicDataImportService(
                 properties,
@@ -141,10 +283,15 @@ class PublicDataImportServiceTest {
     }
 
     private PublicDataImportProperties properties(String serviceKey, String kakaoKey) {
+        return properties(serviceKey, kakaoKey, List.of(PublicDataApiType.SALE, PublicDataApiType.RENT));
+    }
+
+    private PublicDataImportProperties properties(String serviceKey, String kakaoKey, List<PublicDataApiType> apiTypes) {
         return new PublicDataImportProperties(
                 serviceKey,
                 1,
                 List.of(PublicDataTargetRegion.SEOUL),
+                apiTypes,
                 true,
                 false,
                 100,
@@ -168,6 +315,25 @@ class PublicDataImportServiceTest {
                 null,
                 null,
                 sequence
+        );
+    }
+
+    private ImportedApartmentTransaction transaction(String sourceKey, String jibun) {
+        return new ImportedApartmentTransaction(
+                sourceKey,
+                PropertyType.APARTMENT,
+                TransactionType.SALE,
+                "11680",
+                "Yeoksam",
+                jibun,
+                "Example Apartment",
+                new BigDecimal("84.95"),
+                15,
+                2010,
+                LocalDate.of(2026, 5, 20),
+                1_250_000_000L,
+                null,
+                0L
         );
     }
 }

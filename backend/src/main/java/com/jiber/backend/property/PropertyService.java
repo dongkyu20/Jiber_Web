@@ -15,12 +15,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class PropertyService {
 
-    private static final int DETAIL_TRANSACTION_LIMIT = 20;
-
     private final PropertyMapper propertyMapper;
     private final FavoriteMapper favoriteMapper;
     private final PropertyAiEligibilityService eligibilityService;
     private final PropertyValuationClient valuationClient;
+    private final ApartmentComplexHouseholdLookup householdLookup;
     private final Clock clock;
 
     @Autowired
@@ -28,9 +27,10 @@ public class PropertyService {
             PropertyMapper propertyMapper,
             FavoriteMapper favoriteMapper,
             PropertyAiEligibilityService eligibilityService,
-            PropertyValuationClient valuationClient
+            PropertyValuationClient valuationClient,
+            ApartmentComplexHouseholdLookup householdLookup
     ) {
-        this(propertyMapper, favoriteMapper, eligibilityService, valuationClient, Clock.systemDefaultZone());
+        this(propertyMapper, favoriteMapper, eligibilityService, valuationClient, householdLookup, Clock.systemDefaultZone());
     }
 
     PropertyService(
@@ -40,15 +40,27 @@ public class PropertyService {
             PropertyValuationClient valuationClient,
             Clock clock
     ) {
+        this(propertyMapper, favoriteMapper, eligibilityService, valuationClient, (property, ignored) -> java.util.Optional.empty(), clock);
+    }
+
+    PropertyService(
+            PropertyMapper propertyMapper,
+            FavoriteMapper favoriteMapper,
+            PropertyAiEligibilityService eligibilityService,
+            PropertyValuationClient valuationClient,
+            ApartmentComplexHouseholdLookup householdLookup,
+            Clock clock
+    ) {
         this.propertyMapper = propertyMapper;
         this.favoriteMapper = favoriteMapper;
         this.eligibilityService = eligibilityService;
         this.valuationClient = valuationClient;
+        this.householdLookup = householdLookup;
         this.clock = clock;
     }
 
     public PropertyMapResponse findMapProperties(MapSearchRequest request) {
-        var recentSince = LocalDate.now(clock).minusMonths(6);
+        var recentSince = LocalDate.now(clock).minusYears(1);
         return new PropertyMapResponse(
                 propertyMapper.findMapProperties(request, recentSince).stream()
                         .map(this::toMapItem)
@@ -77,7 +89,7 @@ public class PropertyService {
     public PropertyDetailResponse getPropertyDetail(Long propertyId, AuthUserPrincipal principal) {
         var row = propertyMapper.findDetailById(propertyId)
                 .orElseThrow(() -> new ApiException(ErrorCode.PROPERTY_NOT_FOUND));
-        var transactions = propertyMapper.findRecentTransactions(propertyId, DETAIL_TRANSACTION_LIMIT).stream()
+        var transactions = propertyMapper.findTransactionsByPropertyId(propertyId).stream()
                 .map(this::toTransaction)
                 .toList();
         var aiAvailable = row.getPropertyType() == PropertyType.APARTMENT;
@@ -90,7 +102,7 @@ public class PropertyService {
                 row.getName(),
                 new PropertyDetailResponse.Address(row.getSido(), row.getSigungu(), row.getLegalDong(), row.getRoadAddress()),
                 new PropertyDetailResponse.Location(toDouble(row.getLatitude()), toDouble(row.getLongitude())),
-                new PropertyDetailResponse.Summary(row.getBuiltYear(), row.getHouseholdCount(), row.getLatestDealAmount(), row.getLatestDealDate()),
+                new PropertyDetailResponse.Summary(row.getBuiltYear(), householdCount(row, propertyId), row.getLatestDealAmount(), row.getLatestDealDate()),
                 transactions,
                 new PropertyDetailResponse.FavoriteSummary(apartmentFavorited, false),
                 new PropertyDetailResponse.AiMetadata(
@@ -101,20 +113,27 @@ public class PropertyService {
         );
     }
 
+    private Integer householdCount(PropertyDetailRow row, Long propertyId) {
+        if (row.getHouseholdCount() != null || row.getPropertyType() != PropertyType.APARTMENT) {
+            return row.getHouseholdCount();
+        }
+        return householdLookup.findHouseholdCount(row, propertyMapper.findApartmentNameHintsByPropertyId(propertyId)).orElse(null);
+    }
+
     public ValuationResponse valuateApartment(Long propertyId, ValuationRequest request) {
-        var propertyType = resolvePropertyTypeForAi(propertyId);
-        eligibilityService.ensureApartmentSupported(propertyType);
-        return valuationClient.valuateApartment(propertyId, request);
+        var row = resolvePropertyForAi(propertyId);
+        eligibilityService.ensureApartmentSupported(row.getPropertyType());
+        return valuationClient.valuateApartment(row, request);
     }
 
     public ShapResponse explainApartment(Long propertyId, ShapRequest request) {
-        var propertyType = resolvePropertyTypeForAi(propertyId);
-        eligibilityService.ensureApartmentSupported(propertyType);
-        return valuationClient.explainApartment(propertyId, request);
+        var row = resolvePropertyForAi(propertyId);
+        eligibilityService.ensureApartmentSupported(row.getPropertyType());
+        return valuationClient.explainApartment(row, request);
     }
 
-    private PropertyType resolvePropertyTypeForAi(Long propertyId) {
-        return propertyMapper.findPropertyTypeById(propertyId)
+    private PropertyDetailRow resolvePropertyForAi(Long propertyId) {
+        return propertyMapper.findDetailById(propertyId)
                 .orElseThrow(() -> new ApiException(ErrorCode.PROPERTY_NOT_FOUND));
     }
 
@@ -129,6 +148,7 @@ public class PropertyService {
                 toLatestTransaction(row),
                 row.getDealCount() == null ? 0 : row.getDealCount(),
                 row.getRecentTransactionCount(),
+                row.getRecentYearAverageDealAmount(),
                 row.getPropertyType() == PropertyType.APARTMENT
         );
     }

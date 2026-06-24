@@ -2,7 +2,7 @@ package com.jiber.backend.property;
 
 public interface PropertyValuationClient {
 
-    ValuationResponse valuateApartment(Long propertyId, ValuationRequest request);
+    ValuationResponse valuateApartment(PropertyDetailRow property, ValuationRequest request);
 
-    ShapResponse explainApartment(Long propertyId, ShapRequest request);
+    ShapResponse explainApartment(PropertyDetailRow property, ShapRequest request);
 }

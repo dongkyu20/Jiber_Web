@@ -46,4 +46,46 @@ class PublicDataApartmentResponseParserTest {
         assertThat(monthlyRent.depositAmountKrw()).isEqualTo(50000000L);
         assertThat(monthlyRent.monthlyRentKrw()).isEqualTo(1200000L);
     }
+
+    @Test
+    void parsesOfficetelSaleXmlFixture() {
+        var page = parser.parse(FixtureText.read("fixtures/publicdata/officetel-sale.xml"), PublicDataApiType.OFFICETEL_SALE);
+        var mapper = new PublicDataTransactionMapper(new SourceKeyGenerator());
+
+        assertThat(page.items()).singleElement().satisfies(item -> {
+            assertThat(item.lawdCd()).isEqualTo("11680");
+            assertThat(item.legalDong()).isEqualTo("Yeoksam");
+            assertThat(item.jibun()).isEqualTo("10-1");
+            assertThat(item.apartmentName()).isEqualTo("Sample Officetel");
+            assertThat(item.exclusiveAreaM2()).isEqualByComparingTo("29.7");
+            assertThat(item.floor()).isEqualTo(8);
+            assertThat(item.builtYear()).isEqualTo(2020);
+            assertThat(item.dealDate()).isEqualTo(LocalDate.of(2026, 6, 12));
+            assertThat(item.dealAmountKrw()).isEqualTo(320000000L);
+        });
+
+        var transaction = mapper.toImportedTransaction(page.items().get(0), PublicDataApiType.OFFICETEL_SALE);
+
+        assertThat(transaction.propertyType().name()).isEqualTo("OFFICETEL");
+        assertThat(transaction.transactionType()).isEqualTo(TransactionType.SALE);
+        assertThat(transaction.sourceKey()).contains("OFFICETEL");
+    }
+
+    @Test
+    void parsesVillaRentXmlFixture() {
+        var page = parser.parse(FixtureText.read("fixtures/publicdata/villa-rent.xml"), PublicDataApiType.VILLA_RENT);
+        var mapper = new PublicDataTransactionMapper(new SourceKeyGenerator());
+
+        assertThat(page.items()).singleElement().satisfies(item -> {
+            assertThat(item.apartmentName()).isEqualTo("Sample Villa");
+            assertThat(item.depositAmountKrw()).isEqualTo(150000000L);
+            assertThat(item.monthlyRentKrw()).isEqualTo(750000L);
+        });
+
+        var transaction = mapper.toImportedTransaction(page.items().get(0), PublicDataApiType.VILLA_RENT);
+
+        assertThat(transaction.propertyType().name()).isEqualTo("VILLA");
+        assertThat(transaction.transactionType()).isEqualTo(TransactionType.MONTHLY_RENT);
+        assertThat(transaction.sourceKey()).contains("VILLA");
+    }
 }

@@ -42,6 +42,11 @@ export interface KakaoPointLike {
   getY?: () => number
 }
 
+export interface MapScreenPoint {
+  x: number
+  y: number
+}
+
 export interface KakaoProjectionLike {
   containerPointFromCoords(latLng: unknown): KakaoPointLike
 }
@@ -59,6 +64,7 @@ export interface KakaoClusterLike {
   getClusterMarker(): {
     setContent(content: string): void
   }
+  getCenter?(): unknown
 }
 
 export interface KakaoMarkerClustererLike {
@@ -207,7 +213,8 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
     {
       base: PropertyMapItem
       latestTransaction: PropertyMapItem['latestTransaction']
-      recentDealAmounts: number[]
+      recentSaleDealAmounts: number[]
+      recentTransactionRows: number
       providedAverage: number | null
       maxDealCount: number
       maxRecentTransactionCount: number
@@ -219,9 +226,11 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
     const current = grouped.get(item.propertyId)
     const providedAverage =
       typeof item.recentYearAverageDealAmount === 'number' ? item.recentYearAverageDealAmount : null
-    const recentDealAmounts =
-      isRecentYearTransaction(item.latestTransaction, referenceDate) &&
-      typeof item.latestTransaction?.dealAmount === 'number'
+    const recentTransactionRows = isRecentYearTransaction(item.latestTransaction, referenceDate) ? 1 : 0
+    const recentSaleDealAmounts =
+      recentTransactionRows > 0 &&
+      item.latestTransaction?.transactionType === 'SALE' &&
+      typeof item.latestTransaction.dealAmount === 'number'
         ? [item.latestTransaction.dealAmount]
         : []
 
@@ -229,7 +238,8 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
       grouped.set(item.propertyId, {
         base: item,
         latestTransaction: item.latestTransaction ?? null,
-        recentDealAmounts,
+        recentSaleDealAmounts,
+        recentTransactionRows,
         providedAverage,
         maxDealCount: item.dealCount ?? 0,
         maxRecentTransactionCount: item.recentTransactionCount ?? 0,
@@ -239,7 +249,8 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
     }
 
     current.rowCount += 1
-    current.recentDealAmounts.push(...recentDealAmounts)
+    current.recentSaleDealAmounts.push(...recentSaleDealAmounts)
+    current.recentTransactionRows += recentTransactionRows
     current.maxDealCount = Math.max(current.maxDealCount, item.dealCount ?? 0)
     current.maxRecentTransactionCount = Math.max(current.maxRecentTransactionCount, item.recentTransactionCount ?? 0)
     if (providedAverage !== null) {
@@ -254,8 +265,8 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
     ...group.base,
     latestTransaction: group.latestTransaction,
     dealCount: Math.max(group.maxDealCount, group.rowCount),
-    recentTransactionCount: Math.max(group.maxRecentTransactionCount, group.recentDealAmounts.length),
-    recentYearAverageDealAmount: group.providedAverage ?? average(group.recentDealAmounts)
+    recentTransactionCount: Math.max(group.maxRecentTransactionCount, group.recentTransactionRows),
+    recentYearAverageDealAmount: group.providedAverage ?? average(group.recentSaleDealAmounts)
   }))
 }
 
@@ -325,17 +336,13 @@ function pointCoordinate(point: KakaoPointLike, axis: 'x' | 'y'): number | null 
   return Number.isFinite(getterValue) ? getterValue : null
 }
 
-function administrativeClusterPoint(
-  kakaoMaps: KakaoMapsApi,
-  map: KakaoMapLike,
-  cluster: AdministrativeCluster
-): { x: number; y: number } | null {
+function screenPointFromCoords(map: KakaoMapLike, latLng: unknown): MapScreenPoint | null {
   const projection = map.getProjection?.()
   if (!projection) {
     return null
   }
 
-  const point = projection.containerPointFromCoords(new kakaoMaps.LatLng(cluster.centerLat, cluster.centerLng))
+  const point = projection.containerPointFromCoords(latLng)
   const x = pointCoordinate(point, 'x')
   const y = pointCoordinate(point, 'y')
 
@@ -346,11 +353,32 @@ function administrativeClusterPoint(
   return { x, y }
 }
 
+function administrativeClusterPoint(
+  kakaoMaps: KakaoMapsApi,
+  map: KakaoMapLike,
+  cluster: AdministrativeCluster
+): MapScreenPoint | null {
+  return screenPointFromCoords(map, new kakaoMaps.LatLng(cluster.centerLat, cluster.centerLng))
+}
+
+export function screenPointsFromKakaoClusters(map: KakaoMapLike, clusters: KakaoClusterLike[]): MapScreenPoint[] {
+  return clusters.reduce<MapScreenPoint[]>((points, cluster) => {
+    const center = cluster.getCenter?.()
+    const screenPoint = center ? screenPointFromCoords(map, center) : null
+
+    if (screenPoint) {
+      points.push(screenPoint)
+    }
+
+    return points
+  }, [])
+}
+
 function administrativeClusterPriority(cluster: AdministrativeCluster): number {
   return cluster.transactionCount * 100000 + cluster.propertyCount
 }
 
-function pointsOverlap(first: { x: number; y: number }, second: { x: number; y: number }): boolean {
+function pointsOverlap(first: MapScreenPoint, second: MapScreenPoint): boolean {
   return (
     Math.abs(first.x - second.x) < ADMINISTRATIVE_OVERLAY_MIN_X_DISTANCE_PX &&
     Math.abs(first.y - second.y) < ADMINISTRATIVE_OVERLAY_MIN_Y_DISTANCE_PX
@@ -360,7 +388,8 @@ function pointsOverlap(first: { x: number; y: number }, second: { x: number; y: 
 function nonOverlappingAdministrativeClusters(
   kakaoMaps: KakaoMapsApi,
   map: KakaoMapLike,
-  clusters: AdministrativeCluster[]
+  clusters: AdministrativeCluster[],
+  reservedPoints: MapScreenPoint[] = []
 ): AdministrativeCluster[] {
   const positionedClusters = clusters.map((cluster, index) => ({
     cluster,
@@ -389,7 +418,9 @@ function nonOverlappingAdministrativeClusters(
       return selectedPoint ? pointsOverlap(candidatePoint, selectedPoint) : false
     })
 
-    if (!overlapsSelected) {
+    const overlapsReservedPoint = reservedPoints.some((reservedPoint) => pointsOverlap(candidatePoint, reservedPoint))
+
+    if (!overlapsSelected && !overlapsReservedPoint) {
       selected.push(candidate)
     }
   })
@@ -519,6 +550,7 @@ export function syncKakaoPropertyClusters(options: {
   map: KakaoMapLike
   previousClusterer: KakaoMarkerClustererLike | null
   items: PropertyMapItem[]
+  onClustered?: (clusters: KakaoClusterLike[]) => void
 }): KakaoMarkerClustererLike | null {
   clearKakaoPropertyClusterer(options.previousClusterer)
 
@@ -548,10 +580,12 @@ export function syncKakaoPropertyClusters(options: {
       return
     }
 
-    clusters.forEach((cluster) => {
-      const kakaoCluster = cluster as KakaoClusterLike
+    const kakaoClusters = clusters as KakaoClusterLike[]
+
+    kakaoClusters.forEach((kakaoCluster) => {
       kakaoCluster.getClusterMarker().setContent(propertyClusterBadgeContent(kakaoCluster.getMarkers().length))
     })
+    options.onClustered?.(kakaoClusters)
   })
 
   clusterer.addMarkers(markers)
@@ -564,6 +598,7 @@ export function syncAdministrativeClusterOverlays(options: {
   map: KakaoMapLike
   previousOverlays: KakaoOverlayLike[]
   clusters: AdministrativeCluster[]
+  reservedPoints?: MapScreenPoint[]
 }): KakaoOverlayLike[] {
   clearOverlayMarkers(options.previousOverlays)
 
@@ -573,7 +608,12 @@ export function syncAdministrativeClusterOverlays(options: {
 
   const CustomOverlay = options.kakaoMaps.CustomOverlay
 
-  const visibleClusters = nonOverlappingAdministrativeClusters(options.kakaoMaps, options.map, options.clusters)
+  const visibleClusters = nonOverlappingAdministrativeClusters(
+    options.kakaoMaps,
+    options.map,
+    options.clusters,
+    options.reservedPoints ?? []
+  )
 
   return visibleClusters.map(
     (cluster) =>

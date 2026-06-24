@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header>
+    <resultCode>000</resultCode>
+    <resultMsg>OK</resultMsg>
+  </header>
+  <body>
+    <items>
+      <item>
+        <sggCd>11680</sggCd>
+        <umdNm>Yeoksam</umdNm>
+        <jibun>10-1</jibun>
+        <offiNm>Sample Officetel</offiNm>
+        <excluUseAr>29.7</excluUseAr>
+        <floor>8</floor>
+        <buildYear>2020</buildYear>
+        <dealYear>2026</dealYear>
+        <dealMonth>6</dealMonth>
+        <dealDay>12</dealDay>
+        <dealAmount>32,000</dealAmount>
+      </item>
+    </items>
+    <numOfRows>10</numOfRows>
+    <pageNo>1</pageNo>
+    <totalCount>1</totalCount>
+  </body>
+</response>

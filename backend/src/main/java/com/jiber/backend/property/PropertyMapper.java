@@ -34,10 +34,9 @@ public interface PropertyMapper {
 
     Optional<PropertyDetailRow> findDetailById(@Param("propertyId") Long propertyId);
 
-    List<PropertyTransactionRow> findRecentTransactions(
-            @Param("propertyId") Long propertyId,
-            @Param("limit") int limit
-    );
+    List<PropertyTransactionRow> findTransactionsByPropertyId(@Param("propertyId") Long propertyId);
+
+    List<String> findApartmentNameHintsByPropertyId(@Param("propertyId") Long propertyId);
 
     Optional<PropertyType> findPropertyTypeById(@Param("propertyId") Long propertyId);
 }

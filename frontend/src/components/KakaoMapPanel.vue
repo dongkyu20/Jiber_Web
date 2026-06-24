@@ -8,6 +8,7 @@ import {
   clearKakaoPropertyClusterer,
   clearOverlayMarkers,
   mapMarkerRenderMode,
+  screenPointsFromKakaoClusters,
   syncAdministrativeClusterOverlays,
   syncKakaoPropertyClusters,
   syncPropertyMarkerOverlays,
@@ -17,6 +18,7 @@ import {
   type KakaoMapsApi,
   type KakaoMarkerClustererLike,
   type KakaoOverlayLike,
+  type MapScreenPoint,
   type MapViewport
 } from '@/map/kakaoMap'
 import { getKakaoMapFallbackMessage, getKakaoMaps, hasKakaoMapKey, loadKakaoMaps } from '@/map/kakaoLoader'
@@ -53,6 +55,7 @@ let kakaoMaps: KakaoMapsApi | null = null
 let map: KakaoMapLike | null = null
 let propertyOverlays: KakaoOverlayLike[] = []
 let propertyClusterer: KakaoMarkerClustererLike | null = null
+let propertyClusterReservedPoints: MapScreenPoint[] = []
 let administrativeOverlays: KakaoOverlayLike[] = []
 let idleTimer: number | null = null
 let renderQueued = false
@@ -125,15 +128,34 @@ function renderMapLayers(options: { force?: boolean } = {}) {
   }
 
   if (mode.showPropertyClusterer) {
+    propertyClusterReservedPoints = []
     propertyClusterer = syncKakaoPropertyClusters({
       kakaoMaps,
       map,
       previousClusterer: propertyClusterer,
-      items: props.items
+      items: props.items,
+      onClustered: (clusters) => {
+        if (disposed || !kakaoMaps || !map) {
+          return
+        }
+
+        propertyClusterReservedPoints = screenPointsFromKakaoClusters(map, clusters)
+        const currentMode = mapMarkerRenderMode(map.getLevel())
+        if (currentMode.showAdministrativeClusters) {
+          administrativeOverlays = syncAdministrativeClusterOverlays({
+            kakaoMaps,
+            map,
+            previousOverlays: administrativeOverlays,
+            clusters: props.administrativeClusters,
+            reservedPoints: propertyClusterReservedPoints
+          })
+        }
+      }
     })
   } else {
     clearKakaoPropertyClusterer(propertyClusterer)
     propertyClusterer = null
+    propertyClusterReservedPoints = []
   }
 
   if (mode.showAdministrativeClusters) {
@@ -141,7 +163,8 @@ function renderMapLayers(options: { force?: boolean } = {}) {
       kakaoMaps,
       map,
       previousOverlays: administrativeOverlays,
-      clusters: props.administrativeClusters
+      clusters: props.administrativeClusters,
+      reservedPoints: propertyClusterReservedPoints
     })
   } else {
     clearOverlayMarkers(administrativeOverlays)
@@ -239,6 +262,7 @@ onBeforeUnmount(() => {
   propertyOverlays = []
   clearKakaoPropertyClusterer(propertyClusterer)
   propertyClusterer = null
+  propertyClusterReservedPoints = []
   clearOverlayMarkers(administrativeOverlays)
   administrativeOverlays = []
   map = null

@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+﻿import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -47,7 +47,7 @@ const kakaoLoaderMock = vi.hoisted(() => ({
   getKakaoMaps: vi.fn(),
   getKakaoMapFallbackMessage: vi.fn(
     () =>
-      '카카오 지도 API 키가 아직 설정되지 않았습니다. root .env 또는 frontend 실행 환경에 VITE_KAKAO_MAP_APP_KEY를 설정하면 실제 지도를 불러올 수 있습니다.'
+'카카오 지도 API 키가 아직 설정되지 않았습니다. root .env 또는 frontend 실행 환경에 VITE_KAKAO_MAP_APP_KEY를 설정하면 실제 지도를 불러올 수 있습니다.'
   )
 }))
 
@@ -166,7 +166,9 @@ const importedDetail: PropertyDetail = {
     {
       transactionId: 5912,
       transactionType: 'JEONSE',
-      dealAmount: 1080000000,
+      dealAmount: null,
+      depositAmount: 1080000000,
+      monthlyRent: 0,
       dealDate: '2026-06-08',
       exclusiveAreaM2: 84.8792,
       floor: 10
@@ -222,6 +224,42 @@ function detailWithFavorite(apartmentFavorited: boolean): PropertyDetail {
       apartmentFavorited,
       areaFavorited: false
     }
+  }
+}
+
+function detailWithTransactionMix(): PropertyDetail {
+  return {
+    ...importedDetail,
+    transactions: [
+      {
+        transactionId: 7001,
+        transactionType: 'SALE',
+        dealAmount: 1250000000,
+        dealDate: '2026-06-09',
+        exclusiveAreaM2: 84.95,
+        floor: 15
+      },
+      {
+        transactionId: 5912,
+        transactionType: 'JEONSE',
+        dealAmount: null,
+        depositAmount: 1080000000,
+        monthlyRent: 0,
+        dealDate: '2026-06-08',
+        exclusiveAreaM2: 84.8792,
+        floor: 10
+      },
+      {
+        transactionId: 7003,
+        transactionType: 'MONTHLY_RENT',
+        dealAmount: null,
+        depositAmount: 500000000,
+        monthlyRent: 1200000,
+        dealDate: '2026-05-01',
+        exclusiveAreaM2: 59.97,
+        floor: 4
+      }
+    ]
   }
 }
 
@@ -292,7 +330,7 @@ beforeEach(() => {
 })
 
 describe('MapView keyword search', () => {
-  it('normalizes duplicate transaction-like map rows into one property result with an average-price marker payload', async () => {
+  it('normalizes duplicate transaction-like map rows into one property result with a sale-average marker payload', async () => {
     const runtimeYear = new Date().getFullYear()
     const duplicateTransactionRows: PropertyMapItem[] = [
       {
@@ -324,7 +362,7 @@ describe('MapView keyword search', () => {
     expect(panelItems).toHaveLength(1)
     expect(panelItems[0].propertyId).toBe(seedMapItem.propertyId)
     expect(panelItems[0].recentTransactionCount).toBe(2)
-    expect(panelItems[0].recentYearAverageDealAmount).toBe(1100000000)
+    expect(panelItems[0].recentYearAverageDealAmount).toBe(1000000000)
     expect(wrapper.findAll('.result-list li')).toHaveLength(1)
   })
 
@@ -541,6 +579,43 @@ describe('PropertyDetailView transaction summary', () => {
     expect(wrapper.text()).toContain('최근 거래유형')
     expect(wrapper.text()).toContain('전세')
     expect(wrapper.text()).toContain('최근 거래 1건')
+  })
+
+  it('replaces the transaction chart with a transaction history table', async () => {
+    const wrapper = await mountPropertyDetailView({ detail: detailWithTransactionMix() })
+
+    expect(wrapper.text()).toContain('거래 내역')
+    expect(wrapper.findComponent({ name: 'TransactionChart' }).exists()).toBe(false)
+    expect(wrapper.findAll('[data-test="transaction-row"]')).toHaveLength(3)
+    expect(wrapper.text()).toContain('거래일')
+    expect(wrapper.text()).toContain('거래유형')
+    expect(wrapper.text()).toContain('거래금액')
+    expect(wrapper.text()).toContain('전용면적')
+    expect(wrapper.text()).toContain('층수')
+    expect(wrapper.text()).toContain('10.8억 원')
+    expect(wrapper.text()).toContain('보증금 5억 원 / 월세 120만 원')
+  })
+
+  it('filters the transaction history by selected transaction types', async () => {
+    const wrapper = await mountPropertyDetailView({ detail: detailWithTransactionMix() })
+
+    await wrapper.get('[data-test="transaction-type-filter-SALE"]').setValue(false)
+    await wrapper.get('[data-test="transaction-type-filter-MONTHLY_RENT"]').setValue(false)
+
+    const rows = wrapper.findAll('[data-test="transaction-row"]')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].text()).toContain('전세')
+    expect(rows[0].text()).toContain('2026년 6월 8일')
+  })
+
+  it('sorts the transaction history by clickable column headers', async () => {
+    const wrapper = await mountPropertyDetailView({ detail: detailWithTransactionMix() })
+
+    await wrapper.get('[data-test="transaction-sort-dealAmount"]').trigger('click')
+    expect(wrapper.findAll('[data-test="transaction-row"]')[0].text()).toContain('월세')
+
+    await wrapper.get('[data-test="transaction-sort-dealAmount"]').trigger('click')
+    expect(wrapper.findAll('[data-test="transaction-row"]')[0].text()).toContain('매매')
   })
 
   it('reflects initial apartment favorite states', async () => {

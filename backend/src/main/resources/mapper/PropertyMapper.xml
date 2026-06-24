@@ -112,7 +112,22 @@
             <otherwise>
                 NULL
             </otherwise>
-        </choose> AS recent_transaction_count
+        </choose> AS recent_transaction_count,
+        <choose>
+            <when test="_parameter.containsKey('recentSince') and recentSince != null">
+                (
+                    SELECT CAST(ROUND(AVG(t.deal_amount_krw)) AS SIGNED)
+                    FROM property_transactions t
+                    WHERE t.property_id = p.property_id
+                      AND t.transaction_type = 'SALE'
+                      AND t.deal_amount_krw IS NOT NULL
+                    <include refid="RecentTransactionFilters"/>
+                )
+            </when>
+            <otherwise>
+                NULL
+            </otherwise>
+        </choose> AS recent_year_average_deal_amount
     </sql>
 
     <sql id="MapWhere">
@@ -180,8 +195,8 @@
             SELECT
                 t.property_id,
                 COUNT(*) AS transaction_count,
-                SUM(COALESCE(t.deal_amount_krw, t.deposit_amount_krw)) AS total_deal_amount,
-                COUNT(COALESCE(t.deal_amount_krw, t.deposit_amount_krw)) AS priced_transaction_count
+                SUM(CASE WHEN t.transaction_type = 'SALE' THEN t.deal_amount_krw ELSE NULL END) AS total_deal_amount,
+                COUNT(CASE WHEN t.transaction_type = 'SALE' AND t.deal_amount_krw IS NOT NULL THEN 1 ELSE NULL END) AS priced_transaction_count
             FROM property_transactions t
             WHERE 1 = 1
             <include refid="RecentTransactionFilters"/>
@@ -209,8 +224,8 @@
             SELECT
                 t.property_id,
                 COUNT(*) AS transaction_count,
-                SUM(COALESCE(t.deal_amount_krw, t.deposit_amount_krw)) AS total_deal_amount,
-                COUNT(COALESCE(t.deal_amount_krw, t.deposit_amount_krw)) AS priced_transaction_count
+                SUM(CASE WHEN t.transaction_type = 'SALE' THEN t.deal_amount_krw ELSE NULL END) AS total_deal_amount,
+                COUNT(CASE WHEN t.transaction_type = 'SALE' AND t.deal_amount_krw IS NOT NULL THEN 1 ELSE NULL END) AS priced_transaction_count
             FROM property_transactions t
             WHERE 1 = 1
             <include refid="RecentTransactionFilters"/>
@@ -317,7 +332,7 @@
         WHERE p.property_id = #{propertyId}
     </select>
 
-    <select id="findRecentTransactions" resultType="com.jiber.backend.property.PropertyTransactionRow">
+    <select id="findTransactionsByPropertyId" resultType="com.jiber.backend.property.PropertyTransactionRow">
         SELECT
             transaction_id,
             transaction_type,
@@ -330,7 +345,19 @@
         FROM property_transactions
         WHERE property_id = #{propertyId}
         ORDER BY deal_date DESC, transaction_id DESC
-        LIMIT #{limit}
+    </select>
+
+    <select id="findApartmentNameHintsByPropertyId" resultType="string">
+        SELECT DISTINCT apartment_name
+        FROM (
+            SELECT NULLIF(SUBSTRING_INDEX(SUBSTRING_INDEX(t.source_transaction_id, '|', 8), '|', -1), '') AS apartment_name
+            FROM property_transactions t
+            WHERE t.property_id = #{propertyId}
+              AND t.source_system = 'PUBLIC_DATA_PORTAL'
+              AND t.source_transaction_id LIKE 'PUBLIC_DATA|APT|%'
+        ) hints
+        WHERE apartment_name IS NOT NULL
+        ORDER BY apartment_name ASC
     </select>
 
     <select id="findPropertyTypeById" resultType="com.jiber.backend.property.PropertyType">

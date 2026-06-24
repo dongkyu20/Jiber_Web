@@ -15,7 +15,8 @@ public class PublicDataTransactionMapper {
     public ImportedApartmentTransaction toImportedTransaction(PublicDataApartmentItem item, PublicDataApiType apiType) {
         var transactionType = transactionType(item, apiType);
         return new ImportedApartmentTransaction(
-                sourceKeyGenerator.generate(item, transactionType),
+                sourceKeyGenerator.generate(item, apiType, transactionType),
+                apiType.propertyType(),
                 transactionType,
                 item.lawdCd(),
                 item.legalDong(),
@@ -32,7 +33,7 @@ public class PublicDataTransactionMapper {
     }
 
     private TransactionType transactionType(PublicDataApartmentItem item, PublicDataApiType apiType) {
-        if (apiType == PublicDataApiType.SALE) {
+        if (apiType.isSale()) {
             return TransactionType.SALE;
         }
         var monthlyRent = item.monthlyRentKrw() == null ? 0L : item.monthlyRentKrw();

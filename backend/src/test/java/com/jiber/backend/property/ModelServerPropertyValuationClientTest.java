@@ -18,8 +18,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
 
 class ModelServerPropertyValuationClientTest {
 
@@ -32,15 +32,19 @@ class ModelServerPropertyValuationClientTest {
     }
 
     @Test
-    void mapsValuationSuccessToPublicResponse() {
+    void mapsValuationSuccessToPublicResponseAndSendsPropertyLocation() {
         var client = newClient("");
         server.expect(requestTo("http://model.test/internal/v1/valuation/apartments"))
                 .andExpect(method(POST))
                 .andExpect(jsonPath("$.propertyId").value(1001))
                 .andExpect(jsonPath("$.asOfDate").value("2026-06-12"))
-                .andExpect(jsonPath("$.features.sido").value("서울특별시"))
-                .andExpect(jsonPath("$.features.sigungu").value("강남구"))
-                .andExpect(jsonPath("$.features.legalDong").value("예시동"))
+                .andExpect(jsonPath("$.features.sido").value("Seoul"))
+                .andExpect(jsonPath("$.features.sigungu").value("Gangnam"))
+                .andExpect(jsonPath("$.features.legalDong").value("Samseong"))
+                .andExpect(jsonPath("$.features.propertyName").value("Raemian Samsung"))
+                .andExpect(jsonPath("$.features.latitude").value(37.5123))
+                .andExpect(jsonPath("$.features.longitude").value(127.0567))
+                .andExpect(jsonPath("$.features.householdCount").value(1200))
                 .andExpect(jsonPath("$.features.exclusiveAreaM2").value(84.95))
                 .andExpect(jsonPath("$.features.floor").value(15))
                 .andExpect(jsonPath("$.features.builtYear").value(2010))
@@ -53,14 +57,14 @@ class ModelServerPropertyValuationClientTest {
                           "estimatedPrice": 1230000000,
                           "currency": "KRW",
                           "predictionInterval": {"lower": 1150000000, "upper": 1310000000},
-                          "modelVersion": "hedonic-skeleton-v1",
+                          "modelVersion": "seoul-run",
                           "baselineDate": "2026-06-12",
-                          "featureSetVersion": "apartment-basic-skeleton-v1",
+                          "featureSetVersion": "apartment-basic-v1",
                           "warnings": []
                         }
                         """, APPLICATION_JSON));
 
-        var response = client.valuateApartment(1001L, valuationRequest());
+        var response = client.valuateApartment(sampleProperty(PropertyType.APARTMENT), valuationRequest());
 
         assertThat(response.propertyId()).isEqualTo(1001L);
         assertThat(response.supported()).isTrue();
@@ -68,10 +72,9 @@ class ModelServerPropertyValuationClientTest {
         assertThat(response.currency()).isEqualTo("KRW");
         assertThat(response.predictionInterval().lower()).isEqualTo(1150000000L);
         assertThat(response.predictionInterval().upper()).isEqualTo(1310000000L);
-        assertThat(response.modelVersion()).isEqualTo("hedonic-skeleton-v1");
+        assertThat(response.modelVersion()).isEqualTo("seoul-run");
         assertThat(response.baselineDate()).isEqualTo(LocalDate.of(2026, 6, 12));
-        assertThat(response.featureSetVersion()).isEqualTo("apartment-basic-skeleton-v1");
-        assertThat(response.message()).isEqualTo("아파트 실거래 데이터를 바탕으로 계산한 추정가입니다.");
+        assertThat(response.featureSetVersion()).isEqualTo("apartment-basic-v1");
         server.verify();
     }
 
@@ -90,19 +93,19 @@ class ModelServerPropertyValuationClientTest {
                           "values": [
                             {
                               "feature": "exclusiveAreaM2",
-                              "labelKo": "전용면적",
+                              "labelKo": "area",
                               "value": 84.95,
                               "shapValue": 120000000,
                               "direction": "UP"
                             }
                           ],
-                          "modelVersion": "hedonic-skeleton-v1",
+                          "modelVersion": "seoul-run",
                           "baselineDate": "2026-06-12",
-                          "featureSetVersion": "apartment-basic-skeleton-v1"
+                          "featureSetVersion": "apartment-basic-v1"
                         }
                         """, APPLICATION_JSON));
 
-        var response = client.explainApartment(1001L, shapRequest());
+        var response = client.explainApartment(sampleProperty(PropertyType.APARTMENT), shapRequest());
 
         assertThat(response.propertyId()).isEqualTo(1001L);
         assertThat(response.supported()).isTrue();
@@ -110,12 +113,11 @@ class ModelServerPropertyValuationClientTest {
         assertThat(response.prediction()).isEqualTo(1230000000L);
         assertThat(response.values()).singleElement().satisfies(value -> {
             assertThat(value.feature()).isEqualTo("exclusiveAreaM2");
-            assertThat(value.labelKo()).isEqualTo("전용면적");
+            assertThat(value.labelKo()).isEqualTo("area");
             assertThat(value.value()).isEqualByComparingTo("84.95");
             assertThat(value.shapValue()).isEqualTo(120000000L);
             assertThat(value.direction()).isEqualTo(ShapDirection.UP);
         });
-        assertThat(response.message()).isEqualTo("추정가에 영향을 준 주요 요인입니다.");
         server.verify();
     }
 
@@ -135,7 +137,7 @@ class ModelServerPropertyValuationClientTest {
                         }
                         """, APPLICATION_JSON));
 
-        assertThatThrownBy(() -> client.valuateApartment(1001L, valuationRequest()))
+        assertThatThrownBy(() -> client.valuateApartment(sampleProperty(PropertyType.APARTMENT), valuationRequest()))
                 .isInstanceOfSatisfying(ApiException.class, exception -> {
                     assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALUATION_INSUFFICIENT_DATA);
                     assertThat(exception.getDetails())
@@ -152,7 +154,7 @@ class ModelServerPropertyValuationClientTest {
                 .andExpect(method(POST))
                 .andRespond(withServerError());
 
-        assertThatThrownBy(() -> client.valuateApartment(1001L, valuationRequest()))
+        assertThatThrownBy(() -> client.valuateApartment(sampleProperty(PropertyType.APARTMENT), valuationRequest()))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.MODEL_SERVER_UNAVAILABLE));
         server.verify();
@@ -177,7 +179,7 @@ class ModelServerPropertyValuationClientTest {
                         }
                         """, APPLICATION_JSON));
 
-        client.valuateApartment(1001L, valuationRequest());
+        client.valuateApartment(sampleProperty(PropertyType.APARTMENT), valuationRequest());
 
         server.verify();
     }
@@ -194,5 +196,20 @@ class ModelServerPropertyValuationClientTest {
 
     private ShapRequest shapRequest() {
         return new ShapRequest(new BigDecimal("84.95"), 15, LocalDate.of(2026, 6, 12));
+    }
+
+    private PropertyDetailRow sampleProperty(PropertyType propertyType) {
+        var row = new PropertyDetailRow();
+        row.setPropertyId(1001L);
+        row.setPropertyType(propertyType);
+        row.setSido("Seoul");
+        row.setSigungu("Gangnam");
+        row.setLegalDong("Samseong");
+        row.setName("Raemian Samsung");
+        row.setLatitude(new BigDecimal("37.5123"));
+        row.setLongitude(new BigDecimal("127.0567"));
+        row.setHouseholdCount(1200);
+        row.setBuiltYear(2010);
+        return row;
     }
 }

@@ -217,7 +217,9 @@ export interface PropertyDetail {
 export interface PropertyTransaction {
   transactionId?: number
   transactionType: TransactionType
-  dealAmount: number
+  dealAmount?: number | null
+  depositAmount?: number | null
+  monthlyRent?: number | null
   dealDate: string
   exclusiveAreaM2?: number | null
   floor?: number | null

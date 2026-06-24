@@ -5,13 +5,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { favoritesApi } from '@/api/favorites'
 import { propertyApi } from '@/api/property'
 import { getApiError } from '@/api/client'
-import type { PropertyDetail, ShapValue, ValuationResponse } from '@/api/types'
+import type { PropertyDetail, PropertyTransaction, ShapValue, TransactionType, ValuationResponse } from '@/api/types'
 import ShapChart from '@/charts/ShapChart.vue'
-import TransactionChart from '@/charts/TransactionChart.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatContextStore } from '@/stores/chatContext'
 import { formatDate, formatKrw, propertyTypeLabel, transactionTypeLabel } from '@/utils/format'
+
+type TransactionSortKey = 'dealDate' | 'transactionType' | 'dealAmount' | 'exclusiveAreaM2' | 'floor'
+type SortDirection = 'asc' | 'desc'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,6 +29,12 @@ const favoriteErrorMessage = ref('')
 const favoriteUpdating = ref(false)
 const valuation = ref<ValuationResponse | null>(null)
 const shapValues = ref<ShapValue[]>([])
+const transactionTypeOptions: TransactionType[] = ['SALE', 'JEONSE', 'MONTHLY_RENT']
+const selectedTransactionTypes = ref<TransactionType[]>([...transactionTypeOptions])
+const transactionSort = ref<{ key: TransactionSortKey; direction: SortDirection }>({
+  key: 'dealDate',
+  direction: 'desc'
+})
 
 const propertyId = computed(() => String(route.params.propertyId))
 const aiUnavailableMessage = '아파트 단지에 한해 제공되는 기능입니다.'
@@ -41,6 +49,15 @@ const latestTransaction = computed(() => {
   )
 })
 const recentTransactionCount = computed(() => property.value?.transactions.length ?? 0)
+const filteredTransactions = computed(() => {
+  const selectedTypes = new Set(selectedTransactionTypes.value)
+  return property.value?.transactions.filter((transaction) => selectedTypes.has(transaction.transactionType)) ?? []
+})
+const sortedTransactions = computed(() => {
+  return [...filteredTransactions.value].sort((left, right) => {
+    return compareTransactions(left, right, transactionSort.value.key, transactionSort.value.direction)
+  })
+})
 const isApartmentFavorite = computed(() => Boolean(property.value?.favorite?.apartmentFavorited))
 const canRequestAi = computed(() => {
   return Boolean(
@@ -51,6 +68,139 @@ const canRequestAi = computed(() => {
   )
 })
 const canAskChatAboutAnalysis = computed(() => Boolean(property.value && valuation.value && shapValues.value.length))
+
+function setTransactionSort(key: TransactionSortKey) {
+  transactionSort.value =
+    transactionSort.value.key === key
+      ? {
+          key,
+          direction: transactionSort.value.direction === 'asc' ? 'desc' : 'asc'
+        }
+      : {
+          key,
+          direction: key === 'dealDate' ? 'desc' : 'asc'
+        }
+}
+
+function transactionSortAria(key: TransactionSortKey) {
+  if (transactionSort.value.key !== key) {
+    return 'none'
+  }
+
+  return transactionSort.value.direction === 'asc' ? 'ascending' : 'descending'
+}
+
+function transactionSortIndicator(key: TransactionSortKey) {
+  if (transactionSort.value.key !== key) {
+    return ''
+  }
+
+  return transactionSort.value.direction === 'asc' ? '▲' : '▼'
+}
+
+function compareTransactions(
+  left: PropertyTransaction,
+  right: PropertyTransaction,
+  key: TransactionSortKey,
+  direction: SortDirection
+) {
+  const leftValue = transactionSortValue(left, key)
+  const rightValue = transactionSortValue(right, key)
+
+  if (leftValue === null && rightValue === null) {
+    return 0
+  }
+  if (leftValue === null) {
+    return 1
+  }
+  if (rightValue === null) {
+    return -1
+  }
+  const comparison =
+    typeof leftValue === 'string' && typeof rightValue === 'string'
+      ? leftValue.localeCompare(rightValue, 'ko-KR')
+      : Number(leftValue) - Number(rightValue)
+
+  return direction === 'asc' ? comparison : comparison * -1
+}
+
+function transactionSortValue(
+  transaction: PropertyTransaction,
+  key: TransactionSortKey
+): number | string | null {
+  if (key === 'dealDate') {
+    const parsed = Date.parse(transaction.dealDate)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+  if (key === 'transactionType') {
+    return transactionTypeLabel(transaction.transactionType)
+  }
+  if (key === 'dealAmount') {
+    return representativeTransactionAmount(transaction)
+  }
+
+  return transaction[key] ?? null
+}
+
+function representativeTransactionAmount(transaction: PropertyTransaction) {
+  return transaction.dealAmount ?? transaction.depositAmount ?? null
+}
+
+function formatTransactionAmount(transaction: PropertyTransaction) {
+  if (transaction.transactionType === 'MONTHLY_RENT') {
+    const hasDeposit = transaction.depositAmount !== undefined && transaction.depositAmount !== null
+    const hasMonthlyRent = transaction.monthlyRent !== undefined && transaction.monthlyRent !== null
+
+    if (!hasDeposit && !hasMonthlyRent) {
+      return formatKrw(null)
+    }
+
+    if (!hasDeposit) {
+      return `월세 ${formatMonthlyRent(transaction.monthlyRent)}`
+    }
+
+    if (!hasMonthlyRent || transaction.monthlyRent === 0) {
+      return `보증금 ${formatKrw(transaction.depositAmount)}`
+    }
+
+    return `보증금 ${formatKrw(transaction.depositAmount)} / 월세 ${formatMonthlyRent(transaction.monthlyRent)}`
+  }
+
+  return formatKrw(representativeTransactionAmount(transaction))
+}
+
+function formatMonthlyRent(value?: number | null) {
+  if (value === undefined || value === null) {
+    return formatKrw(value)
+  }
+
+  if (value >= 100000000) {
+    return formatKrw(value)
+  }
+
+  if (value >= 10000) {
+    const man = value / 10000
+    return `${man.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}만 원`
+  }
+
+  return `${value.toLocaleString('ko-KR')}원`
+}
+
+function formatArea(value?: number | null) {
+  if (value === undefined || value === null) {
+    return '정보 없음'
+  }
+
+  return `${value.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}㎡`
+}
+
+function formatFloor(value?: number | null) {
+  if (value === undefined || value === null) {
+    return '정보 없음'
+  }
+
+  return `${value}층`
+}
 
 function setApartmentFavorite(nextValue: boolean) {
   if (!property.value) {
@@ -280,10 +430,98 @@ onMounted(fetchProperty)
     </article>
   </section>
 
-  <section class="chart-grid">
-    <article class="info-panel">
-      <h2>거래 차트</h2>
-      <TransactionChart :transactions="property?.transactions ?? []" />
+  <section v-if="property" class="chart-grid">
+    <article class="info-panel transaction-history-panel">
+      <h2>거래 내역</h2>
+      <div class="transaction-toolbar">
+        <fieldset class="transaction-type-filter">
+          <legend>거래 유형</legend>
+          <label v-for="type in transactionTypeOptions" :key="type" class="check-row">
+            <input
+              v-model="selectedTransactionTypes"
+              :data-test="`transaction-type-filter-${type}`"
+              :value="type"
+              type="checkbox"
+            />
+            <span>{{ transactionTypeLabel(type) }}</span>
+          </label>
+        </fieldset>
+        <p class="muted">
+          {{ sortedTransactions.length.toLocaleString('ko-KR') }}건 표시 / 전체
+          {{ property.transactions.length.toLocaleString('ko-KR') }}건
+        </p>
+      </div>
+      <div v-if="sortedTransactions.length" class="transaction-table-wrap">
+        <table class="transaction-table">
+          <thead>
+            <tr>
+              <th :aria-sort="transactionSortAria('dealDate')" scope="col">
+                <button
+                  data-test="transaction-sort-dealDate"
+                  type="button"
+                  @click="setTransactionSort('dealDate')"
+                >
+                  거래일 <span aria-hidden="true">{{ transactionSortIndicator('dealDate') }}</span>
+                </button>
+              </th>
+              <th :aria-sort="transactionSortAria('transactionType')" scope="col">
+                <button
+                  data-test="transaction-sort-transactionType"
+                  type="button"
+                  @click="setTransactionSort('transactionType')"
+                >
+                  거래유형 <span aria-hidden="true">{{ transactionSortIndicator('transactionType') }}</span>
+                </button>
+              </th>
+              <th :aria-sort="transactionSortAria('dealAmount')" scope="col">
+                <button
+                  data-test="transaction-sort-dealAmount"
+                  type="button"
+                  @click="setTransactionSort('dealAmount')"
+                >
+                  거래금액 <span aria-hidden="true">{{ transactionSortIndicator('dealAmount') }}</span>
+                </button>
+              </th>
+              <th :aria-sort="transactionSortAria('exclusiveAreaM2')" scope="col">
+                <button
+                  data-test="transaction-sort-exclusiveAreaM2"
+                  type="button"
+                  @click="setTransactionSort('exclusiveAreaM2')"
+                >
+                  전용면적 <span aria-hidden="true">{{ transactionSortIndicator('exclusiveAreaM2') }}</span>
+                </button>
+              </th>
+              <th :aria-sort="transactionSortAria('floor')" scope="col">
+                <button
+                  data-test="transaction-sort-floor"
+                  type="button"
+                  @click="setTransactionSort('floor')"
+                >
+                  층수 <span aria-hidden="true">{{ transactionSortIndicator('floor') }}</span>
+                </button>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="transaction in sortedTransactions"
+              :key="transaction.transactionId ?? `${transaction.dealDate}-${transaction.transactionType}-${transaction.floor}`"
+              data-test="transaction-row"
+            >
+              <td>{{ formatDate(transaction.dealDate) }}</td>
+              <td>{{ transactionTypeLabel(transaction.transactionType) }}</td>
+              <td>{{ formatTransactionAmount(transaction) }}</td>
+              <td>{{ formatArea(transaction.exclusiveAreaM2) }}</td>
+              <td>{{ formatFloor(transaction.floor) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <EmptyState
+        v-else
+        title="표시할 거래 내역이 없습니다."
+        description="거래 유형 선택을 바꾸거나 실거래 데이터가 연결된 뒤 다시 확인해 주세요."
+      />
     </article>
     <article class="info-panel">
       <h2>SHAP 요인 차트</h2>

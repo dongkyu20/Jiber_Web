@@ -10,6 +10,7 @@ public record PropertyMapItemResponse(
         LatestTransactionResponse latestTransaction,
         Integer dealCount,
         Integer recentTransactionCount,
+        Long recentYearAverageDealAmount,
         boolean aiAvailable
 ) {
 }

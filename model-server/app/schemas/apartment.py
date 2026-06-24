@@ -8,6 +8,10 @@ class ApartmentFeatures(BaseModel):
     sido: Optional[str] = None
     sigungu: Optional[str] = None
     legalDong: Optional[str] = None
+    propertyName: Optional[str] = None
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    householdCount: Optional[int] = Field(default=None, ge=0)
     exclusiveAreaM2: Optional[float] = Field(default=None, ge=0)
     floor: Optional[int] = None
     builtYear: Optional[int] = None

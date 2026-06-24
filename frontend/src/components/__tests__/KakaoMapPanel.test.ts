@@ -8,6 +8,7 @@ const kakaoMock = vi.hoisted(() => {
   const state = {
     hasKey: false,
     idleHandler: null as null | (() => void),
+    clusteredHandlers: [] as Array<(clusters: unknown[]) => void>,
     markerClickHandlers: [] as Array<() => void>,
     mapInstance: {
       getBounds: vi.fn(() => ({
@@ -21,6 +22,12 @@ const kakaoMock = vi.hoisted(() => {
         })
       })),
       getLevel: vi.fn(() => 5),
+      getProjection: vi.fn(() => ({
+        containerPointFromCoords: (latLng: { lat: number; lng: number }) => ({
+          x: (latLng.lng - 127) * 10000,
+          y: (37.6 - latLng.lat) * 10000
+        })
+      })),
       panTo: vi.fn(),
       setLevel: vi.fn(),
       setCenter: vi.fn()
@@ -70,6 +77,10 @@ const kakaoMock = vi.hoisted(() => {
       addListener: vi.fn((target: unknown, eventName: string, handler: () => void) => {
         if (target === state.mapInstance && eventName === 'idle') {
           state.idleHandler = handler
+        }
+
+        if (eventName === 'clustered') {
+          state.clusteredHandlers.push(handler as (clusters: unknown[]) => void)
         }
 
         if (eventName === 'click') {
@@ -140,10 +151,12 @@ describe('KakaoMapPanel', () => {
   beforeEach(() => {
     kakaoMock.state.hasKey = false
     kakaoMock.state.idleHandler = null
+    kakaoMock.state.clusteredHandlers = []
     kakaoMock.state.markerClickHandlers = []
     kakaoMock.state.markers = []
     kakaoMock.state.mapInstance.getBounds.mockClear()
     kakaoMock.state.mapInstance.getLevel.mockClear()
+    kakaoMock.state.mapInstance.getProjection.mockClear()
     kakaoMock.state.mapInstance.panTo.mockClear()
     kakaoMock.state.mapInstance.setLevel.mockClear()
     kakaoMock.state.mapInstance.setCenter.mockClear()
@@ -307,6 +320,38 @@ describe('KakaoMapPanel', () => {
     expect(firstAdminOverlay.setMap).toHaveBeenCalledWith(null)
     expect(kakaoMock.maps.MarkerClusterer).toHaveBeenCalledTimes(2)
     expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(2)
+  })
+
+  it('removes administrative overlays that overlap Kakao property cluster markers after clustering', async () => {
+    kakaoMock.state.hasKey = true
+    kakaoMock.state.mapInstance.getLevel.mockReturnValue(5)
+
+    mount(KakaoMapPanel, {
+      props: {
+        items: [property(1001), property(1002)],
+        selectedPropertyId: null,
+        administrativeClusters: [administrativeCluster('legal-dong-overlap', 'LEGAL_DONG', '역삼동')]
+      }
+    })
+
+    await flushPromises()
+
+    expect(kakaoMock.maps.MarkerClusterer).toHaveBeenCalledTimes(1)
+    expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
+
+    const initialAdministrativeOverlay = kakaoMock.state.overlays[0]
+    const clusterMarker = { setContent: vi.fn() }
+    kakaoMock.state.clusteredHandlers[0]([
+      {
+        getMarkers: () => kakaoMock.state.markers,
+        getClusterMarker: () => clusterMarker,
+        getCenter: () => ({ lat: 37.5, lng: 127.03 })
+      }
+    ])
+    await flushPromises()
+
+    expect(initialAdministrativeOverlay.setMap).toHaveBeenCalledWith(null)
+    expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
   })
 
   it('does not rebuild cluster layers on idle while the map render mode is unchanged', async () => {

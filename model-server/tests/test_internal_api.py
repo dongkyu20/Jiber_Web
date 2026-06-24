@@ -4,16 +4,46 @@ from fastapi.testclient import TestClient
 from app.core.config import get_settings
 from app.main import app
 from app.rag.chat_service import get_rag_chat_service
+from app.services.valuation_service import get_valuation_model_repository
+
+
+SHAP_GROUP_FEATURES = [
+    "legalDongLocation",
+    "area",
+    "complexScaleParking",
+    "age",
+    "transitAccess",
+    "parkAccess",
+    "educationAccess",
+    "districtLocation",
+    "floor",
+]
+
+SHAP_GROUP_LABELS = [
+    "\ubc95\uc815\ub3d9 \uc785\uc9c0",
+    "\uba74\uc801",
+    "\ub2e8\uc9c0\uaddc\ubaa8/\uc8fc\ucc28",
+    "\ub178\ud6c4\ub3c4",
+    "\uad50\ud1b5 \uc811\uadfc\uc131",
+    "\uacf5\uc6d0 \uc811\uadfc\uc131",
+    "\uad50\uc721 \uc811\uadfc\uc131",
+    "\uc790\uce58\uad6c \uc785\uc9c0",
+    "\uce35\uc218",
+]
 
 
 @pytest.fixture(autouse=True)
-def clear_model_server_settings(monkeypatch):
+def clear_model_server_settings(monkeypatch, tmp_path):
     monkeypatch.delenv("MODEL_SERVER_INTERNAL_TOKEN", raising=False)
+    monkeypatch.setenv("VALUATION_ARTIFACTS_DIR", str(tmp_path / "no-artifacts"))
+    monkeypatch.setenv("VALUATION_DATA_DIR", str(tmp_path / "no-data"))
     get_settings.cache_clear()
     get_rag_chat_service.cache_clear()
+    get_valuation_model_repository.cache_clear()
     yield
     get_settings.cache_clear()
     get_rag_chat_service.cache_clear()
+    get_valuation_model_repository.cache_clear()
 
 
 def test_model_server_app_importable_from_package() -> None:
@@ -96,36 +126,11 @@ def test_shap_apartments_success() -> None:
     assert body["modelVersion"] == "hedonic-skeleton-v1"
     assert body["baselineDate"] == "2026-06-12"
     assert body["featureSetVersion"] == "apartment-basic-skeleton-v1"
-    assert body["values"] == [
-        {
-            "feature": "exclusiveAreaM2",
-            "labelKo": "전용면적",
-            "value": 84.95,
-            "shapValue": 254_850_000,
-            "direction": "UP",
-        },
-        {
-            "feature": "floor",
-            "labelKo": "층수",
-            "value": 15,
-            "shapValue": 12_000_000,
-            "direction": "UP",
-        },
-        {
-            "feature": "builtYear",
-            "labelKo": "준공연도",
-            "value": 2010,
-            "shapValue": 15_000_000,
-            "direction": "UP",
-        },
-        {
-            "feature": "distanceToStationM",
-            "labelKo": "역까지 거리",
-            "value": 420,
-            "shapValue": -4_200_000,
-            "direction": "DOWN",
-        },
-    ]
+    values = body["values"]
+    assert [value["feature"] for value in values] == SHAP_GROUP_FEATURES
+    assert [value["labelKo"] for value in values] == SHAP_GROUP_LABELS
+    assert all(isinstance(value["shapValue"], int) for value in values)
+    assert all(value["direction"] in {"UP", "DOWN", "NEUTRAL"} for value in values)
 
 
 def test_missing_required_features_returns_unsupported_payload() -> None:

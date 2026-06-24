@@ -65,12 +65,12 @@ public class ModelServerPropertyValuationClient implements PropertyValuationClie
     }
 
     @Override
-    public ValuationResponse valuateApartment(Long propertyId, ValuationRequest request) {
-        var internalRequest = featureMapper.toInternalRequest(propertyId, request);
+    public ValuationResponse valuateApartment(PropertyDetailRow property, ValuationRequest request) {
+        var internalRequest = featureMapper.toInternalRequest(property, request);
         var response = post(VALUATION_PATH, internalRequest, ModelServerValuationResponse.class);
         ensureSupported(response.supported(), response.reason(), response.missingFeatures());
         return new ValuationResponse(
-                propertyId,
+                property.getPropertyId(),
                 true,
                 response.estimatedPrice(),
                 response.currency(),
@@ -83,12 +83,12 @@ public class ModelServerPropertyValuationClient implements PropertyValuationClie
     }
 
     @Override
-    public ShapResponse explainApartment(Long propertyId, ShapRequest request) {
-        var internalRequest = featureMapper.toInternalRequest(propertyId, request);
+    public ShapResponse explainApartment(PropertyDetailRow property, ShapRequest request) {
+        var internalRequest = featureMapper.toInternalRequest(property, request);
         var response = post(SHAP_PATH, internalRequest, ModelServerShapResponse.class);
         ensureSupported(response.supported(), response.reason(), response.missingFeatures());
         return new ShapResponse(
-                propertyId,
+                property.getPropertyId(),
                 true,
                 response.baseValue(),
                 response.prediction(),

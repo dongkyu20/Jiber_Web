@@ -28,8 +28,8 @@ class SourceKeyGeneratorTest {
                 "1"
         );
 
-        var first = generator.generate(item, TransactionType.SALE);
-        var second = generator.generate(item, TransactionType.SALE);
+        var first = generator.generate(item, PublicDataApiType.SALE, TransactionType.SALE);
+        var second = generator.generate(item, PublicDataApiType.SALE, TransactionType.SALE);
 
         assertThat(first).isEqualTo(second);
         assertThat(first).isEqualTo("PUBLIC_DATA|APT|SALE|11680|2026-05-20|역삼동|12-3|예시아파트|84.95|15|1");
@@ -52,8 +52,8 @@ class SourceKeyGeneratorTest {
                 "1"
         );
 
-        var jeonse = generator.generate(item, TransactionType.JEONSE);
-        var monthlyRent = generator.generate(item, TransactionType.MONTHLY_RENT);
+        var jeonse = generator.generate(item, PublicDataApiType.RENT, TransactionType.JEONSE);
+        var monthlyRent = generator.generate(item, PublicDataApiType.RENT, TransactionType.MONTHLY_RENT);
 
         assertThat(jeonse).isNotEqualTo(monthlyRent);
         assertThat(jeonse).contains("|JEONSE|");

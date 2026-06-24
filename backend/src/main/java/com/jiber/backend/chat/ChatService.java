@@ -33,7 +33,7 @@ public class ChatService {
             ModelServerChatClient modelServerChatClient,
             ChatClient.Builder chatClientBuilder,
             ObjectMapper objectMapper,
-            @Value("${spring.ai.openai.chat.options.model:gpt-4o-mini}") String chatModel
+            @Value("${spring.ai.openai.chat.options.model:gpt-5.4-nano}") String chatModel
     ) {
         this.modelServerChatClient = modelServerChatClient;
         this.chatClient = chatClientBuilder.build();

@@ -1,12 +1,14 @@
 package com.jiber.backend.publicdata;
 
 import com.jiber.backend.property.TransactionType;
+import com.jiber.backend.property.PropertyType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record CanonicalApartmentRawRow(
         Long rawTransactionId,
         String sourceKey,
+        PropertyType propertyType,
         TransactionType transactionType,
         String sido,
         String sigungu,

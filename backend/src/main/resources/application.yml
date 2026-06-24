@@ -13,8 +13,9 @@ spring:
       api-key: ${OPENAI_API_KEY:}
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
       chat:
+        completions-path: ${OPENAI_CHAT_COMPLETIONS_PATH:/v1/chat/completions}
         options:
-          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          model: ${OPENAI_CHAT_MODEL:gpt-5.4-nano}
           temperature: 0
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:jiber}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=utf8
@@ -87,6 +88,7 @@ jiber:
     service-key: ${PUBLIC_DATA_SERVICE_KEY:}
     import-months: ${PUBLIC_DATA_IMPORT_MONTHS:12}
     target-regions: ${PUBLIC_DATA_TARGET_REGIONS:SEOUL,BUSAN}
+    api-types: ${PUBLIC_DATA_API_TYPES:SALE,RENT}
     enabled: ${PUBLIC_DATA_IMPORT_ENABLED:false}
     dry-run: ${PUBLIC_DATA_IMPORT_DRY_RUN:true}
     limit: ${PUBLIC_DATA_IMPORT_LIMIT:100}
