@@ -7,6 +7,7 @@ WORKDIR /app
 
 COPY requirements.txt setup.py ./
 COPY app ./app
+COPY documents ./documents
 COPY hedonic_house_price ./hedonic_house_price
 
 RUN python -m pip install --no-cache-dir -r requirements.txt \

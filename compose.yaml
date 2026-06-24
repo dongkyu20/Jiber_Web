@@ -110,10 +110,12 @@ services:
       VALUATION_DATA_DIR: /app/data/valuation
       VALUATION_ARTIFACTS_DIR: /app/artifacts/valuation
       XAI_ARTIFACTS_DIR: /app/artifacts/xai
+      RAG_DOCS_DIR: /app/documents/structured
     volumes:
       - ./data/valuation:/app/data/valuation:ro
       - ./model-server/artifacts/valuation:/app/artifacts/valuation:ro
       - ./model-server/artifacts/xai:/app/artifacts/xai:ro
+      - ./model-server/documents:/app/documents:ro
     depends_on:
       model-assets:
         condition: service_completed_successfully
