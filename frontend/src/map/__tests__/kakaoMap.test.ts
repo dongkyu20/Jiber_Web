@@ -87,6 +87,7 @@ describe('kakaoMap utilities', () => {
     expect(normalized[0].latestTransaction?.dealDate).toBe('2026-06-01')
     expect(normalized[0].recentTransactionCount).toBe(2)
     expect(normalized[0].recentYearAverageDealAmount).toBe(1000000000)
+    expect(normalized[0].recentYearAverageJeonseDepositAmount).toBe(1200000000)
     expect(normalized[1].propertyId).toBe(1002)
   })
 
@@ -115,7 +116,8 @@ describe('kakaoMap utilities', () => {
         {
           ...property(1001, 37.5, 127.03),
           name: '경희궁롯데캐슬',
-          recentYearAverageDealAmount: 1100000000
+          recentYearAverageDealAmount: 1100000000,
+          recentYearAverageJeonseDepositAmount: 780000000
         }
       ],
       selectedPropertyId: 1001,
@@ -133,7 +135,8 @@ describe('kakaoMap utilities', () => {
     expect(createdOverlays[0].content.className).toContain('map-property-marker')
     expect(createdOverlays[0].content.className).toContain('is-selected')
     expect(createdOverlays[0].content.textContent).toContain('경희궁롯데캐슬')
-    expect(createdOverlays[0].content.textContent).toContain('최근 1년 평균 11억 원')
+    expect(createdOverlays[0].content.textContent).toContain('매매 평균 11억 원')
+    expect(createdOverlays[0].content.textContent).toContain('전세 평균 7.8억 원')
 
     createdOverlays[0].content.dispatchEvent(new MouseEvent('click'))
 

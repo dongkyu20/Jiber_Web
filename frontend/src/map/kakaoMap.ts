@@ -214,8 +214,10 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
       base: PropertyMapItem
       latestTransaction: PropertyMapItem['latestTransaction']
       recentSaleDealAmounts: number[]
+      recentJeonseDepositAmounts: number[]
       recentTransactionRows: number
-      providedAverage: number | null
+      providedSaleAverage: number | null
+      providedJeonseAverage: number | null
       maxDealCount: number
       maxRecentTransactionCount: number
       rowCount: number
@@ -224,12 +226,22 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
 
   items.forEach((item) => {
     const current = grouped.get(item.propertyId)
-    const providedAverage =
+    const providedSaleAverage =
       typeof item.recentYearAverageDealAmount === 'number' ? item.recentYearAverageDealAmount : null
+    const providedJeonseAverage =
+      typeof item.recentYearAverageJeonseDepositAmount === 'number'
+        ? item.recentYearAverageJeonseDepositAmount
+        : null
     const recentTransactionRows = isRecentYearTransaction(item.latestTransaction, referenceDate) ? 1 : 0
     const recentSaleDealAmounts =
       recentTransactionRows > 0 &&
       item.latestTransaction?.transactionType === 'SALE' &&
+      typeof item.latestTransaction.dealAmount === 'number'
+        ? [item.latestTransaction.dealAmount]
+        : []
+    const recentJeonseDepositAmounts =
+      recentTransactionRows > 0 &&
+      item.latestTransaction?.transactionType === 'JEONSE' &&
       typeof item.latestTransaction.dealAmount === 'number'
         ? [item.latestTransaction.dealAmount]
         : []
@@ -239,8 +251,10 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
         base: item,
         latestTransaction: item.latestTransaction ?? null,
         recentSaleDealAmounts,
+        recentJeonseDepositAmounts,
         recentTransactionRows,
-        providedAverage,
+        providedSaleAverage,
+        providedJeonseAverage,
         maxDealCount: item.dealCount ?? 0,
         maxRecentTransactionCount: item.recentTransactionCount ?? 0,
         rowCount: 1
@@ -250,11 +264,15 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
 
     current.rowCount += 1
     current.recentSaleDealAmounts.push(...recentSaleDealAmounts)
+    current.recentJeonseDepositAmounts.push(...recentJeonseDepositAmounts)
     current.recentTransactionRows += recentTransactionRows
     current.maxDealCount = Math.max(current.maxDealCount, item.dealCount ?? 0)
     current.maxRecentTransactionCount = Math.max(current.maxRecentTransactionCount, item.recentTransactionCount ?? 0)
-    if (providedAverage !== null) {
-      current.providedAverage = providedAverage
+    if (providedSaleAverage !== null) {
+      current.providedSaleAverage = providedSaleAverage
+    }
+    if (providedJeonseAverage !== null) {
+      current.providedJeonseAverage = providedJeonseAverage
     }
     if (transactionTime(item.latestTransaction) > transactionTime(current.latestTransaction)) {
       current.latestTransaction = item.latestTransaction ?? null
@@ -266,7 +284,9 @@ export function normalizePropertyMapItems(items: PropertyMapItem[], referenceDat
     latestTransaction: group.latestTransaction,
     dealCount: Math.max(group.maxDealCount, group.rowCount),
     recentTransactionCount: Math.max(group.maxRecentTransactionCount, group.recentTransactionRows),
-    recentYearAverageDealAmount: group.providedAverage ?? average(group.recentSaleDealAmounts)
+    recentYearAverageDealAmount: group.providedSaleAverage ?? average(group.recentSaleDealAmounts),
+    recentYearAverageJeonseDepositAmount:
+      group.providedJeonseAverage ?? average(group.recentJeonseDepositAmounts)
   }))
 }
 
@@ -428,10 +448,17 @@ function nonOverlappingAdministrativeClusters(
   return selected.sort((first, second) => first.index - second.index).map(({ cluster }) => cluster)
 }
 
-function propertyAverageLabel(item: PropertyMapItem): string {
-  return typeof item.recentYearAverageDealAmount === 'number'
-    ? `최근 1년 평균 ${formatKrw(item.recentYearAverageDealAmount)}`
-    : '최근 1년 평균 정보 없음'
+function propertyAverageLabels(item: PropertyMapItem): string[] {
+  const saleAverageLabel =
+    typeof item.recentYearAverageDealAmount === 'number'
+      ? `매매 평균 ${formatKrw(item.recentYearAverageDealAmount)}`
+      : '매매 정보 없음'
+  const jeonseAverageLabel =
+    typeof item.recentYearAverageJeonseDepositAmount === 'number'
+      ? `전세 평균 ${formatKrw(item.recentYearAverageJeonseDepositAmount)}`
+      : '전세 정보 없음'
+
+  return [saleAverageLabel, jeonseAverageLabel]
 }
 
 function propertyMarkerContent(
@@ -442,15 +469,22 @@ function propertyMarkerContent(
   const markerButton = document.createElement('button')
   markerButton.type = 'button'
   markerButton.className = selected ? 'map-property-marker is-selected' : 'map-property-marker'
-  markerButton.setAttribute('aria-label', `${item.name}, ${propertyAverageLabel(item)}`)
+  markerButton.setAttribute('aria-label', `${item.name}, ${propertyAverageLabels(item).join(', ')}`)
 
   const name = document.createElement('strong')
   name.textContent = item.name
 
-  const averageLabel = document.createElement('span')
-  averageLabel.textContent = propertyAverageLabel(item)
+  const priceList = document.createElement('span')
+  priceList.className = 'map-property-marker-prices'
 
-  markerButton.append(name, averageLabel)
+  propertyAverageLabels(item).forEach((label) => {
+    const priceLabel = document.createElement('span')
+    priceLabel.className = 'map-property-marker-price'
+    priceLabel.textContent = label
+    priceList.append(priceLabel)
+  })
+
+  markerButton.append(name, priceList)
   markerButton.addEventListener('click', (event) => {
     event.preventDefault()
     onClick(item.propertyId)

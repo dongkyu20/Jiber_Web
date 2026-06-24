@@ -35,6 +35,28 @@
         <include refid="TransactionFilters"/>
     </sql>
 
+    <sql id="RecentAverageFilters">
+        AND t.deal_date &gt;= #{recentSince}
+        <if test="request.minDealAmount != null">
+            AND COALESCE(t.deal_amount_krw, t.deposit_amount_krw, 0) &gt;= #{request.minDealAmount}
+        </if>
+        <if test="request.maxDealAmount != null">
+            AND COALESCE(t.deal_amount_krw, t.deposit_amount_krw, 0) &lt;= #{request.maxDealAmount}
+        </if>
+        <if test="request.minAreaM2 != null">
+            AND t.exclusive_area_m2 &gt;= #{request.minAreaM2}
+        </if>
+        <if test="request.maxAreaM2 != null">
+            AND t.exclusive_area_m2 &lt;= #{request.maxAreaM2}
+        </if>
+        <if test="request.dealYearFrom != null">
+            AND YEAR(t.deal_date) &gt;= #{request.dealYearFrom}
+        </if>
+        <if test="request.dealYearTo != null">
+            AND YEAR(t.deal_date) &lt;= #{request.dealYearTo}
+        </if>
+    </sql>
+
     <sql id="FilteredTransactionExists">
         <if test="(request.transactionTypes != null and request.transactionTypes.size() &gt; 0)
                 or request.minDealAmount != null
@@ -121,13 +143,28 @@
                     WHERE t.property_id = p.property_id
                       AND t.transaction_type = 'SALE'
                       AND t.deal_amount_krw IS NOT NULL
-                    <include refid="RecentTransactionFilters"/>
+                    <include refid="RecentAverageFilters"/>
                 )
             </when>
             <otherwise>
                 NULL
             </otherwise>
-        </choose> AS recent_year_average_deal_amount
+        </choose> AS recent_year_average_deal_amount,
+        <choose>
+            <when test="_parameter.containsKey('recentSince') and recentSince != null">
+                (
+                    SELECT CAST(ROUND(AVG(t.deposit_amount_krw)) AS SIGNED)
+                    FROM property_transactions t
+                    WHERE t.property_id = p.property_id
+                      AND t.transaction_type = 'JEONSE'
+                      AND t.deposit_amount_krw IS NOT NULL
+                    <include refid="RecentAverageFilters"/>
+                )
+            </when>
+            <otherwise>
+                NULL
+            </otherwise>
+        </choose> AS recent_year_average_jeonse_deposit_amount
     </sql>
 
     <sql id="MapWhere">

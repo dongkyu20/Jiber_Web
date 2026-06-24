@@ -11,6 +11,7 @@ public record PropertyMapItemResponse(
         Integer dealCount,
         Integer recentTransactionCount,
         Long recentYearAverageDealAmount,
+        Long recentYearAverageJeonseDepositAmount,
         boolean aiAvailable
 ) {
 }

@@ -149,6 +149,7 @@ public class PropertyService {
                 row.getDealCount() == null ? 0 : row.getDealCount(),
                 row.getRecentTransactionCount(),
                 row.getRecentYearAverageDealAmount(),
+                row.getRecentYearAverageJeonseDepositAmount(),
                 row.getPropertyType() == PropertyType.APARTMENT
         );
     }

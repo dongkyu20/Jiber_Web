@@ -123,6 +123,7 @@ function property(propertyId: number): PropertyMapItem {
     dealCount: 1,
     recentTransactionCount: propertyId,
     recentYearAverageDealAmount: 1100000000,
+    recentYearAverageJeonseDepositAmount: 780000000,
     aiAvailable: true
   }
 }
@@ -229,7 +230,8 @@ describe('KakaoMapPanel', () => {
       expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
       expect(kakaoMock.state.overlays[0].content).toBeInstanceOf(HTMLElement)
       expect(kakaoMock.state.overlays[0].content.textContent).toContain('테스트 단지 1001')
-      expect(kakaoMock.state.overlays[0].content.textContent).toContain('최근 1년 평균 11억 원')
+      expect(kakaoMock.state.overlays[0].content.textContent).toContain('매매 평균 11억 원')
+      expect(kakaoMock.state.overlays[0].content.textContent).toContain('전세 평균 7.8억 원')
 
       kakaoMock.state.idleHandler?.()
       vi.advanceTimersByTime(180)

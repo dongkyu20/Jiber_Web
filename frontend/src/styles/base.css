@@ -534,6 +534,15 @@ input[type="range"] {
   line-height: 1.25;
 }
 
+.map-property-marker-prices {
+  display: grid;
+  gap: 2px;
+}
+
+.map-property-marker-price {
+  white-space: nowrap;
+}
+
 .map-property-marker.is-selected {
   border-color: var(--warning);
   background: #fff7ed;

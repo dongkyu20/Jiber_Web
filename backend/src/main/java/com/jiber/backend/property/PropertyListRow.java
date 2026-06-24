@@ -18,6 +18,7 @@ public class PropertyListRow {
     private Integer dealCount;
     private Integer recentTransactionCount;
     private Long recentYearAverageDealAmount;
+    private Long recentYearAverageJeonseDepositAmount;
     private Integer distanceM;
 
     public Long getPropertyId() {
@@ -122,6 +123,14 @@ public class PropertyListRow {
 
     public void setRecentYearAverageDealAmount(Long recentYearAverageDealAmount) {
         this.recentYearAverageDealAmount = recentYearAverageDealAmount;
+    }
+
+    public Long getRecentYearAverageJeonseDepositAmount() {
+        return recentYearAverageJeonseDepositAmount;
+    }
+
+    public void setRecentYearAverageJeonseDepositAmount(Long recentYearAverageJeonseDepositAmount) {
+        this.recentYearAverageJeonseDepositAmount = recentYearAverageJeonseDepositAmount;
     }
 
     public Integer getDistanceM() {

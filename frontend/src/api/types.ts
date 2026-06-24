@@ -97,6 +97,7 @@ export interface PropertyMapItem {
   dealCount: number
   recentTransactionCount: number
   recentYearAverageDealAmount?: number | null
+  recentYearAverageJeonseDepositAmount?: number | null
   aiAvailable: boolean
 }
 

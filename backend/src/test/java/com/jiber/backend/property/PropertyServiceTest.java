@@ -127,6 +127,7 @@ class PropertyServiceTest {
             assertThat(item.latestTransaction().dealAmount()).isEqualTo(1_250_000_000L);
             assertThat(item.dealCount()).isEqualTo(2);
             assertThat(item.recentYearAverageDealAmount()).isEqualTo(1_180_000_000L);
+            assertThat(item.recentYearAverageJeonseDepositAmount()).isEqualTo(780_000_000L);
             assertThat(item.aiAvailable()).isTrue();
         });
     }
@@ -370,6 +371,7 @@ class PropertyServiceTest {
         row.setDealCount(2);
         row.setRecentTransactionCount(3);
         row.setRecentYearAverageDealAmount(1_180_000_000L);
+        row.setRecentYearAverageJeonseDepositAmount(780_000_000L);
         return row;
     }
 
