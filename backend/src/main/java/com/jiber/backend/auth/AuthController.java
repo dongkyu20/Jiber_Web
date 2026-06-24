@@ -60,6 +60,21 @@ public class AuthController {
         return result.response();
     }
 
+    @PostMapping("/recovery/identifier")
+    public AccountRecoveryResponse recoverIdentifier(@Valid @RequestBody AccountIdentifierRecoveryRequest recoveryRequest) {
+        return authService.recoverIdentifier(recoveryRequest);
+    }
+
+    @PostMapping("/recovery/password")
+    public AccountRecoveryResponse requestPasswordRecovery(@Valid @RequestBody PasswordRecoveryRequest recoveryRequest) {
+        return authService.requestPasswordRecovery(recoveryRequest);
+    }
+
+    @PostMapping("/recovery/password/direct")
+    public AccountRecoveryResponse directPasswordReset(@Valid @RequestBody DirectPasswordResetRequest resetRequest) {
+        return authService.directPasswordReset(resetRequest);
+    }
+
     @GetMapping("/social/pending")
     public SocialPendingResponse socialPending(
             @CookieValue(name = "${jiber.auth.pending-social.cookie.name:JIBER_PENDING_SOCIAL}", required = false) String pendingToken

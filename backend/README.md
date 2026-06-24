@@ -133,11 +133,15 @@ Schema preflight가 통과한 뒤 smoke 순서:
 - refresh token HttpOnly cookie 설정과 `refresh_sessions` MyBatis mapper skeleton
 - refresh token rotation 후 재사용 감지 시 해당 session family revocation skeleton
 - `GET /api/v1/auth/me`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout` skeleton
+- `POST /api/v1/auth/recovery/identifier`, `POST /api/v1/auth/recovery/password` 계정 복구 요청 skeleton
+- `POST /api/v1/auth/recovery/password/direct` MVP 직접 비밀번호 재설정 fallback
 - OAuth2 login success handler skeleton
 - Google/Kakao/Naver OAuth2 client registration 환경 변수 연결
-- property, favorite, notice controller/DTO/service skeleton
+- property, favorite, notice controller/DTO/service
 - favorite apartments의 로그인 사용자 소유권 기반 MyBatis list/add/delete와 property detail favorite flag 연동
 - favorite areas의 로그인 사용자 소유권 기반 MyBatis list/add/delete
+- public/admin notices의 MyBatis list/detail/create/update/soft-delete
+- admin users의 MyBatis list/search, role update, enabled update
 - property map/search/detail API의 canonical table 기반 MyBatis 조회 skeleton
 - Springdoc OpenAPI 설정
 - MyBatis mapper 위치 설정
@@ -151,14 +155,18 @@ Schema preflight가 통과한 뒤 smoke 순서:
 - 실제 Google/Kakao/Naver OAuth app 등록 후 provider별 E2E 로그인 검증
 - refresh token reuse 감지 시 session family revocation SQL의 실제 MySQL 통합 검증
 - model-server feature mapping의 실제 DB/거래 데이터 기반 보강
-- 공지사항 작성자/수정자 기록
+- 공지사항 작성자/수정자 표시 응답
+- 비밀번호 재설정 메일 발송, reset token 저장/검증 flow
 
 ## Auth / Security Handoff
 
 - `/api/v1/favorites/**`는 `USER` 또는 `ADMIN` 필요.
 - `POST /api/v1/properties/{propertyId}/valuation`과 `POST /api/v1/properties/{propertyId}/shap`은 `USER` 또는 `ADMIN` 필요.
 - `/api/v1/admin/notices/**`는 `ADMIN` 필요.
+- `/api/v1/admin/users/**`는 `ADMIN` 필요. MVP 정책상 관리자는 회원 목록 조회, 권한 변경, 활성 상태 변경을 할 수 있으며 자기 자신의 권한 강등/비활성화는 차단합니다.
 - `GET /api/v1/auth/me`는 anonymous 호출을 허용하며 미인증 시 `{"authenticated": false, "user": null}`을 반환합니다.
+- `POST /api/v1/auth/recovery/**`는 anonymous 호출을 허용합니다. 계정 존재 여부를 노출하지 않도록 동일한 안내 응답을 반환합니다.
+- `POST /api/v1/auth/recovery/password/direct`는 MVP fallback입니다. 이메일과 표시 이름이 기존 계정과 일치하면 password hash를 갱신하고 해당 user의 refresh session을 revoke합니다. 성공/불일치 모두 같은 메시지를 반환하며, 운영용 이메일 reset token flow는 후속 Auth 작업입니다.
 - `POST /api/v1/auth/refresh`는 refresh cookie가 있을 때만 access token JSON을 반환하고, refresh token은 응답 body에 넣지 않습니다.
 - `POST /api/v1/auth/logout`은 현재 refresh cookie를 폐기하고 같은 name/path 속성으로 cookie를 삭제합니다.
 - refresh token reuse가 감지되면 재사용된 session과 그 descendant/current session family를 revoke하고 `AUTH_REQUIRED`를 반환합니다.
@@ -168,6 +176,7 @@ Schema preflight가 통과한 뒤 smoke 순서:
 - 미연결 provider identity는 local user를 자동 생성하지 않고 pending social session과 HttpOnly pending cookie를 만든 뒤 `FRONTEND_PUBLIC_BASE_URL/signup/social`로 redirect합니다.
 - matching email만으로 social account를 자동 link하지 않습니다. 기존 계정 link는 pending cookie와 email/password 재인증을 통과한 뒤에만 수행합니다.
 - 최초 `ADMIN` 권한은 자동 부여하지 않습니다. 별도 seed, migration, 또는 운영 script에서 명시 user ID/email allowlist로 처리해야 합니다.
+- 회원 비활성화는 신규 로그인/refresh 경로에서 막히지만, 이미 발급된 access token의 즉시 폐기는 별도 token revocation 또는 DB enabled 재검증 정책이 필요합니다.
 
 ### Auth Environment Variables
 

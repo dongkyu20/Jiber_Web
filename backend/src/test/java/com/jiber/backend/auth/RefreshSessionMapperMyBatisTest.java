@@ -141,6 +141,22 @@ class RefreshSessionMapperMyBatisTest {
     }
 
     @Test
+    void revokeByUserIdRevokesOnlyThatUsersActiveSessions() {
+        var expiresAt = OffsetDateTime.parse("2026-06-29T07:00:00Z");
+        var revokedAt = OffsetDateTime.parse("2026-06-15T07:01:00Z");
+        refreshSessionMapper.insert(new RefreshSessionInsertCommand(1L, "a".repeat(64), null, "JUnit", null, expiresAt));
+        refreshSessionMapper.insert(new RefreshSessionInsertCommand(1L, "b".repeat(64), null, "JUnit", null, expiresAt));
+        refreshSessionMapper.insert(new RefreshSessionInsertCommand(2L, "c".repeat(64), null, "JUnit", null, expiresAt));
+
+        var changed = refreshSessionMapper.revokeByUserId(1L, revokedAt);
+
+        assertThat(changed).isEqualTo(2);
+        assertThat(refreshSessionMapper.findByTokenHash("a".repeat(64)).revokedAt()).isNotNull();
+        assertThat(refreshSessionMapper.findByTokenHash("b".repeat(64)).revokedAt()).isNotNull();
+        assertThat(refreshSessionMapper.findByTokenHash("c".repeat(64)).revokedAt()).isNull();
+    }
+
+    @Test
     void authServiceRefreshWorksWithDbBackedUserAndRefreshSessionMappers() {
         jdbcTemplate.update("""
                 INSERT INTO users (

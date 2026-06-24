@@ -206,6 +206,11 @@ class OAuth2AuthorizationEndpointTest {
             public int revokeSessionFamily(Long refreshSessionId, OffsetDateTime revokedAt) {
                 return 0;
             }
+
+            @Override
+            public int revokeByUserId(Long userId, OffsetDateTime revokedAt) {
+                return 0;
+            }
         }
 
         private static class FakePendingSocialSessionMapper implements PendingSocialSessionMapper {
@@ -258,6 +263,11 @@ class OAuth2AuthorizationEndpointTest {
             @Override
             public int updateLastLoginAt(Long userId, OffsetDateTime lastLoginAt) {
                 return 1;
+            }
+
+            @Override
+            public int updatePasswordHash(Long userId, String passwordHash, OffsetDateTime updatedAt) {
+                return 0;
             }
         }
 

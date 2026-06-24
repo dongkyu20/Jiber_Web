@@ -30,4 +30,9 @@ public interface RefreshSessionMapper {
             @Param("refreshSessionId") Long refreshSessionId,
             @Param("revokedAt") OffsetDateTime revokedAt
     );
+
+    int revokeByUserId(
+            @Param("userId") Long userId,
+            @Param("revokedAt") OffsetDateTime revokedAt
+    );
 }

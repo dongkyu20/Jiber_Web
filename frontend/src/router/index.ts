@@ -73,6 +73,12 @@ export const router = createRouter({
       meta: { requiresAuth: false, guestOnly: true }
     },
     {
+      path: '/account-recovery',
+      name: 'account-recovery',
+      component: () => import('@/views/AccountRecoveryView.vue'),
+      meta: { requiresAuth: false, guestOnly: true }
+    },
+    {
       path: '/admin',
       name: 'admin',
       component: () => import('@/views/AdminView.vue'),

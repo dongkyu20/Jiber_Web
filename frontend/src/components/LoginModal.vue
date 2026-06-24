@@ -25,6 +25,11 @@ function goSignup() {
   uiStore.switchToSignup()
 }
 
+async function goAccountRecovery() {
+  uiStore.closeAll()
+  await router.push('/account-recovery')
+}
+
 function startSocial(provider: OAuthProvider) {
   window.location.href = getOAuthStartUrl(provider)
 }
@@ -74,7 +79,9 @@ async function submit() {
             <input type="checkbox" v-model="rememberMe" />
             <span>로그인 유지</span>
           </label>
-          <a href="#" class="modal-link">아이디 · 비밀번호 찾기</a>
+          <button class="modal-link" type="button" data-test="account-recovery-link" @click="goAccountRecovery">
+            아이디 · 비밀번호 찾기
+          </button>
         </div>
 
         <p v-if="errorMessage" class="modal-error">{{ errorMessage }}</p>
@@ -223,10 +230,14 @@ async function submit() {
 .modal-check input[type="checkbox"] { accent-color: #1a1208; width: auto; }
 
 .modal-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
   font-size: 0.8rem;
   color: #8a7255;
   text-decoration: underline;
   text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 .modal-error {

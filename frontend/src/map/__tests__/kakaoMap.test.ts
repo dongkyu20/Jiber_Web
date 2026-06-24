@@ -199,6 +199,57 @@ describe('kakaoMap utilities', () => {
     expect(createdOverlays[2].content.className).not.toContain('is-minimized')
   })
 
+  it('keeps the upper unselected marker detailed when overlapping property markers compete', () => {
+    const createdOverlays: Array<{
+      content: HTMLElement
+      setMap: ReturnType<typeof vi.fn>
+      setZIndex: ReturnType<typeof vi.fn>
+      zIndex?: number
+    }> = []
+    const map = {
+      getProjection: () => ({
+        containerPointFromCoords: (latLng: { lat: number; lng: number }) => ({
+          x: (latLng.lng - 127) * 10000,
+          y: (37.6 - latLng.lat) * 10000
+        })
+      })
+    }
+    const kakaoMaps = {
+      LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
+      CustomOverlay: vi.fn((options: { content: HTMLElement; zIndex?: number }) => {
+        const overlay = { content: options.content, setMap: vi.fn(), setZIndex: vi.fn(), zIndex: options.zIndex }
+        createdOverlays.push(overlay)
+        return overlay
+      })
+    }
+
+    syncPropertyMarkerOverlays({
+      kakaoMaps,
+      map,
+      previousOverlays: [],
+      items: [
+        {
+          ...property(1001, 37.5, 127.03),
+          recentTransactionCount: 50,
+          dealCount: 50
+        },
+        {
+          ...property(1002, 37.5001, 127.0301),
+          recentTransactionCount: 1,
+          dealCount: 1
+        }
+      ],
+      selectedPropertyId: null,
+      onClick: vi.fn()
+    })
+
+    expect(createdOverlays).toHaveLength(2)
+    expect(createdOverlays[0].content.textContent).toContain('테스트 단지 1001')
+    expect(createdOverlays[0].content.className).toContain('is-minimized')
+    expect(createdOverlays[1].content.textContent).toContain('테스트 단지 1002')
+    expect(createdOverlays[1].content.className).not.toContain('is-minimized')
+  })
+
   it('clears old markers, renders new markers, and wires marker clicks to property selection', () => {
     const oldMarker = { setMap: vi.fn() }
     const clickHandlers: Array<() => void> = []

@@ -80,6 +80,13 @@ public class RefreshTokenService {
         refreshSessionMapper.revokeByTokenHash(hash(rawRefreshToken), OffsetDateTime.now(clock));
     }
 
+    public void revokeAllForUser(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        refreshSessionMapper.revokeByUserId(userId, OffsetDateTime.now(clock));
+    }
+
     String hash(String rawRefreshToken) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")

@@ -71,4 +71,11 @@
             updated_at = CURRENT_TIMESTAMP(6)
         WHERE user_id = #{userId}
     </update>
+
+    <update id="updatePasswordHash">
+        UPDATE users
+        SET password_hash = #{passwordHash},
+            updated_at = #{updatedAt}
+        WHERE user_id = #{userId}
+    </update>
 </mapper>

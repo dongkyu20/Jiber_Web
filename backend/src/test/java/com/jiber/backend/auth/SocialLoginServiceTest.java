@@ -377,6 +377,11 @@ class SocialLoginServiceTest {
             return 1;
         }
 
+        @Override
+        public int updatePasswordHash(Long userId, String passwordHash, OffsetDateTime updatedAt) {
+            return 0;
+        }
+
         void insertExistingUser(Long userId, String email, String passwordHash, String displayName, Boolean enabled) {
             var now = OffsetDateTime.now(FIXED_CLOCK);
             var user = new AuthUserRecord(userId, email, passwordHash, displayName, "USER", enabled, now, now, now);
@@ -528,6 +533,11 @@ class SocialLoginServiceTest {
 
         @Override
         public int revokeSessionFamily(Long refreshSessionId, OffsetDateTime revokedAt) {
+            return 0;
+        }
+
+        @Override
+        public int revokeByUserId(Long userId, OffsetDateTime revokedAt) {
             return 0;
         }
     }

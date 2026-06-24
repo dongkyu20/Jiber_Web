@@ -19,6 +19,12 @@ import org.springframework.util.StringUtils;
 public class AuthService {
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+    private static final String IDENTIFIER_RECOVERY_MESSAGE =
+            "집er 아이디는 가입 이메일입니다. 보안상 화면에는 가입 이메일을 표시하지 않습니다.";
+    private static final String PASSWORD_RECOVERY_MESSAGE =
+            "입력한 이메일이 가입되어 있다면 비밀번호 재설정 안내를 받을 수 있습니다. 현재 메일 발송 연동 전에는 관리자에게 문의해 주세요.";
+    private static final String DIRECT_PASSWORD_RESET_MESSAGE =
+            "입력한 정보가 가입 정보와 일치하면 비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.";
 
     private final JwtTokenService jwtTokenService;
     private final RefreshTokenService refreshTokenService;
@@ -137,6 +143,26 @@ public class AuthService {
         return startSession(updatedUser == null ? user : updatedUser, context);
     }
 
+    AccountRecoveryResponse recoverIdentifier(AccountIdentifierRecoveryRequest request) {
+        return new AccountRecoveryResponse(IDENTIFIER_RECOVERY_MESSAGE);
+    }
+
+    AccountRecoveryResponse requestPasswordRecovery(PasswordRecoveryRequest request) {
+        return new AccountRecoveryResponse(PASSWORD_RECOVERY_MESSAGE);
+    }
+
+    AccountRecoveryResponse directPasswordReset(DirectPasswordResetRequest request) {
+        var normalizedEmail = emailNormalizer.normalize(request.email());
+        passwordPolicy.validate(request.newPassword());
+        var user = StringUtils.hasText(normalizedEmail) ? authUserMapper.findByEmail(normalizedEmail) : null;
+        if (canResetPassword(user, request.displayName())) {
+            var now = OffsetDateTime.now(clock);
+            authUserMapper.updatePasswordHash(user.userId(), passwordEncoder.encode(request.newPassword()), now);
+            refreshTokenService.revokeAllForUser(user.userId());
+        }
+        return new AccountRecoveryResponse(DIRECT_PASSWORD_RESET_MESSAGE);
+    }
+
     AuthRefreshResult refresh(String rawRefreshToken, RefreshRequestContext context) {
         if (!StringUtils.hasText(rawRefreshToken)) {
             throw authRequired();
@@ -175,6 +201,17 @@ public class AuthService {
         } catch (RuntimeException exception) {
             return false;
         }
+    }
+
+    private boolean canResetPassword(AuthUserRecord user, String displayName) {
+        return user != null
+                && Boolean.TRUE.equals(user.enabled())
+                && StringUtils.hasText(user.passwordHash())
+                && normalizeDisplayName(user.displayName()).equals(normalizeDisplayName(displayName));
+    }
+
+    private String normalizeDisplayName(String displayName) {
+        return displayName == null ? "" : displayName.trim();
     }
 
     private void validateSignupEmail(String normalizedEmail) {

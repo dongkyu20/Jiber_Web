@@ -2,17 +2,25 @@ package com.jiber.backend.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jiber.backend.admin.AdminUserController;
+import com.jiber.backend.admin.AdminUserListRequest;
+import com.jiber.backend.admin.AdminUserMapper;
+import com.jiber.backend.admin.AdminUserRow;
+import com.jiber.backend.admin.AdminUserService;
 import com.jiber.backend.auth.AuthController;
 import com.jiber.backend.auth.AuthService;
 import com.jiber.backend.auth.AuthUserPrincipal;
@@ -49,7 +57,9 @@ import com.jiber.backend.favorite.FavoriteController;
 import com.jiber.backend.favorite.FavoriteMapper;
 import com.jiber.backend.favorite.FavoriteService;
 import com.jiber.backend.notice.AdminNoticeController;
+import com.jiber.backend.notice.NoticeMapper;
 import com.jiber.backend.notice.NoticeService;
+import com.jiber.backend.notice.NoticeUpsertCommand;
 import com.jiber.backend.property.PropertyType;
 import java.time.Clock;
 import java.time.Instant;
@@ -79,6 +89,7 @@ import org.springframework.test.web.servlet.MockMvc;
         AuthController.class,
         FavoriteController.class,
         AdminNoticeController.class,
+        AdminUserController.class,
         ChatController.class
 })
 @Import({
@@ -238,6 +249,41 @@ class SecurityRulesTest {
                         .content(linkBody))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("SOCIAL_PENDING_NOT_FOUND"));
+    }
+
+    @Test
+    void accountRecoveryEndpointsAllowAnonymous() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/recovery/identifier")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "displayName": "보안 테스트"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(Matchers.containsString("가입 이메일")));
+
+        mockMvc.perform(post("/api/v1/auth/recovery/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "security-signup@example.com"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(Matchers.containsString("이메일")));
+
+        mockMvc.perform(post("/api/v1/auth/recovery/password/direct")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "security-signup@example.com",
+                                  "displayName": "보안 테스트",
+                                  "newPassword": "new-valid-credential-1"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(Matchers.containsString("비밀번호")));
     }
 
     @Test
@@ -423,6 +469,19 @@ class SecurityRulesTest {
     }
 
     @Test
+    void adminNoticeReadRequiresAdminRole() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/notices")
+                        .with(user("1").roles("USER")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+        mockMvc.perform(get("/api/v1/admin/notices")
+                        .with(user("1").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray());
+    }
+
+    @Test
     void adminCanMutateNotices() throws Exception {
         var body = """
                 {
@@ -439,6 +498,54 @@ class SecurityRulesTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.noticeId").value(0));
+    }
+
+    @Test
+    void adminUserManagementRequiresAdminRole() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/users"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+
+        mockMvc.perform(get("/api/v1/admin/users")
+                        .with(user("1").roles("USER")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+        mockMvc.perform(get("/api/v1/admin/users")
+                        .with(user("1").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.items[0].email").value("member@example.com"));
+    }
+
+    @Test
+    void adminCanMutateUsers() throws Exception {
+        var roleBody = """
+                {
+                  "role": "ADMIN"
+                }
+                """;
+        var enabledBody = """
+                {
+                  "enabled": false
+                }
+                """;
+
+        mockMvc.perform(patch("/api/v1/admin/users/2/role")
+                        .with(authentication(authPrincipal(1L, "ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(roleBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.userId").value(2))
+                .andExpect(jsonPath("$.user.role").value("ADMIN"));
+
+        mockMvc.perform(patch("/api/v1/admin/users/2/enabled")
+                        .with(authentication(authPrincipal(1L, "ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(enabledBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.userId").value(2))
+                .andExpect(jsonPath("$.user.enabled").value(false));
     }
 
     @TestConfiguration
@@ -540,8 +647,59 @@ class SecurityRulesTest {
         }
 
         @Bean
-        NoticeService noticeService() {
-            return new NoticeService();
+        NoticeService noticeService(NoticeMapper noticeMapper) {
+            return NoticeService.forTesting(
+                    noticeMapper,
+                    Clock.fixed(Instant.parse("2026-06-24T01:00:00Z"), ZoneOffset.UTC)
+            );
+        }
+
+        @Bean
+        NoticeMapper noticeMapper() {
+            var noticeMapper = mock(NoticeMapper.class);
+            when(noticeMapper.findAdminNotices(any(), any(Integer.class), any(Integer.class))).thenReturn(List.of());
+            when(noticeMapper.countAdminNotices(any())).thenReturn(0L);
+            when(noticeMapper.insertNotice(any())).thenAnswer(invocation -> {
+                NoticeUpsertCommand command = invocation.getArgument(0);
+                command.setNoticeId(0L);
+                return 1;
+            });
+            return noticeMapper;
+        }
+
+        @Bean
+        AdminUserService adminUserService(AdminUserMapper adminUserMapper) {
+            return new AdminUserService(adminUserMapper);
+        }
+
+        @Bean
+        AdminUserMapper adminUserMapper() {
+            var adminUserMapper = mock(AdminUserMapper.class);
+            var listed = adminUserRow(2L, "member@example.com", "일반 회원", "USER", true);
+            when(adminUserMapper.findUsers(any(AdminUserListRequest.class), anyInt(), anyInt()))
+                    .thenReturn(List.of(listed));
+            when(adminUserMapper.countUsers(any(AdminUserListRequest.class))).thenReturn(1L);
+            when(adminUserMapper.updateRole(2L, "ADMIN")).thenReturn(1);
+            when(adminUserMapper.updateEnabled(2L, false)).thenReturn(1);
+            when(adminUserMapper.findById(2L))
+                    .thenReturn(
+                            adminUserRow(2L, "member@example.com", "일반 회원", "ADMIN", true),
+                            adminUserRow(2L, "member@example.com", "일반 회원", "ADMIN", false)
+                    );
+            return adminUserMapper;
+        }
+
+        private static AdminUserRow adminUserRow(Long userId, String email, String displayName, String role, boolean enabled) {
+            return new AdminUserRow(
+                    userId,
+                    email,
+                    displayName,
+                    role,
+                    enabled,
+                    OffsetDateTime.parse("2026-06-24T09:00:00+09:00"),
+                    OffsetDateTime.parse("2026-06-20T09:00:00+09:00"),
+                    OffsetDateTime.parse("2026-06-24T09:00:00+09:00")
+            );
         }
 
         private static class SecurityAuthUserMapper implements AuthUserMapper {
@@ -584,6 +742,28 @@ class SecurityRulesTest {
                         lastLoginAt,
                         current.createdAt(),
                         lastLoginAt
+                );
+                usersById.put(userId, updated);
+                usersByEmail.put(updated.email(), updated);
+                return 1;
+            }
+
+            @Override
+            public int updatePasswordHash(Long userId, String passwordHash, OffsetDateTime updatedAt) {
+                var current = usersById.get(userId);
+                if (current == null) {
+                    return 0;
+                }
+                var updated = new AuthUserRecord(
+                        current.userId(),
+                        current.email(),
+                        passwordHash,
+                        current.displayName(),
+                        current.role(),
+                        current.enabled(),
+                        current.lastLoginAt(),
+                        current.createdAt(),
+                        updatedAt
                 );
                 usersById.put(userId, updated);
                 usersByEmail.put(updated.email(), updated);
@@ -693,6 +873,11 @@ class SecurityRulesTest {
 
             @Override
             public int revokeSessionFamily(Long refreshSessionId, OffsetDateTime revokedAt) {
+                return 0;
+            }
+
+            @Override
+            public int revokeByUserId(Long userId, OffsetDateTime revokedAt) {
                 return 0;
             }
         }

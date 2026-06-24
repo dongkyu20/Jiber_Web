@@ -9,6 +9,7 @@ import LoginModal from '@/components/LoginModal.vue'
 import SignupModal from '@/components/SignupModal.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import AccountRecoveryView from '@/views/AccountRecoveryView.vue'
 import LoginView from '@/views/LoginView.vue'
 import SignupView from '@/views/SignupView.vue'
 import SocialSignupView from '@/views/SocialSignupView.vue'
@@ -48,7 +49,8 @@ function createTestRouter() {
       { path: '/favorites', component: { template: '<main />' } },
       { path: '/login', component: LoginView },
       { path: '/signup', component: SignupView },
-      { path: '/signup/social', component: SocialSignupView }
+      { path: '/signup/social', component: SocialSignupView },
+      { path: '/account-recovery', component: AccountRecoveryView }
     ]
   })
 }
@@ -123,6 +125,80 @@ describe('LoginModal', () => {
 
     expect(wrapper.find('.modal-error').exists()).toBe(true)
   })
+
+  it('links to the account recovery page', async () => {
+    const { wrapper, router } = await mountWithRouter(LoginModal)
+
+    await wrapper.get('[data-test="account-recovery-link"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/account-recovery')
+  })
+})
+
+describe('AccountRecoveryView', () => {
+  it('submits identifier and password recovery forms with safe success messages', async () => {
+    const identifierSpy = vi.spyOn(authApi, 'recoverIdentifier').mockResolvedValueOnce({
+      message: '가입 이메일은 보안상 화면에 표시하지 않습니다.'
+    })
+    const passwordSpy = vi.spyOn(authApi, 'directPasswordReset').mockResolvedValueOnce({
+      message: '입력한 정보가 가입 정보와 일치하면 비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.'
+    })
+    const { wrapper } = await mountWithRouter(AccountRecoveryView, '/account-recovery')
+
+    await wrapper.get('#recovery-display-name').setValue('사용자')
+    await wrapper.get('[data-test="identifier-recovery-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(identifierSpy).toHaveBeenCalledWith({ displayName: '사용자' })
+    expect(wrapper.text()).toContain('가입 이메일은 보안상 화면에 표시하지 않습니다.')
+
+    await wrapper.get('[data-test="password-tab"]').trigger('click')
+    await wrapper.get('#recovery-email').setValue('user@example.com')
+    await wrapper.get('#recovery-password-display-name').setValue('사용자')
+    await wrapper.get('#recovery-new-password').setValue('new-valid-credential-1')
+    await wrapper.get('#recovery-new-password-confirm').setValue('new-valid-credential-1')
+    await wrapper.get('[data-test="password-recovery-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(passwordSpy).toHaveBeenCalledWith({
+      email: 'user@example.com',
+      displayName: '사용자',
+      newPassword: 'new-valid-credential-1'
+    })
+    expect(wrapper.text()).toContain('입력한 정보가 가입 정보와 일치하면 비밀번호가 변경되었습니다.')
+  })
+
+  it('keeps direct password reset on the safe guidance path when the backend is temporarily unavailable', async () => {
+    vi.spyOn(authApi, 'directPasswordReset').mockRejectedValueOnce(new Error('network unavailable'))
+    const { wrapper } = await mountWithRouter(AccountRecoveryView, '/account-recovery')
+
+    await wrapper.get('[data-test="password-tab"]').trigger('click')
+    await wrapper.get('#recovery-email').setValue('user@example.com')
+    await wrapper.get('#recovery-password-display-name').setValue('사용자')
+    await wrapper.get('#recovery-new-password').setValue('new-valid-credential-1')
+    await wrapper.get('#recovery-new-password-confirm').setValue('new-valid-credential-1')
+    await wrapper.get('[data-test="password-recovery-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('입력한 정보가 가입 정보와 일치하면 비밀번호가 변경되었습니다.')
+    expect(wrapper.text()).not.toContain('비밀번호 찾기 요청을 처리하지 못했습니다.')
+  })
+
+  it('does not call direct password reset when new password confirmation differs', async () => {
+    const passwordSpy = vi.spyOn(authApi, 'directPasswordReset')
+    const { wrapper } = await mountWithRouter(AccountRecoveryView, '/account-recovery')
+
+    await wrapper.get('[data-test="password-tab"]').trigger('click')
+    await wrapper.get('#recovery-email').setValue('user@example.com')
+    await wrapper.get('#recovery-password-display-name').setValue('사용자')
+    await wrapper.get('#recovery-new-password').setValue('new-valid-credential-1')
+    await wrapper.get('#recovery-new-password-confirm').setValue('different-credential-1')
+    await wrapper.get('[data-test="password-recovery-form"]').trigger('submit')
+
+    expect(passwordSpy).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('새 비밀번호가 일치하지 않습니다.')
+  })
 })
 
 describe('SignupModal', () => {
@@ -132,6 +208,8 @@ describe('SignupModal', () => {
 
     await wrapper.get('#su-email').setValue('user@example.com')
     await wrapper.get('#su-name').setValue('Test User')
+    await wrapper.get('#su-birth-date').setValue('1990-01-23')
+    await wrapper.get('#su-phone-number').setValue('010-1234-5678')
     await wrapper.get('#su-pw').setValue('password-8')
     await wrapper.get('#su-pw2').setValue('password-8')
     const agreements = wrapper.findAll('.agree-item input')
@@ -143,6 +221,8 @@ describe('SignupModal', () => {
     expect(signupSpy).toHaveBeenCalledWith({
       email: 'user@example.com',
       displayName: 'Test User',
+      birthDate: '1990-01-23',
+      phoneNumber: '010-1234-5678',
       password: 'password-8'
     })
     expect(authStore.accessToken).toBe('memory-only-token')
@@ -155,6 +235,8 @@ describe('SignupModal', () => {
 
     await wrapper.get('#su-email').setValue('user@example.com')
     await wrapper.get('#su-name').setValue('Test User')
+    await wrapper.get('#su-birth-date').setValue('1990-01-23')
+    await wrapper.get('#su-phone-number').setValue('010-1234-5678')
     await wrapper.get('#su-pw').setValue('password-8')
     await wrapper.get('#su-pw2').setValue('password-8')
     const agreements = wrapper.findAll('.agree-item input')
@@ -164,6 +246,24 @@ describe('SignupModal', () => {
     await flushPromises()
 
     expect(wrapper.find('.modal-error').exists()).toBe(true)
+  })
+
+  it('requires birth date and phone number before signup', async () => {
+    const signupSpy = vi.spyOn(authApi, 'signup')
+    const { wrapper } = await mountWithRouter(SignupModal)
+
+    await wrapper.get('#su-email').setValue('user@example.com')
+    await wrapper.get('#su-name').setValue('Test User')
+    await wrapper.get('#su-pw').setValue('password-8')
+    await wrapper.get('#su-pw2').setValue('password-8')
+    const agreements = wrapper.findAll('.agree-item input')
+    await agreements[0].setValue(true)
+    await agreements[1].setValue(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(signupSpy).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('모든 항목을 입력해 주세요.')
   })
 
   it('validates required fields before signup', async () => {

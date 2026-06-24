@@ -24,4 +24,10 @@ public interface AuthUserMapper {
             @Param("userId") Long userId,
             @Param("lastLoginAt") OffsetDateTime lastLoginAt
     );
+
+    int updatePasswordHash(
+            @Param("userId") Long userId,
+            @Param("passwordHash") String passwordHash,
+            @Param("updatedAt") OffsetDateTime updatedAt
+    );
 }

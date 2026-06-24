@@ -8,6 +8,8 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
     SOCIAL_PENDING_NOT_FOUND(HttpStatus.UNAUTHORIZED, "소셜 가입 세션이 만료되었거나 존재하지 않습니다."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 회원을 찾을 수 없습니다."),
+    ADMIN_SELF_UPDATE_NOT_ALLOWED(HttpStatus.CONFLICT, "자기 자신의 관리자 권한 또는 활성 상태는 변경할 수 없습니다."),
     PROPERTY_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 부동산 정보를 찾을 수 없습니다."),
     NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 공지사항을 찾을 수 없습니다."),
     FAVORITE_NOT_FOUND(HttpStatus.NOT_FOUND, "관심 아파트 정보를 찾을 수 없습니다."),

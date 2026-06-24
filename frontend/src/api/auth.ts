@@ -1,11 +1,15 @@
 import { apiClient, getBackendPublicBaseUrl } from './client'
 import type {
+  AccountIdentifierRecoveryRequest,
+  AccountRecoveryResponse,
   AuthLoginRequest,
   AuthLogoutResponse,
   AuthMeResponse,
   AuthRefreshResponse,
   AuthSessionResponse,
   AuthSignupRequest,
+  DirectPasswordResetRequest,
+  PasswordRecoveryRequest,
   PendingSocialSignupResponse,
   SocialLinkRequest,
   SocialSignupRequest
@@ -46,6 +50,21 @@ export const authApi = {
       { logoutAllDevices },
       { withCredentials: true }
     )
+    return data
+  },
+
+  async recoverIdentifier(payload: AccountIdentifierRecoveryRequest): Promise<AccountRecoveryResponse> {
+    const { data } = await apiClient.post<AccountRecoveryResponse>('/auth/recovery/identifier', payload)
+    return data
+  },
+
+  async requestPasswordRecovery(payload: PasswordRecoveryRequest): Promise<AccountRecoveryResponse> {
+    const { data } = await apiClient.post<AccountRecoveryResponse>('/auth/recovery/password', payload)
+    return data
+  },
+
+  async directPasswordReset(payload: DirectPasswordResetRequest): Promise<AccountRecoveryResponse> {
+    const { data } = await apiClient.post<AccountRecoveryResponse>('/auth/recovery/password/direct', payload)
     return data
   },
 
