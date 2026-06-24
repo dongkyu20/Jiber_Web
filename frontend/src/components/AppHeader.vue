@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
+import brandLogoUrl from '@/assets/brand/jiper-estate-real-logo-cropped.png'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
@@ -21,8 +22,7 @@ async function logout() {
 <template>
   <header class="site-header">
     <RouterLink to="/" class="brand">
-      <span class="brand-ko">집</span><span class="brand-en">ER</span>
-      <span class="brand-sub">ESTATE REAL</span>
+      <img class="brand-logo-img brand-logo-img--header" :src="brandLogoUrl" alt="집er estate real" />
     </RouterLink>
 
     <nav class="main-nav" aria-label="주요 메뉴">

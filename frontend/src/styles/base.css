@@ -95,10 +95,28 @@ a { color: inherit; text-decoration: none; }
 
 .brand {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
+  align-items: center;
   text-decoration: none;
   font-family: var(--font-logo);
+  min-width: 58px;
+}
+
+.brand-logo-img {
+  display: block;
+  width: auto;
+  object-fit: contain;
+}
+
+.brand-logo-img--header {
+  height: 56px;
+}
+
+.brand-logo-img--modal {
+  height: 150px;
+}
+
+.brand-logo-img--footer {
+  height: 120px;
 }
 
 .brand-ko {

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import brandLogoUrl from '@/assets/brand/jiper-estate-real-logo-cropped.png'
 import { getOAuthStartUrl, type OAuthProvider } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -79,8 +80,7 @@ async function submit() {
       <button class="modal-close" type="button" @click="close" aria-label="닫기">✕</button>
 
       <div class="modal-logo">
-        <span class="brand-ko">집</span><span class="brand-en">ER</span>
-        <span class="brand-sub">ESTATE REAL</span>
+        <img class="brand-logo-img brand-logo-img--modal" :src="brandLogoUrl" alt="집er estate real" />
       </div>
 
       <h2 class="modal-title">회원가입</h2>
@@ -195,10 +195,9 @@ async function submit() {
 
 .modal-logo {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
-  gap: 4px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
   font-family: var(--font-logo);
 }
 .modal-logo .brand-ko { color: #1a1208; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }

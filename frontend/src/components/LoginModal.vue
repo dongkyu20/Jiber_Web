@@ -2,9 +2,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import brandLogoUrl from '@/assets/brand/jiper-estate-real-logo-cropped.png'
 import { getOAuthStartUrl, type OAuthProvider } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { safeRedirectTarget } from '@/views/authHelpers'
 
 const authStore = useAuthStore()
 const uiStore = useUiStore()
@@ -36,9 +38,9 @@ async function submit() {
 
   try {
     await authStore.loginWithPassword({ email: email.value.trim(), password: password.value })
+    const redirect = safeRedirectTarget(uiStore.loginRedirect)
     uiStore.closeAll()
-    const redirect = uiStore.loginRedirect
-    if (redirect) await router.push(redirect)
+    await router.push(redirect)
   } catch {
     errorMessage.value = '아이디 또는 비밀번호가 올바르지 않습니다.'
   }
@@ -51,8 +53,7 @@ async function submit() {
       <button class="modal-close" type="button" @click="close" aria-label="닫기">✕</button>
 
       <div class="modal-logo">
-        <span class="brand-ko">집</span><span class="brand-en">ER</span>
-        <span class="brand-sub">ESTATE REAL</span>
+        <img class="brand-logo-img brand-logo-img--modal" :src="brandLogoUrl" alt="집er estate real" />
       </div>
 
       <h2 class="modal-title">다시 오신 것을 환영합니다</h2>
@@ -148,10 +149,9 @@ async function submit() {
 
 .modal-logo {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
-  gap: 4px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
   font-family: var(--font-logo);
 }
 

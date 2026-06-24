@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { DirectiveBinding } from 'vue'
 
+import brandLogoUrl from '@/assets/brand/jiper-estate-real-logo-cropped.png'
+
 const vReveal = {
   mounted(el: HTMLElement, binding: DirectiveBinding<{ delay?: number } | undefined>) {
     const delay = binding.value?.delay ?? 0
@@ -47,16 +49,14 @@ const filteredListings = computed(() =>
     <header class="lp-header">
       <div class="lp-container lp-header-inner">
         <RouterLink to="/" class="lp-brand">
-          <span class="brand-ko">집</span><span class="brand-en">ER</span>
-          <span class="brand-sub">ESTATE REAL</span>
+          <img class="brand-logo-img brand-logo-img--header" :src="brandLogoUrl" alt="집er estate real" />
         </RouterLink>
         <nav class="lp-nav">
-          <RouterLink to="/map">매물 검색</RouterLink>
+          <a href="#listings">추천 매물</a>
           <a href="#services">서비스</a>
           <a href="#community">커뮤니티</a>
-          <RouterLink to="/login">로그인</RouterLink>
         </nav>
-        <RouterLink to="/map" class="lp-cta-btn">지도에서 검색</RouterLink>
+        <RouterLink to="/login" class="lp-cta-btn">로그인</RouterLink>
       </div>
     </header>
 
@@ -354,7 +354,9 @@ const filteredListings = computed(() =>
         <footer class="lp-footer">
           <div class="lp-container footer-inner">
             <div class="footer-brand">
-              <RouterLink to="/" class="lp-brand"><span class="brand-ko">집</span><span class="brand-en">ER</span></RouterLink>
+              <RouterLink to="/" class="lp-brand">
+                <img class="brand-logo-img brand-logo-img--footer" :src="brandLogoUrl" alt="집er estate real" />
+              </RouterLink>
               <p>프리미엄 부동산 매매 · 분양</p>
               <p>서울특별시 강남구 청담동 · 02-1234-5678</p>
             </div>
@@ -442,14 +444,13 @@ const filteredListings = computed(() =>
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 24px;
+  gap: 40px;
   height: var(--header-h);
 }
 
 .lp-brand {
   display: flex;
-  align-items: baseline;
-  gap: 5px;
+  align-items: center;
   text-decoration: none;
   font-family: var(--font-logo);
 }
@@ -461,7 +462,7 @@ const filteredListings = computed(() =>
 .lp-nav {
   display: flex;
   justify-content: center;
-  gap: 32px;
+  gap: 64px;
 }
 
 .lp-nav a {
@@ -943,7 +944,7 @@ const filteredListings = computed(() =>
 @media (max-width: 900px) {
   .lp-cta-btn { display: none; }
   .lp-header-inner { grid-template-columns: auto 1fr; }
-  .lp-nav { justify-content: flex-end; gap: 16px; }
+  .lp-nav { justify-content: flex-end; gap: 32px; }
 
   .hero-inner { grid-template-columns: 1fr; gap: 32px; }
   .hero-img { height: 220px; }
@@ -960,7 +961,7 @@ const filteredListings = computed(() =>
 
 @media (max-width: 640px) {
   .lp-container { width: calc(100% - 32px); }
-  .lp-nav { gap: 10px; font-size: 0.8rem; }
+  .lp-nav { gap: 20px; font-size: 0.8rem; }
   .listings-grid, .services-grid, .how-grid, .review-grid { grid-template-columns: 1fr; }
   .how-item { border-right: none; }
   .sec-header { flex-direction: column; align-items: flex-start; }
