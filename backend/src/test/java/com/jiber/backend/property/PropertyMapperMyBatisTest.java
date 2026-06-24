@@ -90,6 +90,23 @@ class PropertyMapperMyBatisTest {
     }
 
     @Test
+    void findMapPropertiesAveragesOnlyRecentSaleDealAmounts() {
+        insertProperty(1L, PropertyType.APARTMENT, "역삼 A", "서울특별시", "강남구", "역삼동", "37.5000000", "127.0300000");
+        insertTransaction(101L, 1L, TransactionType.SALE, 700_000_000L, null, LocalDate.of(2026, 1, 10));
+        insertTransaction(102L, 1L, TransactionType.SALE, 900_000_000L, null, LocalDate.of(2026, 2, 10));
+        insertTransaction(103L, 1L, TransactionType.JEONSE, null, 2_000_000_000L, LocalDate.of(2026, 3, 10));
+        insertTransaction(104L, 1L, TransactionType.SALE, 500_000_000L, null, LocalDate.of(2025, 1, 10));
+
+        var rows = propertyMapper.findMapProperties(mapRequest(7, allTransactionTypes()), RECENT_SINCE);
+        var yeoksam = row(rows, 1L);
+
+        assertThat(yeoksam.getLatestTransactionType()).isEqualTo(TransactionType.JEONSE);
+        assertThat(yeoksam.getLatestDealAmount()).isEqualTo(2_000_000_000L);
+        assertThat(yeoksam.getRecentTransactionCount()).isEqualTo(3);
+        assertThat(yeoksam.getRecentYearAverageDealAmount()).isEqualTo(800_000_000L);
+    }
+
+    @Test
     void findLegalDongClustersAggregatesVisiblePropertiesBySidoSigunguLegalDong() {
         insertProperty(1L, PropertyType.APARTMENT, "역삼 A", "서울특별시", "강남구", "역삼동", "37.5000000", "127.0300000");
         insertProperty(2L, PropertyType.APARTMENT, "역삼 B", "서울특별시", "강남구", "역삼동", "37.5200000", "127.0500000");
@@ -99,7 +116,7 @@ class PropertyMapperMyBatisTest {
         insertTransaction(101L, 1L, TransactionType.SALE, 700_000_000L, null, LocalDate.of(2026, 1, 10));
         insertTransaction(102L, 1L, TransactionType.SALE, null, null, LocalDate.of(2026, 2, 10));
         insertTransaction(103L, 1L, TransactionType.SALE, 500_000_000L, null, LocalDate.of(2025, 1, 10));
-        insertTransaction(201L, 2L, TransactionType.SALE, null, 300_000_000L, LocalDate.of(2026, 1, 20));
+        insertTransaction(201L, 2L, TransactionType.JEONSE, null, 300_000_000L, LocalDate.of(2026, 1, 20));
         insertTransaction(202L, 2L, TransactionType.JEONSE, null, 200_000_000L, LocalDate.of(2026, 1, 20));
         insertTransaction(301L, 3L, TransactionType.SALE, 600_000_000L, null, LocalDate.of(2026, 3, 10));
         insertTransaction(401L, 4L, TransactionType.SALE, 100_000_000L, null, LocalDate.of(2026, 1, 10));
@@ -108,7 +125,7 @@ class PropertyMapperMyBatisTest {
         insertProperty(5L, PropertyType.APARTMENT, "Old A", "Seoul", "Gangnam-gu", "Old-dong", "37.5400000", "127.0800000");
         insertTransaction(501L, 5L, TransactionType.SALE, 400_000_000L, null, LocalDate.of(2025, 1, 10));
 
-        var rows = propertyMapper.findLegalDongClusters(mapRequest(5), RECENT_SINCE);
+        var rows = propertyMapper.findLegalDongClusters(mapRequest(5, allTransactionTypes()), RECENT_SINCE);
         assertThat(rows).extracting(AdministrativeClusterRow::getLegalDong).doesNotContain("Old-dong");
 
         assertThat(rows).extracting(AdministrativeClusterRow::getLegalDong).containsExactly("역삼동", "삼성동");
@@ -119,8 +136,8 @@ class PropertyMapperMyBatisTest {
         assertThat(yeoksam.getCenterLat()).isEqualByComparingTo("37.5100000");
         assertThat(yeoksam.getCenterLng()).isEqualByComparingTo("127.0400000");
         assertThat(yeoksam.getPropertyCount()).isEqualTo(2);
-        assertThat(yeoksam.getTransactionCount()).isEqualTo(3);
-        assertThat(yeoksam.getAverageDealAmount()).isEqualTo(500_000_000L);
+        assertThat(yeoksam.getTransactionCount()).isEqualTo(4);
+        assertThat(yeoksam.getAverageDealAmount()).isEqualTo(700_000_000L);
     }
 
     @Test
@@ -131,14 +148,14 @@ class PropertyMapperMyBatisTest {
         insertProperty(9L, PropertyType.APARTMENT, "부산 외부", "부산광역시", "해운대구", "우동", "35.1600000", "129.1600000");
         insertTransaction(101L, 1L, TransactionType.SALE, 700_000_000L, null, LocalDate.of(2026, 1, 10));
         insertTransaction(102L, 1L, TransactionType.SALE, 500_000_000L, null, LocalDate.of(2025, 1, 10));
-        insertTransaction(201L, 2L, TransactionType.SALE, null, 300_000_000L, LocalDate.of(2026, 1, 20));
+        insertTransaction(201L, 2L, TransactionType.JEONSE, null, 300_000_000L, LocalDate.of(2026, 1, 20));
         insertTransaction(301L, 3L, TransactionType.SALE, null, null, LocalDate.of(2026, 2, 10));
         insertTransaction(901L, 9L, TransactionType.SALE, 900_000_000L, null, LocalDate.of(2026, 1, 10));
 
         insertProperty(4L, PropertyType.APARTMENT, "Old District A", "Seoul", "Old-gu", "Old-dong", "37.5400000", "127.0800000");
         insertTransaction(401L, 4L, TransactionType.SALE, 400_000_000L, null, LocalDate.of(2025, 1, 10));
 
-        var rows = propertyMapper.findSigunguClusters(mapRequest(7), RECENT_SINCE);
+        var rows = propertyMapper.findSigunguClusters(mapRequest(7, allTransactionTypes()), RECENT_SINCE);
         assertThat(rows).extracting(AdministrativeClusterRow::getSigungu).doesNotContain("Old-gu");
 
         assertThat(rows).extracting(AdministrativeClusterRow::getSigungu).containsExactly("강남구", "서초구");
@@ -150,12 +167,37 @@ class PropertyMapperMyBatisTest {
         assertThat(gangnam.getCenterLng()).isEqualByComparingTo("127.0400000");
         assertThat(gangnam.getPropertyCount()).isEqualTo(2);
         assertThat(gangnam.getTransactionCount()).isEqualTo(2);
-        assertThat(gangnam.getAverageDealAmount()).isEqualTo(500_000_000L);
+        assertThat(gangnam.getAverageDealAmount()).isEqualTo(700_000_000L);
         assertThat(cluster(rows, "서초구").getTransactionCount()).isEqualTo(1);
         assertThat(cluster(rows, "서초구").getAverageDealAmount()).isNull();
     }
 
+    @Test
+    void findTransactionsByPropertyIdReturnsAllTransactionsNewestFirst() {
+        insertProperty(1L, PropertyType.APARTMENT, "All Deals A", "Seoul", "Gangnam-gu", "Deal-dong", "37.5000000", "127.0300000");
+        for (int index = 1; index <= 25; index++) {
+            insertTransaction(
+                    1000L + index,
+                    1L,
+                    index == 1 ? TransactionType.SALE : TransactionType.JEONSE,
+                    index == 1 ? 700_000_000L : null,
+                    index == 1 ? null : 300_000_000L + index,
+                    LocalDate.of(2026, 1, 1).plusDays(index)
+            );
+        }
+
+        var rows = propertyMapper.findTransactionsByPropertyId(1L);
+
+        assertThat(rows).hasSize(25);
+        assertThat(rows.get(0).getDealDate()).isEqualTo(LocalDate.of(2026, 1, 26));
+        assertThat(rows.get(24).getTransactionType()).isEqualTo(TransactionType.SALE);
+    }
+
     private MapSearchRequest mapRequest(int zoomLevel) {
+        return mapRequest(zoomLevel, List.of(TransactionType.SALE));
+    }
+
+    private MapSearchRequest mapRequest(int zoomLevel, List<TransactionType> transactionTypes) {
         return new MapSearchRequest(
                 new BigDecimal("37.4500000"),
                 new BigDecimal("126.9500000"),
@@ -163,7 +205,7 @@ class PropertyMapperMyBatisTest {
                 new BigDecimal("127.1500000"),
                 zoomLevel,
                 List.of(PropertyType.APARTMENT),
-                List.of(TransactionType.SALE),
+                transactionTypes,
                 null,
                 null,
                 null,
@@ -171,6 +213,10 @@ class PropertyMapperMyBatisTest {
                 null,
                 null
         );
+    }
+
+    private List<TransactionType> allTransactionTypes() {
+        return List.of(TransactionType.SALE, TransactionType.JEONSE, TransactionType.MONTHLY_RENT);
     }
 
     private void insertProperty(

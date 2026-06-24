@@ -2,6 +2,7 @@ package com.jiber.backend.publicdata;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.jiber.backend.property.PropertyType;
 import com.jiber.backend.property.TransactionType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -171,6 +172,7 @@ class CanonicalApartmentUpsertServiceTest {
         return new CanonicalApartmentRawRow(
                 rawTransactionId,
                 sourceKey,
+                PropertyType.APARTMENT,
                 transactionType,
                 "서울특별시",
                 "강남구",

@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 class PropertyServiceTest {
 
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-06-23T00:00:00Z"), ZoneOffset.UTC);
-    private static final LocalDate EXPECTED_RECENT_SINCE = LocalDate.of(2025, 12, 23);
+    private static final LocalDate EXPECTED_RECENT_SINCE = LocalDate.of(2025, 6, 23);
 
     @Test
     void searchPropertiesReturnsEmptyPageFromMapper() {
@@ -80,7 +80,7 @@ class PropertyServiceTest {
     @Test
     void aiEndpointsRejectNonApartmentFromDbBeforeCallingModelServer() {
         var mapper = new FakePropertyMapper();
-        mapper.propertyType = PropertyType.OFFICETEL;
+        mapper.detailRow = sampleDetailRow(PropertyType.OFFICETEL);
         var valuationClient = new RecordingValuationClient();
         var service = service(mapper, valuationClient);
 
@@ -92,6 +92,20 @@ class PropertyServiceTest {
                         assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALUATION_UNSUPPORTED_PROPERTY_TYPE));
         assertThat(valuationClient.valuationCalled).isFalse();
         assertThat(valuationClient.shapCalled).isFalse();
+    }
+
+    @Test
+    void aiEndpointsPassPropertyDetailToModelServerClient() {
+        var mapper = new FakePropertyMapper();
+        mapper.detailRow = sampleDetailRow(PropertyType.APARTMENT);
+        var valuationClient = new RecordingValuationClient();
+        var service = service(mapper, valuationClient);
+
+        service.valuateApartment(1001L, valuationRequest());
+        service.explainApartment(1001L, shapRequest());
+
+        assertThat(valuationClient.valuationProperty).isSameAs(mapper.detailRow);
+        assertThat(valuationClient.shapProperty).isSameAs(mapper.detailRow);
     }
 
     @Test
@@ -112,6 +126,7 @@ class PropertyServiceTest {
             assertThat(item.latestTransaction().transactionType()).isEqualTo(TransactionType.SALE);
             assertThat(item.latestTransaction().dealAmount()).isEqualTo(1_250_000_000L);
             assertThat(item.dealCount()).isEqualTo(2);
+            assertThat(item.recentYearAverageDealAmount()).isEqualTo(1_180_000_000L);
             assertThat(item.aiAvailable()).isTrue();
         });
     }
@@ -229,6 +244,53 @@ class PropertyServiceTest {
     }
 
     @Test
+    void propertyDetailKeepsHouseholdCountFromDbWhenPresent() {
+        var mapper = new FakePropertyMapper();
+        mapper.detailRow = sampleDetailRow(PropertyType.APARTMENT);
+        mapper.detailRow.setHouseholdCount(500);
+        var householdLookup = new FakeApartmentComplexHouseholdLookup();
+        householdLookup.householdCount = 806;
+        var service = service(mapper, new FakeFavoriteMapper(), new RecordingValuationClient(), householdLookup);
+
+        var response = service.getPropertyDetail(1001L);
+
+        assertThat(response.summary().householdCount()).isEqualTo(500);
+        assertThat(householdLookup.requests).isEmpty();
+    }
+
+    @Test
+    void propertyDetailFillsMissingApartmentHouseholdCountFromComplexData() {
+        var mapper = new FakePropertyMapper();
+        mapper.detailRow = sampleDetailRow(PropertyType.APARTMENT);
+        mapper.detailRow.setHouseholdCount(null);
+        mapper.apartmentNameHints = List.of("샘플역삼아파트");
+        var householdLookup = new FakeApartmentComplexHouseholdLookup();
+        householdLookup.householdCount = 806;
+        var service = service(mapper, new FakeFavoriteMapper(), new RecordingValuationClient(), householdLookup);
+
+        var response = service.getPropertyDetail(1001L);
+
+        assertThat(response.summary().householdCount()).isEqualTo(806);
+        assertThat(householdLookup.requests).containsExactly(mapper.detailRow);
+        assertThat(householdLookup.apartmentNameHints).containsExactly(List.of("샘플역삼아파트"));
+    }
+
+    @Test
+    void propertyDetailKeepsMissingHouseholdCountForNonApartment() {
+        var mapper = new FakePropertyMapper();
+        mapper.detailRow = sampleDetailRow(PropertyType.OFFICETEL);
+        mapper.detailRow.setHouseholdCount(null);
+        var householdLookup = new FakeApartmentComplexHouseholdLookup();
+        householdLookup.householdCount = 806;
+        var service = service(mapper, new FakeFavoriteMapper(), new RecordingValuationClient(), householdLookup);
+
+        var response = service.getPropertyDetail(1001L);
+
+        assertThat(response.summary().householdCount()).isNull();
+        assertThat(householdLookup.requests).isEmpty();
+    }
+
+    @Test
     void propertyDetailReturnsFavoriteFlagForLoggedInUser() {
         var mapper = new FakePropertyMapper();
         mapper.detailRow = sampleDetailRow();
@@ -249,6 +311,22 @@ class PropertyServiceTest {
 
     private PropertyService service(PropertyMapper mapper, FavoriteMapper favoriteMapper, PropertyValuationClient valuationClient) {
         return new PropertyService(mapper, favoriteMapper, new PropertyAiEligibilityService(), valuationClient, FIXED_CLOCK);
+    }
+
+    private PropertyService service(
+            PropertyMapper mapper,
+            FavoriteMapper favoriteMapper,
+            PropertyValuationClient valuationClient,
+            ApartmentComplexHouseholdLookup householdLookup
+    ) {
+        return new PropertyService(
+                mapper,
+                favoriteMapper,
+                new PropertyAiEligibilityService(),
+                valuationClient,
+                householdLookup,
+                FIXED_CLOCK
+        );
     }
 
     private ValuationRequest valuationRequest() {
@@ -291,6 +369,7 @@ class PropertyServiceTest {
         row.setLatestDealDate(LocalDate.of(2026, 5, 20));
         row.setDealCount(2);
         row.setRecentTransactionCount(3);
+        row.setRecentYearAverageDealAmount(1_180_000_000L);
         return row;
     }
 
@@ -319,9 +398,13 @@ class PropertyServiceTest {
     }
 
     private PropertyDetailRow sampleDetailRow() {
+        return sampleDetailRow(PropertyType.APARTMENT);
+    }
+
+    private PropertyDetailRow sampleDetailRow(PropertyType propertyType) {
         var row = new PropertyDetailRow();
         row.setPropertyId(1001L);
-        row.setPropertyType(PropertyType.APARTMENT);
+        row.setPropertyType(propertyType);
         row.setName("샘플 역삼아파트");
         row.setSido("서울특별시");
         row.setSigungu("강남구");
@@ -364,6 +447,7 @@ class PropertyServiceTest {
         private final List<AdministrativeClusterRow> sigunguClusters = new ArrayList<>();
         private final List<PropertyListRow> searchRows = new ArrayList<>();
         private final List<PropertyTransactionRow> transactionRows = new ArrayList<>();
+        private List<String> apartmentNameHints = List.of();
         private PropertyType propertyType;
         private PropertyDetailRow detailRow;
         private int searchLimit;
@@ -417,8 +501,13 @@ class PropertyServiceTest {
         }
 
         @Override
-        public List<PropertyTransactionRow> findRecentTransactions(Long propertyId, int limit) {
+        public List<PropertyTransactionRow> findTransactionsByPropertyId(Long propertyId) {
             return transactionRows;
+        }
+
+        @Override
+        public List<String> findApartmentNameHintsByPropertyId(Long propertyId) {
+            return apartmentNameHints;
         }
 
         @Override
@@ -499,17 +588,35 @@ class PropertyServiceTest {
 
         private boolean valuationCalled;
         private boolean shapCalled;
+        private PropertyDetailRow valuationProperty;
+        private PropertyDetailRow shapProperty;
 
         @Override
-        public ValuationResponse valuateApartment(Long propertyId, ValuationRequest request) {
+        public ValuationResponse valuateApartment(PropertyDetailRow property, ValuationRequest request) {
             valuationCalled = true;
+            valuationProperty = property;
             return null;
         }
 
         @Override
-        public ShapResponse explainApartment(Long propertyId, ShapRequest request) {
+        public ShapResponse explainApartment(PropertyDetailRow property, ShapRequest request) {
             shapCalled = true;
+            shapProperty = property;
             return null;
+        }
+    }
+
+    private static class FakeApartmentComplexHouseholdLookup implements ApartmentComplexHouseholdLookup {
+
+        private final List<PropertyDetailRow> requests = new ArrayList<>();
+        private final List<List<String>> apartmentNameHints = new ArrayList<>();
+        private Integer householdCount;
+
+        @Override
+        public Optional<Integer> findHouseholdCount(PropertyDetailRow property, List<String> apartmentNameHints) {
+            requests.add(property);
+            this.apartmentNameHints.add(apartmentNameHints);
+            return Optional.ofNullable(householdCount);
         }
     }
 }

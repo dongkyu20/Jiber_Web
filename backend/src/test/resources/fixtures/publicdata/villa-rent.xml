@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header>
+    <resultCode>000</resultCode>
+    <resultMsg>OK</resultMsg>
+  </header>
+  <body>
+    <items>
+      <item>
+        <sggCd>11680</sggCd>
+        <umdNm>Yeoksam</umdNm>
+        <jibun>22-3</jibun>
+        <mhouseNm>Sample Villa</mhouseNm>
+        <houseType>rowhouse</houseType>
+        <excluUseAr>48.33</excluUseAr>
+        <floor>3</floor>
+        <buildYear>2015</buildYear>
+        <dealYear>2026</dealYear>
+        <dealMonth>6</dealMonth>
+        <dealDay>7</dealDay>
+        <deposit>15,000</deposit>
+        <monthlyRent>75</monthlyRent>
+      </item>
+    </items>
+    <numOfRows>10</numOfRows>
+    <pageNo>1</pageNo>
+    <totalCount>1</totalCount>
+  </body>
+</response>

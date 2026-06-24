@@ -50,7 +50,7 @@ describe('kakaoMap utilities', () => {
     })
   })
 
-  it('normalizes transaction-like map rows into one item per property with a recent-year average price', () => {
+  it('normalizes transaction-like map rows into one item per property with a recent-year sale average price', () => {
     const normalized = normalizePropertyMapItems(
       [
         {
@@ -86,7 +86,7 @@ describe('kakaoMap utilities', () => {
     expect(normalized[0].propertyId).toBe(1001)
     expect(normalized[0].latestTransaction?.dealDate).toBe('2026-06-01')
     expect(normalized[0].recentTransactionCount).toBe(2)
-    expect(normalized[0].recentYearAverageDealAmount).toBe(1100000000)
+    expect(normalized[0].recentYearAverageDealAmount).toBe(1000000000)
     expect(normalized[1].propertyId).toBe(1002)
   })
 
@@ -273,6 +273,7 @@ describe('kakaoMap utilities', () => {
   it('creates a MarkerClusterer and updates cluster marker content with property counts', () => {
     const oldClusterer = { clear: vi.fn() }
     const clusteredHandlers: Array<(clusters: unknown[]) => void> = []
+    const onClustered = vi.fn()
     const clusterMarker = { setContent: vi.fn() }
     const createdMarkers: Array<{ setMap: ReturnType<typeof vi.fn> }> = []
     const markerOptions: Array<Record<string, unknown>> = []
@@ -309,7 +310,8 @@ describe('kakaoMap utilities', () => {
       items: [
         { ...property(1001, 37.5, 127.03), recentTransactionCount: 3 },
         { ...property(1002, 37.51, 127.04), recentTransactionCount: 5 }
-      ]
+      ],
+      onClustered
     })
 
     expect(oldClusterer.clear).toHaveBeenCalled()
@@ -342,6 +344,13 @@ describe('kakaoMap utilities', () => {
       {
         getMarkers: () => createdMarkers,
         getClusterMarker: () => clusterMarker
+      }
+    ])
+
+    expect(onClustered).toHaveBeenCalledWith([
+      {
+        getMarkers: expect.any(Function),
+        getClusterMarker: expect.any(Function)
       }
     ])
 
@@ -478,5 +487,63 @@ describe('kakaoMap utilities', () => {
     expect(createdOverlays.map((overlay) => overlay.content)).not.toEqual(
       expect.arrayContaining([expect.stringContaining('낮은동')])
     )
+  })
+
+  it('skips administrative overlays that would overlap Kakao property cluster markers', () => {
+    const createdOverlays: Array<{ content: string; setMap: ReturnType<typeof vi.fn> }> = []
+    const map = {
+      id: 'map',
+      getProjection: () => ({
+        containerPointFromCoords: (latLng: { lat: number; lng: number }) => ({
+          x: (latLng.lng - 127) * 10000,
+          y: (37.6 - latLng.lat) * 10000
+        })
+      })
+    }
+    const kakaoMaps = {
+      LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
+      Marker: vi.fn(),
+      CustomOverlay: vi.fn((options: { content: string }) => {
+        const overlay = { content: options.content, setMap: vi.fn() }
+        createdOverlays.push(overlay)
+        return overlay
+      }),
+      event: {
+        addListener: vi.fn()
+      }
+    }
+    const overlappingCluster: AdministrativeCluster = {
+      clusterId: 'legal-dong-overlap',
+      level: 'LEGAL_DONG',
+      sido: '서울특별시',
+      sigungu: '강남구',
+      legalDong: '역삼동',
+      label: '역삼동',
+      centerLat: 37.5,
+      centerLng: 127.03,
+      propertyCount: 20,
+      transactionCount: 30,
+      averageDealAmount: 1000000000
+    }
+    const farCluster: AdministrativeCluster = {
+      ...overlappingCluster,
+      clusterId: 'legal-dong-far',
+      legalDong: '논현동',
+      label: '논현동',
+      centerLat: 37.52,
+      centerLng: 127.06
+    }
+
+    const overlays = syncAdministrativeClusterOverlays({
+      kakaoMaps,
+      map,
+      previousOverlays: [],
+      clusters: [overlappingCluster, farCluster],
+      reservedPoints: [{ x: 300, y: 1000 }]
+    })
+
+    expect(overlays).toHaveLength(1)
+    expect(createdOverlays[0].content).toContain('논현동')
+    expect(createdOverlays[0].content).not.toContain('역삼동')
   })
 })

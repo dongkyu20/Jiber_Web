@@ -10,6 +10,7 @@ public record PublicDataImportProperties(
         @DefaultValue("") String serviceKey,
         @DefaultValue("12") int importMonths,
         @DefaultValue("SEOUL,BUSAN") List<PublicDataTargetRegion> targetRegions,
+        @DefaultValue("SALE,RENT") List<PublicDataApiType> apiTypes,
         @DefaultValue("false") boolean enabled,
         @DefaultValue("true") boolean dryRun,
         @DefaultValue("100") int limit,
@@ -21,6 +22,13 @@ public record PublicDataImportProperties(
             @DefaultValue("") String restApiKey,
         @DefaultValue("https://dapi.kakao.com") String baseUrl
     ) {
+    }
+
+    public List<PublicDataApiType> resolvedApiTypes() {
+        if (apiTypes == null || apiTypes.isEmpty()) {
+            return List.of(PublicDataApiType.SALE, PublicDataApiType.RENT);
+        }
+        return apiTypes;
     }
 
     public void validateLiveImportSecrets() {

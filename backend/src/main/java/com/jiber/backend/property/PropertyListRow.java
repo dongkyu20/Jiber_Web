@@ -17,6 +17,7 @@ public class PropertyListRow {
     private LocalDate latestDealDate;
     private Integer dealCount;
     private Integer recentTransactionCount;
+    private Long recentYearAverageDealAmount;
     private Integer distanceM;
 
     public Long getPropertyId() {
@@ -113,6 +114,14 @@ public class PropertyListRow {
 
     public void setRecentTransactionCount(Integer recentTransactionCount) {
         this.recentTransactionCount = recentTransactionCount;
+    }
+
+    public Long getRecentYearAverageDealAmount() {
+        return recentYearAverageDealAmount;
+    }
+
+    public void setRecentYearAverageDealAmount(Long recentYearAverageDealAmount) {
+        this.recentYearAverageDealAmount = recentYearAverageDealAmount;
     }
 
     public Integer getDistanceM() {

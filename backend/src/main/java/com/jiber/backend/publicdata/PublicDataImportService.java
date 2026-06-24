@@ -2,14 +2,15 @@ package com.jiber.backend.publicdata;
 
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 @Service
 public class PublicDataImportService {
 
     private static final ZoneId SEOUL_ZONE = ZoneId.of("Asia/Seoul");
-    private static final List<PublicDataApiType> API_TYPES = List.of(PublicDataApiType.SALE, PublicDataApiType.RENT);
 
     private final PublicDataImportProperties properties;
     private final LawdCodeRegistry lawdCodeRegistry;
@@ -48,12 +49,13 @@ public class PublicDataImportService {
         var run = PublicDataImportRunRecord.started(properties, command);
         importMapper.insertImportRun(run);
         var summary = PublicDataImportSummary.empty(false);
+        var geocodingResults = new HashMap<String, GeocodingResult>();
         try {
             var lawdCodes = lawdCodeRegistry.findByRegions(properties.targetRegions());
             for (var dealMonth : recentMonths(properties.importMonths())) {
                 for (var lawdCode : lawdCodes) {
-                    for (var apiType : API_TYPES) {
-                        summary = importMonth(lawdCode, dealMonth, apiType, command, run.importRunId(), summary);
+                    for (var apiType : properties.resolvedApiTypes()) {
+                        summary = importMonth(lawdCode, dealMonth, apiType, command, run.importRunId(), summary, geocodingResults);
                         if (summary.reachedLimit(command.limit())) {
                             return finish(run, summary);
                         }
@@ -73,7 +75,8 @@ public class PublicDataImportService {
             PublicDataApiType apiType,
             PublicDataImportCommand command,
             Long importRunId,
-            PublicDataImportSummary summary
+            PublicDataImportSummary summary,
+            Map<String, GeocodingResult> geocodingResults
     ) {
         var pageNo = 1;
         while (true) {
@@ -95,19 +98,15 @@ public class PublicDataImportService {
             for (var item : page.items()) {
                 var transaction = transactionMapper.toImportedTransaction(item, apiType);
                 var address = addressNormalizer.normalize(lawdCode.sido(), lawdCode.sigungu(), item.legalDong(), item.jibun());
-                importMapper.upsertGeocodingCache(new GeocodingCacheRecord(
-                        address.addressKey(),
-                        address.fullAddress(),
-                        GeocodingStatus.PENDING,
-                        null,
-                        null,
-                        null
+                var geocoding = geocode(address, geocodingResults);
+                importMapper.upsertRawTransaction(PublicDataRawTransactionRecord.from(
+                        importRunId,
+                        lawdCode,
+                        address,
+                        transaction,
+                        geocoding.status()
                 ));
-                importMapper.upsertRawTransaction(PublicDataRawTransactionRecord.from(importRunId, lawdCode, address, transaction));
                 summary = summary.addStaged();
-                var geocoding = geocode(address);
-                importMapper.upsertGeocodingCache(GeocodingCacheRecord.from(address, geocoding));
-                importMapper.updateRawGeocodingStatus(transaction.sourceKey(), geocoding.status());
                 if (geocoding.status() == GeocodingStatus.SUCCESS) {
                     summary = summary.addGeocoded();
                 }
@@ -122,9 +121,13 @@ public class PublicDataImportService {
         }
     }
 
-    private GeocodingResult geocode(NormalizedAddress address) {
+    private GeocodingResult geocode(NormalizedAddress address, Map<String, GeocodingResult> geocodingResults) {
+        return geocodingResults.computeIfAbsent(address.addressKey(), ignored -> resolveGeocoding(address));
+    }
+
+    private GeocodingResult resolveGeocoding(NormalizedAddress address) {
         return importMapper.findGeocodingByAddressKey(address.addressKey())
-                .filter(record -> record.status() == GeocodingStatus.SUCCESS)
+                .filter(record -> record.status() != GeocodingStatus.PENDING)
                 .map(record -> new GeocodingResult(
                         address.fullAddress(),
                         record.status(),
@@ -132,7 +135,19 @@ public class PublicDataImportService {
                         record.longitude(),
                         record.failureReason()
                 ))
-                .orElseGet(() -> kakaoGeocodingClient.geocode(address));
+                .orElseGet(() -> {
+                    importMapper.upsertGeocodingCache(new GeocodingCacheRecord(
+                            address.addressKey(),
+                            address.fullAddress(),
+                            GeocodingStatus.PENDING,
+                            null,
+                            null,
+                            null
+                    ));
+                    var geocoding = kakaoGeocodingClient.geocode(address);
+                    importMapper.upsertGeocodingCache(GeocodingCacheRecord.from(address, geocoding));
+                    return geocoding;
+                });
     }
 
     private PublicDataImportSummary finish(PublicDataImportRunRecord run, PublicDataImportSummary summary) {

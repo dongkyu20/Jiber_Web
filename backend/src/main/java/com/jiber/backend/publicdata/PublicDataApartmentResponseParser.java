@@ -50,16 +50,25 @@ public class PublicDataApartmentResponseParser {
                 firstText(item, "sggCd", "LAWD_CD", "lawdCd"),
                 firstText(item, "umdNm", "legalDong"),
                 firstText(item, "jibun"),
-                firstText(item, "aptNm", "apartmentName"),
+                propertyName(item, apiType),
                 parseDecimal(firstText(item, "excluUseAr", "exclusiveAreaM2")),
                 parseInt(firstText(item, "floor"), null),
                 parseInt(firstText(item, "buildYear", "builtYear"), null),
                 dealDate,
-                apiType == PublicDataApiType.SALE ? parseAmountKrw(firstText(item, "dealAmount")) : null,
-                apiType == PublicDataApiType.RENT ? parseAmountKrw(firstText(item, "deposit", "depositAmount")) : null,
-                apiType == PublicDataApiType.RENT ? parseAmountKrw(firstText(item, "monthlyRent", "monthlyRentAmount")) : null,
+                apiType.isSale() ? parseAmountKrw(firstText(item, "dealAmount")) : null,
+                apiType.isSale() ? null : parseAmountKrw(firstText(item, "deposit", "depositAmount")),
+                apiType.isSale() ? null : parseAmountKrw(firstText(item, "monthlyRent", "monthlyRentAmount")),
                 firstNonBlank(firstText(item, "sourceSequence"), Integer.toString(sequence))
         );
+    }
+
+    private String propertyName(Element item, PublicDataApiType apiType) {
+        return switch (apiType.propertyType()) {
+            case APARTMENT -> firstNonBlank(firstText(item, "aptNm", "apartmentName"), "아파트");
+            case OFFICETEL -> firstNonBlank(firstText(item, "offiNm", "aptNm", "apartmentName"), "오피스텔");
+            case VILLA -> firstNonBlank(firstText(item, "mhouseNm", "houseName", "aptNm", "apartmentName"), "연립다세대");
+            case HOUSE -> firstNonBlank(firstText(item, "houseName", "mhouseNm", "aptNm", "apartmentName"), "주택");
+        };
     }
 
     private Element firstElement(Element parent, String name) {
