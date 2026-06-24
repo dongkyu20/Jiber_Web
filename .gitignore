@@ -53,6 +53,9 @@ venv/
 artifacts/
 model-artifacts/
 model-server/artifacts/
+model-server/data/**
+!model-server/data/
+!model-server/data/README.md
 model-server/cache/
 model-server/documents/**
 !model-server/documents/
