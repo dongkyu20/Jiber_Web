@@ -159,6 +159,80 @@ class AuthControllerTest {
     }
 
     @Test
+    void accountRecoveryDoesNotExposeWhetherAccountExists() {
+        var fixture = new Fixture();
+        var controller = fixture.controller();
+
+        var knownIdentifier = controller.recoverIdentifier(new AccountIdentifierRecoveryRequest("기존 사용자"));
+        var unknownIdentifier = controller.recoverIdentifier(new AccountIdentifierRecoveryRequest("없는 사용자"));
+        var knownPassword = controller.requestPasswordRecovery(new PasswordRecoveryRequest("existing@example.com"));
+        var unknownPassword = controller.requestPasswordRecovery(new PasswordRecoveryRequest("missing@example.com"));
+
+        assertThat(knownIdentifier.message()).isEqualTo(unknownIdentifier.message());
+        assertThat(knownPassword.message()).isEqualTo(unknownPassword.message());
+        assertThat(knownPassword.message()).contains("이메일");
+        assertThat(knownIdentifier.message()).contains("가입 이메일");
+        assertThat(fixture.authUserMapper.findByEmailCalls).isZero();
+    }
+
+    @Test
+    void directPasswordResetChangesPasswordWhenEmailAndDisplayNameMatch() {
+        var fixture = new Fixture();
+        var controller = fixture.controller();
+        var request = new MockHttpServletRequest();
+
+        var response = controller.directPasswordReset(new DirectPasswordResetRequest(
+                " EXISTING@example.com ",
+                " 기존 사용자 ",
+                "new-valid-credential-1"
+        ));
+
+        assertThat(response.message()).contains("비밀번호가 변경");
+        assertThat(fixture.refreshSessionMapper.revokedUserId).isEqualTo(1L);
+        assertThatThrownBy(() ->
+                controller.login(new EmailLoginRequest("existing@example.com", CREDENTIAL), request, new MockHttpServletResponse())
+        )
+                .isInstanceOf(ApiException.class)
+                .extracting(exception -> ((ApiException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+
+        var login = controller.login(
+                new EmailLoginRequest("existing@example.com", "new-valid-credential-1"),
+                request,
+                new MockHttpServletResponse()
+        );
+        assertThat(login.user().email()).isEqualTo("existing@example.com");
+    }
+
+    @Test
+    void directPasswordResetDoesNotRevealMismatchAndDoesNotChangePassword() {
+        var fixture = new Fixture();
+        var controller = fixture.controller();
+
+        var response = controller.directPasswordReset(new DirectPasswordResetRequest(
+                "existing@example.com",
+                "다른 이름",
+                "new-valid-credential-1"
+        ));
+
+        assertThat(response.message()).contains("입력한 정보가 가입 정보와 일치하면");
+        assertThat(fixture.refreshSessionMapper.revokedUserId).isNull();
+        assertThatThrownBy(() ->
+                controller.login(new EmailLoginRequest("existing@example.com", "new-valid-credential-1"), new MockHttpServletRequest(), new MockHttpServletResponse())
+        )
+                .isInstanceOf(ApiException.class)
+                .extracting(exception -> ((ApiException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+
+        var login = controller.login(
+                new EmailLoginRequest("existing@example.com", CREDENTIAL),
+                new MockHttpServletRequest(),
+                new MockHttpServletResponse()
+        );
+        assertThat(login.user().email()).isEqualTo("existing@example.com");
+    }
+
+    @Test
     void disabledUserLoginReturnsInvalidCredentials() {
         var fixture = new Fixture();
         var controller = fixture.controller();
@@ -377,6 +451,7 @@ class AuthControllerTest {
         private final Map<Long, AuthUserRecord> usersById = new LinkedHashMap<>();
         private long nextUserId = 1L;
         private Long lastLoginUpdatedUserId;
+        private int findByEmailCalls;
 
         @Override
         public AuthUserRecord findById(Long userId) {
@@ -385,6 +460,7 @@ class AuthControllerTest {
 
         @Override
         public AuthUserRecord findByEmail(String email) {
+            findByEmailCalls++;
             return usersByEmail.get(email);
         }
 
@@ -422,6 +498,28 @@ class AuthControllerTest {
             return 1;
         }
 
+        @Override
+        public int updatePasswordHash(Long userId, String passwordHash, OffsetDateTime updatedAt) {
+            var current = usersById.get(userId);
+            if (current == null) {
+                return 0;
+            }
+            var updated = new AuthUserRecord(
+                    current.userId(),
+                    current.email(),
+                    passwordHash,
+                    current.displayName(),
+                    current.role(),
+                    current.enabled(),
+                    current.lastLoginAt(),
+                    current.createdAt(),
+                    updatedAt
+            );
+            usersById.put(userId, updated);
+            usersByEmail.put(updated.email(), updated);
+            return 1;
+        }
+
         void insertDisabledUser(String email, String passwordHash) {
             var now = OffsetDateTime.now(FIXED_CLOCK);
             var user = new AuthUserRecord(nextUserId++, email, passwordHash, "비활성 사용자", "USER", false, now, now, now);
@@ -442,6 +540,7 @@ class AuthControllerTest {
 
         private RefreshSessionRecord byTokenHash;
         private String revokedTokenHash;
+        private Long revokedUserId;
 
         @Override
         public int insert(RefreshSessionInsertCommand command) {
@@ -471,6 +570,12 @@ class AuthControllerTest {
 
         @Override
         public int revokeSessionFamily(Long refreshSessionId, OffsetDateTime revokedAt) {
+            return 1;
+        }
+
+        @Override
+        public int revokeByUserId(Long userId, OffsetDateTime revokedAt) {
+            this.revokedUserId = userId;
             return 1;
         }
     }

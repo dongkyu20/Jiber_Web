@@ -21,6 +21,18 @@ export const noticesApi = {
     return data
   },
 
+  async adminList(params: NoticeListParams = {}): Promise<PagedResponse<NoticeSummary>> {
+    const { data } = await apiClient.get<PagedResponse<NoticeSummary>>('/admin/notices', {
+      params: compactParams(params)
+    })
+    return data
+  },
+
+  async adminGet(noticeId: string | number): Promise<NoticeDetail> {
+    const { data } = await apiClient.get<NoticeDetail>(`/admin/notices/${noticeId}`)
+    return data
+  },
+
   async create(payload: NoticeUpsertRequest): Promise<NoticeMutationResponse> {
     const { data } = await apiClient.post<NoticeMutationResponse>('/admin/notices', payload)
     return data

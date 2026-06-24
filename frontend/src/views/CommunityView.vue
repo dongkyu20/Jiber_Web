@@ -27,7 +27,7 @@ const activeTab = ref<Category>('전체')
 const tabs: Category[] = ['전체', '자유게시판', '매매후기', 'Q&A']
 
 const notices = ref<NoticeSummary[]>([])
-const noticeError = ref(false)
+const noticeError = ref('')
 
 const mockPosts: Post[] = [
   { id: 1, category: '매매후기', hot: true, title: '반포 아크로리버파크 84m² 실거주 1년 후기 (장단점 솔직 정리)', author: '리버뷰', createdAt: '2026-06-21', viewCount: 3201, commentCount: 42 },
@@ -86,7 +86,7 @@ onMounted(async () => {
     const res = await noticesApi.list({ sort: 'publishedAt,desc', page: 0, size: 10 })
     notices.value = res.items
   } catch {
-    noticeError.value = true
+    noticeError.value = '공지사항을 불러오지 못했습니다.'
   }
 })
 </script>
@@ -114,6 +114,8 @@ onMounted(async () => {
       </div>
 
       <!-- Table -->
+      <p v-if="noticeError" class="notice-error">{{ noticeError }}</p>
+
       <div class="post-table">
         <div class="post-table-head">
           <span class="col-cat">분류</span>
@@ -240,6 +242,15 @@ onMounted(async () => {
 
 .comm-tab:hover { color: var(--cream); }
 .comm-tab.active { color: var(--gold); border-bottom-color: var(--gold); font-weight: 700; }
+
+.notice-error {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(232, 80, 80, 0.2);
+  background: rgba(232, 80, 80, 0.08);
+  color: #e87a7a;
+  font-size: 0.84rem;
+}
 
 /* Table */
 .post-table {

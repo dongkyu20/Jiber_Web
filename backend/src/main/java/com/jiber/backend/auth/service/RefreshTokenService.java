@@ -3,8 +3,6 @@ package com.jiber.backend.auth.service;
 import com.jiber.backend.auth.config.*;
 import com.jiber.backend.auth.dto.*;
 import com.jiber.backend.auth.mapper.*;
-import com.jiber.backend.auth.service.*;
-
 import com.jiber.backend.common.error.ApiException;
 import com.jiber.backend.common.error.ErrorCode;
 import java.nio.charset.StandardCharsets;
@@ -83,6 +81,13 @@ public class RefreshTokenService {
             return;
         }
         refreshSessionMapper.revokeByTokenHash(hash(rawRefreshToken), OffsetDateTime.now(clock));
+    }
+
+    public void revokeAllForUser(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        refreshSessionMapper.revokeByUserId(userId, OffsetDateTime.now(clock));
     }
 
     public String hash(String rawRefreshToken) {

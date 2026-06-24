@@ -192,6 +192,11 @@ class OAuth2LoginSuccessHandlerTest {
             return 1;
         }
 
+        @Override
+        public int updatePasswordHash(Long userId, String passwordHash, OffsetDateTime updatedAt) {
+            return 0;
+        }
+
         void insertExistingUser(Long userId, String email, String passwordHash, String displayName, Boolean enabled) {
             var now = OffsetDateTime.now(FIXED_CLOCK);
             usersById.put(userId, new AuthUserRecord(userId, email, passwordHash, displayName, "USER", enabled, now, now, now));
@@ -286,6 +291,11 @@ class OAuth2LoginSuccessHandlerTest {
 
         @Override
         public int revokeSessionFamily(Long refreshSessionId, OffsetDateTime revokedAt) {
+            return 0;
+        }
+
+        @Override
+        public int revokeByUserId(Long userId, OffsetDateTime revokedAt) {
             return 0;
         }
     }

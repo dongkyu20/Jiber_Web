@@ -1,8 +1,8 @@
 package com.jiber.backend.auth.controller;
 
+import com.jiber.backend.auth.*;
 import com.jiber.backend.auth.config.*;
 import com.jiber.backend.auth.dto.*;
-import com.jiber.backend.auth.mapper.*;
 import com.jiber.backend.auth.service.*;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -63,6 +63,21 @@ public class AuthController {
         var result = authService.login(loginRequest, RefreshRequestContext.from(request));
         response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookieService.createRefreshCookie(result.refreshToken()).toString());
         return result.response();
+    }
+
+    @PostMapping("/recovery/identifier")
+    public AccountRecoveryResponse recoverIdentifier(@Valid @RequestBody AccountIdentifierRecoveryRequest recoveryRequest) {
+        return authService.recoverIdentifier(recoveryRequest);
+    }
+
+    @PostMapping("/recovery/password")
+    public AccountRecoveryResponse requestPasswordRecovery(@Valid @RequestBody PasswordRecoveryRequest recoveryRequest) {
+        return authService.requestPasswordRecovery(recoveryRequest);
+    }
+
+    @PostMapping("/recovery/password/direct")
+    public AccountRecoveryResponse directPasswordReset(@Valid @RequestBody DirectPasswordResetRequest resetRequest) {
+        return authService.directPasswordReset(resetRequest);
     }
 
     @GetMapping("/social/pending")

@@ -42,6 +42,39 @@ export interface AuthUser {
   roles: UserRole[]
 }
 
+export interface AdminUserSummary {
+  userId: number
+  email: string
+  displayName?: string | null
+  role: UserRole
+  enabled: boolean
+  lastLoginAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminUserListParams {
+  page?: number
+  size?: number
+  keyword?: string
+  role?: UserRole
+  enabled?: boolean
+  sort?: string
+}
+
+export interface AdminUserRoleUpdateRequest {
+  role: UserRole
+}
+
+export interface AdminUserEnabledUpdateRequest {
+  enabled: boolean
+}
+
+export interface AdminUserMutationResponse {
+  user: AdminUserSummary
+  message: string
+}
+
 export interface AuthMeResponse {
   authenticated: boolean
   user: AuthUser | null
@@ -61,11 +94,31 @@ export interface AuthLoginRequest {
 
 export interface AuthSignupRequest extends AuthLoginRequest {
   displayName: string
+  birthDate?: string
+  phoneNumber?: string
 }
 
 export type AuthSessionResponse = AuthRefreshResponse
 
 export interface AuthLogoutResponse {
+  message: string
+}
+
+export interface AccountIdentifierRecoveryRequest {
+  displayName: string
+}
+
+export interface PasswordRecoveryRequest {
+  email: string
+}
+
+export interface DirectPasswordResetRequest {
+  email: string
+  displayName: string
+  newPassword: string
+}
+
+export interface AccountRecoveryResponse {
   message: string
 }
 
