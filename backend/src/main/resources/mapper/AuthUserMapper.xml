@@ -78,4 +78,18 @@
             updated_at = #{updatedAt}
         WHERE user_id = #{userId}
     </update>
+
+    <update id="updateDisplayName">
+        UPDATE users
+        SET display_name = #{displayName},
+            updated_at = #{updatedAt}
+        WHERE user_id = #{userId}
+    </update>
+
+    <update id="updateEnabled">
+        UPDATE users
+        SET enabled = #{enabled},
+            updated_at = #{updatedAt}
+        WHERE user_id = #{userId}
+    </update>
 </mapper>

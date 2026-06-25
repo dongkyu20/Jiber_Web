@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  administrativePriceTone,
   boundsFromKakao,
   formatAdministrativeClusterLabel,
   mapMarkerRenderMode,
@@ -25,6 +26,27 @@ function property(propertyId: number, lat: number, lng: number): PropertyMapItem
     dealCount: 1,
     recentTransactionCount: 1,
     aiAvailable: true
+  }
+}
+
+function administrativeCluster(
+  clusterId: string,
+  averageDealAmount: number | null,
+  overrides: Partial<AdministrativeCluster> = {}
+): AdministrativeCluster {
+  return {
+    clusterId,
+    level: 'LEGAL_DONG',
+    sido: 'Seoul',
+    sigungu: 'Gangnam-gu',
+    legalDong: clusterId,
+    label: clusterId,
+    centerLat: 37.5,
+    centerLng: 127.03,
+    propertyCount: 10,
+    transactionCount: 10,
+    averageDealAmount,
+    ...overrides
   }
 }
 
@@ -136,8 +158,8 @@ describe('kakaoMap utilities', () => {
     expect(createdOverlays[0].content.className).toContain('map-property-marker')
     expect(createdOverlays[0].content.className).toContain('is-selected')
     expect(createdOverlays[0].content.textContent).toContain('경희궁롯데캐슬')
-    expect(createdOverlays[0].content.textContent).toContain('매매 평균 11억 원')
-    expect(createdOverlays[0].content.textContent).toContain('전세 평균 7.8억 원')
+    expect(createdOverlays[0].content.textContent).toContain('매매 평균 11억원')
+    expect(createdOverlays[0].content.textContent).toContain('전세 평균 7.8억원')
 
     createdOverlays[0].content.dispatchEvent(new MouseEvent('click'))
 
@@ -349,7 +371,7 @@ describe('kakaoMap utilities', () => {
       averageDealAmount: 1500000000
     }
 
-    expect(formatAdministrativeClusterLabel(cluster)).toBe('역삼동\n평균 15억 원\n거래 1,234건')
+    expect(formatAdministrativeClusterLabel(cluster)).toBe('역삼동\n평균 15억원\n거래 1,234건')
   })
 
   it('formats administrative cluster labels without average deal amount', () => {
@@ -368,6 +390,19 @@ describe('kakaoMap utilities', () => {
     }
 
     expect(formatAdministrativeClusterLabel(cluster)).toBe('강남구\n평균 정보 없음\n거래 0건')
+  })
+
+  it('maps administrative average deal amounts to relative price tones', () => {
+    const low = administrativeCluster('low', 100000000)
+    const middle = administrativeCluster('middle', 300000000)
+    const high = administrativeCluster('high', 500000000)
+    const unknown = administrativeCluster('unknown', null)
+
+    expect(administrativePriceTone(low, [low, middle, high, unknown])).toBe('price-low')
+    expect(administrativePriceTone(middle, [low, middle, high, unknown])).toBe('price-medium')
+    expect(administrativePriceTone(high, [low, middle, high, unknown])).toBe('price-high')
+    expect(administrativePriceTone(unknown, [low, middle, high, unknown])).toBeNull()
+    expect(administrativePriceTone(low, [low])).toBe('price-medium')
   })
 
   it('sums recent transaction counts defensively', () => {
@@ -492,6 +527,115 @@ describe('kakaoMap utilities', () => {
     expect(onClusterClick).toHaveBeenCalledWith(clickedCluster)
   })
 
+  it('keeps Kakao property cluster badges uncolored when price tone is disabled', () => {
+    const clusteredHandlers: Array<(clusters: unknown[]) => void> = []
+    const createdMarkers: Array<{ setMap: ReturnType<typeof vi.fn> }> = []
+    const clusterMarker = { setContent: vi.fn() }
+    const addMarkers = vi.fn()
+    const map = { id: 'map' }
+    const kakaoMaps = {
+      LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
+      Size: vi.fn((width: number, height: number) => ({ width, height })),
+      Point: vi.fn((x: number, y: number) => ({ x, y })),
+      MarkerImage: vi.fn((src: string) => ({ src })),
+      Marker: vi.fn(() => {
+        const marker = { setMap: vi.fn() }
+        createdMarkers.push(marker)
+        return marker
+      }),
+      MarkerClusterer: vi.fn(() => ({
+        addMarkers,
+        clear: vi.fn()
+      })),
+      event: {
+        addListener: vi.fn((_target: unknown, eventName: string, handler: (clusters: unknown[]) => void) => {
+          if (eventName === 'clustered') {
+            clusteredHandlers.push(handler)
+          }
+        })
+      }
+    }
+
+    syncKakaoPropertyClusters({
+      kakaoMaps,
+      map,
+      previousClusterer: null,
+      items: [
+        { ...property(1001, 37.5, 127.03), recentYearAverageDealAmount: 100000000 },
+        { ...property(1002, 37.51, 127.04), recentYearAverageDealAmount: 900000000 }
+      ]
+    })
+
+    clusteredHandlers[0]([
+      {
+        getMarkers: () => createdMarkers,
+        getClusterMarker: () => clusterMarker
+      }
+    ])
+
+    const content = clusterMarker.setContent.mock.calls[0][0] as HTMLElement
+    expect(content.className).toContain('map-property-cluster')
+    expect(content.className).not.toContain('price-')
+  })
+
+  it('colors Kakao property cluster badges by relative average price when enabled', () => {
+    const clusteredHandlers: Array<(clusters: unknown[]) => void> = []
+    const createdMarkers: Array<{ setMap: ReturnType<typeof vi.fn> }> = []
+    const lowClusterMarker = { setContent: vi.fn() }
+    const highClusterMarker = { setContent: vi.fn() }
+    const addMarkers = vi.fn()
+    const map = { id: 'map' }
+    const kakaoMaps = {
+      LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
+      Size: vi.fn((width: number, height: number) => ({ width, height })),
+      Point: vi.fn((x: number, y: number) => ({ x, y })),
+      MarkerImage: vi.fn((src: string) => ({ src })),
+      Marker: vi.fn(() => {
+        const marker = { setMap: vi.fn() }
+        createdMarkers.push(marker)
+        return marker
+      }),
+      MarkerClusterer: vi.fn(() => ({
+        addMarkers,
+        clear: vi.fn()
+      })),
+      event: {
+        addListener: vi.fn((_target: unknown, eventName: string, handler: (clusters: unknown[]) => void) => {
+          if (eventName === 'clustered') {
+            clusteredHandlers.push(handler)
+          }
+        })
+      }
+    }
+
+    syncKakaoPropertyClusters({
+      kakaoMaps,
+      map,
+      previousClusterer: null,
+      showPriceTone: true,
+      items: [
+        { ...property(1001, 37.5, 127.03), recentYearAverageDealAmount: 100000000 },
+        { ...property(1002, 37.51, 127.04), recentYearAverageDealAmount: 200000000 },
+        { ...property(1003, 37.52, 127.05), recentYearAverageDealAmount: 900000000 },
+        { ...property(1004, 37.53, 127.06), recentYearAverageDealAmount: 1000000000 }
+      ]
+    })
+
+    clusteredHandlers[0]([
+      {
+        getMarkers: () => [createdMarkers[0], createdMarkers[1]],
+        getClusterMarker: () => lowClusterMarker
+      },
+      {
+        getMarkers: () => [createdMarkers[2], createdMarkers[3]],
+        getClusterMarker: () => highClusterMarker
+      }
+    ])
+
+    expect((lowClusterMarker.setContent.mock.calls[0][0] as HTMLElement).className).toContain('price-low')
+    expect((highClusterMarker.setContent.mock.calls[0][0] as HTMLElement).className).toContain('price-high')
+  })
+
   it('clears old administrative overlays and creates Korean cluster content', () => {
     const oldOverlay = { setMap: vi.fn() }
     const createdOverlays: Array<{ content: HTMLElement; setMap: ReturnType<typeof vi.fn> }> = []
@@ -537,13 +681,14 @@ describe('kakaoMap utilities', () => {
       map,
       position: { lat: 37.5, lng: 127.03 },
       content: createdOverlays[0].content,
-      yAnchor: 0.5
+      yAnchor: 0.5,
+      zIndex: 12
     })
     expect(createdOverlays[0].content.className).toContain('map-admin-cluster')
     expect(createdOverlays[0].content.dataset.clusterId).toBe('legal-dong-1168010100"><img src=x onerror=alert(1)>')
     expect(createdOverlays[0].content.textContent).toContain('<img src=x onerror=alert(1)>')
     expect(createdOverlays[0].content.querySelector('img')).toBeNull()
-    expect(createdOverlays[0].content.textContent).toContain('평균 15억 원')
+    expect(createdOverlays[0].content.textContent).toContain('평균 15억원')
     expect(createdOverlays[0].content.textContent).toContain('거래 1,234건')
 
     createdOverlays[0].content.dispatchEvent(new MouseEvent('click'))

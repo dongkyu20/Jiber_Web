@@ -34,6 +34,7 @@ const loading = ref(false)
 const errorMessage = ref('')
 const items = ref<PropertyMapItem[]>([])
 const administrativeClusters = ref<AdministrativeCluster[]>([])
+const showAdministrativePriceLayer = ref(false)
 const currentViewport = ref<MapViewport>({ ...SEOUL_SEED_VIEWPORT })
 const selectedPropertyId = ref<number | null>(null)
 const searchKeyword = ref('')
@@ -588,6 +589,21 @@ onBeforeUnmount(() => {
             </label>
           </div>
         </fieldset>
+
+        <fieldset>
+          <legend>지도 표시</legend>
+          <label class="check-row">
+            <input
+              v-model="showAdministrativePriceLayer"
+              data-test="administrative-price-layer-toggle"
+              type="checkbox"
+            />
+            <span>평균 거래금액 색상</span>
+          </label>
+        </fieldset>
+
+        <label class="field-label" for="zoom-level">지도 확대 단계 ({{ zoomLevel }})</label>
+        <input id="zoom-level" v-model.number="zoomLevel" min="1" max="14" type="range" />
       </div>
 
       <button class="search-area-btn" type="button" :disabled="loading" @click="resetToVisibleArea">
@@ -664,6 +680,7 @@ onBeforeUnmount(() => {
       <KakaoMapPanel
         :items="items"
         :administrative-clusters="administrativeClusters"
+        :show-administrative-price-layer="showAdministrativePriceLayer"
         :selected-property-id="selectedPropertyId"
         :focus-target="mapFocusTarget"
         :focus-zoom-level="zoomLevel"

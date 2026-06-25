@@ -51,6 +51,7 @@ Public frontend routes:
 Protected frontend routes:
 
 - `/favorites`: `USER` or `ADMIN`
+- `/mypage`: `USER` or `ADMIN`
 - `/admin`: `ADMIN`
 - `/account/social-connections`: `USER` or `ADMIN`
 
@@ -79,6 +80,9 @@ Base path: `/api/v1`
 | Social signup | `POST /auth/social/signup` | Pending social cookie | Creates a Jiber account, links the pending provider, and starts a session. |
 | Social link | `POST /auth/social/link` | Pending social cookie + email/password re-auth | Links the pending provider to an existing account only after the account owner verifies email/password. |
 | Social account list | `GET /auth/social-accounts` | `USER` or `ADMIN` | Lists linked providers for the current account. |
+| Account profile update | `PATCH /auth/account/profile` | `USER` or `ADMIN` | Updates the current user's display name only. |
+| Account password change | `PATCH /auth/account/password` | `USER` or `ADMIN` | Requires current password, updates password hash, and revokes all refresh sessions. |
+| Account deactivation | `DELETE /auth/account/deactivate` | `USER` or `ADMIN` | Requires current password, sets `enabled=false`, revokes all refresh sessions, and clears refresh cookie. |
 | Refresh | `POST /auth/refresh` | Refresh cookie | Requires valid refresh cookie and allowed origin. |
 | Logout | `POST /auth/logout` | Refresh cookie if present | Idempotent; invalidates current refresh state when available and clears cookie. |
 
@@ -289,6 +293,98 @@ Rules:
 - Missing access token returns `200` with `authenticated: false`.
 - Expired access token should return `200` with `authenticated: false`; the frontend may then attempt refresh.
 - Malformed or suspicious tokens may return `401 AUTH_REQUIRED`.
+
+### Account Profile Update
+
+`PATCH /api/v1/auth/account/profile`
+
+Requires authenticated `USER` or `ADMIN`.
+
+Draft request:
+
+```json
+{
+  "displayName": "새 닉네임"
+}
+```
+
+Draft response:
+
+```json
+{
+  "userId": 1,
+  "email": "user@example.com",
+  "displayName": "새 닉네임",
+  "roles": ["USER"]
+}
+```
+
+Rules:
+
+- The endpoint updates only the current authenticated user's display name.
+- Blank display names return `400 VALIDATION_FAILED`.
+- The frontend updates the in-memory user after success.
+
+### Account Password Change
+
+`PATCH /api/v1/auth/account/password`
+
+Requires authenticated `USER` or `ADMIN`.
+
+Draft request:
+
+```json
+{
+  "currentPassword": "current-password-from-form",
+  "newPassword": "new-password-from-form"
+}
+```
+
+Draft response:
+
+```json
+{
+  "message": "비밀번호가 변경되었습니다. 다시 로그인해 주세요."
+}
+```
+
+Rules:
+
+- The current password must match the current account password hash.
+- The new password follows the same password policy as signup.
+- On success, the backend updates the password hash and revokes all refresh sessions for the user.
+- The frontend clears the in-memory access token/user and sends the user to login after success.
+- Wrong current password returns `401 INVALID_CREDENTIALS` without revealing extra detail.
+
+### Account Deactivation
+
+`DELETE /api/v1/auth/account/deactivate`
+
+Requires authenticated `USER` or `ADMIN`.
+
+Draft request:
+
+```json
+{
+  "password": "current-password-from-form"
+}
+```
+
+Draft response:
+
+```json
+{
+  "message": "회원탈퇴가 완료되었습니다."
+}
+```
+
+Rules:
+
+- Account deactivation is a soft withdrawal: `users.enabled=false`.
+- The current password must match before deactivation.
+- On success, the backend revokes all refresh sessions for the user and clears the refresh cookie.
+- The frontend clears the in-memory access token/user and sends the user to the public home route.
+- Wrong current password returns `401 INVALID_CREDENTIALS` without revealing extra detail.
 
 ### Refresh
 

@@ -104,6 +104,23 @@ export interface AuthLogoutResponse {
   message: string
 }
 
+export interface UpdateProfileRequest {
+  displayName: string
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
+export interface DeactivateAccountRequest {
+  password: string
+}
+
+export interface AccountMutationResponse {
+  message: string
+}
+
 export interface AccountIdentifierRecoveryRequest {
   displayName: string
 }
@@ -369,6 +386,27 @@ export interface ChatResponse {
     hybrid: boolean
     rerank: boolean
   }
+}
+
+export interface NewsFeedItem {
+  title: string
+  summary: string
+  naverLink: string
+  originalLink?: string | null
+  publishedAt?: string | null
+  source: string
+}
+
+export interface NewsFeedResponse {
+  available: boolean
+  keyword: string
+  message: string
+  items: NewsFeedItem[]
+}
+
+export interface NewsSearchParams {
+  query?: string
+  display?: number
 }
 
 export interface FavoriteApartmentItem {

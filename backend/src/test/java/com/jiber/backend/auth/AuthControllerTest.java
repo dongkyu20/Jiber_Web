@@ -18,10 +18,14 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 class AuthControllerTest {
@@ -246,6 +250,85 @@ class AuthControllerTest {
     }
 
     @Test
+    void updateProfileChangesDisplayNameForCurrentUser() {
+        var fixture = new Fixture();
+        var controller = fixture.controller();
+
+        var body = controller.updateProfile(auth(1L), new UpdateProfileRequest(" New Name "));
+
+        assertThat(body.email()).isEqualTo("existing@example.com");
+        assertThat(body.displayName()).isEqualTo("New Name");
+        assertThat(fixture.authUserMapper.findById(1L).displayName()).isEqualTo("New Name");
+    }
+
+    @Test
+    void changePasswordRequiresCurrentPasswordAndRevokesRefreshSessions() {
+        var fixture = new Fixture();
+        var controller = fixture.controller();
+
+        var wrongPassword = catchApiException(() ->
+                controller.changePassword(auth(1L), new ChangePasswordRequest("wrong-credential-1", "new-valid-credential-1"))
+        );
+
+        assertThat(wrongPassword.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+        assertThat(fixture.refreshSessionMapper.revokedUserId).isNull();
+
+        var body = controller.changePassword(auth(1L), new ChangePasswordRequest(CREDENTIAL, "new-valid-credential-1"));
+
+        assertThat(body.message()).contains("비밀번호");
+        assertThat(fixture.refreshSessionMapper.revokedUserId).isEqualTo(1L);
+        assertThatThrownBy(() ->
+                controller.login(
+                        new EmailLoginRequest("existing@example.com", CREDENTIAL),
+                        new MockHttpServletRequest(),
+                        new MockHttpServletResponse()
+                )
+        )
+                .isInstanceOf(ApiException.class)
+                .extracting(exception -> ((ApiException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+
+        var login = controller.login(
+                new EmailLoginRequest("existing@example.com", "new-valid-credential-1"),
+                new MockHttpServletRequest(),
+                new MockHttpServletResponse()
+        );
+        assertThat(login.user().email()).isEqualTo("existing@example.com");
+    }
+
+    @Test
+    void deactivateAccountDisablesUserRevokesSessionsAndClearsCookie() {
+        var fixture = new Fixture();
+        var controller = fixture.controller();
+        var response = new MockHttpServletResponse();
+
+        var body = controller.deactivateAccount(
+                "raw-refresh-token",
+                auth(1L),
+                new DeactivateAccountRequest(CREDENTIAL),
+                response
+        );
+
+        assertThat(body.message()).contains("회원탈퇴");
+        assertThat(fixture.authUserMapper.findById(1L).enabled()).isFalse();
+        assertThat(fixture.refreshSessionMapper.revokedUserId).isEqualTo(1L);
+        assertThat(response.getHeader("Set-Cookie"))
+                .contains("JIBER_REFRESH_TOKEN=")
+                .contains("Max-Age=0")
+                .contains("HttpOnly");
+        assertThatThrownBy(() ->
+                controller.login(
+                        new EmailLoginRequest("existing@example.com", CREDENTIAL),
+                        new MockHttpServletRequest(),
+                        new MockHttpServletResponse()
+                )
+        )
+                .isInstanceOf(ApiException.class)
+                .extracting(exception -> ((ApiException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    @Test
     void socialPendingReturnsSafePreviewFromPendingCookie() {
         var fixture = new Fixture();
         fixture.authUserMapper.insertExistingUser(
@@ -352,6 +435,20 @@ class AuthControllerTest {
 
     private interface ThrowingRunnable {
         void run();
+    }
+
+    private UsernamePasswordAuthenticationToken auth(Long userId) {
+        var principal = new AuthUserPrincipal(
+                userId,
+                "existing@example.com",
+                "Existing User",
+                Set.of("USER")
+        );
+        return new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+        );
     }
 
     private static class Fixture {
@@ -511,6 +608,48 @@ class AuthControllerTest {
                     current.displayName(),
                     current.role(),
                     current.enabled(),
+                    current.lastLoginAt(),
+                    current.createdAt(),
+                    updatedAt
+            );
+            usersById.put(userId, updated);
+            usersByEmail.put(updated.email(), updated);
+            return 1;
+        }
+
+        public int updateDisplayName(Long userId, String displayName, OffsetDateTime updatedAt) {
+            var current = usersById.get(userId);
+            if (current == null) {
+                return 0;
+            }
+            var updated = new AuthUserRecord(
+                    current.userId(),
+                    current.email(),
+                    current.passwordHash(),
+                    displayName,
+                    current.role(),
+                    current.enabled(),
+                    current.lastLoginAt(),
+                    current.createdAt(),
+                    updatedAt
+            );
+            usersById.put(userId, updated);
+            usersByEmail.put(updated.email(), updated);
+            return 1;
+        }
+
+        public int updateEnabled(Long userId, Boolean enabled, OffsetDateTime updatedAt) {
+            var current = usersById.get(userId);
+            if (current == null) {
+                return 0;
+            }
+            var updated = new AuthUserRecord(
+                    current.userId(),
+                    current.email(),
+                    current.passwordHash(),
+                    current.displayName(),
+                    current.role(),
+                    enabled,
                     current.lastLoginAt(),
                     current.createdAt(),
                     updatedAt

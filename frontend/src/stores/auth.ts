@@ -1,14 +1,17 @@
 import { defineStore } from 'pinia'
 
 import { authApi } from '@/api/auth'
-import { getApiErrorMessage } from '@/api/client'
+import { getApiError, getApiErrorMessage } from '@/api/client'
 import type {
   AuthLoginRequest,
   AuthSessionResponse,
   AuthSignupRequest,
   AuthUser,
+  ChangePasswordRequest,
+  DeactivateAccountRequest,
   SocialLinkRequest,
-  SocialSignupRequest
+  SocialSignupRequest,
+  UpdateProfileRequest
 } from '@/api/types'
 
 interface AuthSessionPayload {
@@ -203,6 +206,89 @@ export const useAuthStore = defineStore('auth', {
         this.user = meResponse.user
       } else {
         this.clearSession()
+      }
+    },
+
+    async refreshSessionForRetry(): Promise<boolean> {
+      try {
+        const refreshResponse = await authApi.refresh()
+        this.setSession({
+          accessToken: refreshResponse.accessToken,
+          user: refreshResponse.user
+        })
+        this.bootstrapped = true
+        return true
+      } catch {
+        this.clearSession()
+        this.bootstrapped = true
+        return false
+      }
+    },
+
+    async withAuthRefreshRetry<T>(operation: () => Promise<T>): Promise<T> {
+      try {
+        return await operation()
+      } catch (error) {
+        if (getApiError(error)?.code !== 'AUTH_REQUIRED') {
+          throw error
+        }
+
+        const restored = await this.refreshSessionForRetry()
+        if (!restored) {
+          throw error
+        }
+
+        return operation()
+      }
+    },
+
+    async updateProfile(payload: UpdateProfileRequest) {
+      this.loading = true
+      this.errorMessage = null
+
+      try {
+        const user = await this.withAuthRefreshRetry(() => authApi.updateProfile(payload))
+        this.user = user
+        return user
+      } catch (error) {
+        this.errorMessage = getApiErrorMessage(error, '닉네임을 변경하지 못했습니다.')
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async changePassword(payload: ChangePasswordRequest) {
+      this.loading = true
+      this.errorMessage = null
+
+      try {
+        const response = await this.withAuthRefreshRetry(() => authApi.changePassword(payload))
+        this.clearSession()
+        this.bootstrapped = true
+        return response
+      } catch (error) {
+        this.errorMessage = getApiErrorMessage(error, '비밀번호를 변경하지 못했습니다.')
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async deactivateAccount(payload: DeactivateAccountRequest) {
+      this.loading = true
+      this.errorMessage = null
+
+      try {
+        const response = await this.withAuthRefreshRetry(() => authApi.deactivateAccount(payload))
+        this.clearSession()
+        this.bootstrapped = true
+        return response
+      } catch (error) {
+        this.errorMessage = getApiErrorMessage(error, '회원탈퇴를 처리하지 못했습니다.')
+        throw error
+      } finally {
+        this.loading = false
       }
     },
 

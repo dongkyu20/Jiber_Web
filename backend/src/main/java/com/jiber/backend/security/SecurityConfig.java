@@ -50,10 +50,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/recovery/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/social/signup", "/api/v1/auth/social/link").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
+                        .requestMatchers("/api/v1/auth/account/**").authenticated()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/properties/map",
                                 "/api/v1/properties/search",
                                 "/api/v1/properties/*",
+                                "/api/v1/news",
                                 "/api/v1/notices",
                                 "/api/v1/notices/*",
                                 "/api/v1/community/posts",

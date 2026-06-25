@@ -45,6 +45,23 @@ class JwtTokenServiceTest {
     }
 
     @Test
+    void issuesAndValidatesAccessTokenWithKoreanDisplayName() {
+        var properties = new JwtTokenProperties(
+                "jiber-test",
+                "test-secret-with-enough-entropy-for-hmac",
+                900,
+                "test"
+        );
+        var service = JwtTokenService.forTesting(properties, new ObjectMapper(), FIXED_CLOCK);
+        var principal = new AuthUserPrincipal(1L, "user@example.com", "코덱스 확인", Set.of("USER"));
+
+        var issuedToken = service.issueAccessToken(principal);
+
+        var parsedPrincipal = service.parseAccessToken(issuedToken.token()).orElseThrow();
+        assertThat(parsedPrincipal.displayName()).isEqualTo("코덱스 확인");
+    }
+
+    @Test
     void rejectsBlankJwtSecretOutsideLocalLikeEnvironments() {
         var properties = new JwtTokenProperties("jiber-prod", "", 900, "prod");
 

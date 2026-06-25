@@ -6,6 +6,7 @@ import brandLogoUrl from '@/assets/brand/jiper-estate-real-logo-cropped.png'
 import { getOAuthStartUrl, type OAuthProvider } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { authErrorMessage } from '@/views/authHelpers'
 
 const authStore = useAuthStore()
 const uiStore = useUiStore()
@@ -79,8 +80,11 @@ async function submit() {
     })
     uiStore.closeAll()
     await router.push('/map')
-  } catch {
-    errorMessage.value = '회원가입을 완료하지 못했습니다. 이미 사용 중인 이메일일 수 있습니다.'
+  } catch (error) {
+    errorMessage.value = authErrorMessage(
+      error,
+      '회원가입을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+    )
   }
 }
 </script>

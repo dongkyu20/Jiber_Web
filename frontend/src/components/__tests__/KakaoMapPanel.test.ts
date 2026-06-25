@@ -40,7 +40,7 @@ const kakaoMock = vi.hoisted(() => {
       clear: ReturnType<typeof vi.fn>
       setMap: ReturnType<typeof vi.fn>
     }>,
-    overlays: [] as Array<{ setMap: ReturnType<typeof vi.fn>; content: string | HTMLElement }>
+    overlays: [] as Array<{ setMap: ReturnType<typeof vi.fn>; content: string | HTMLElement; zIndex?: number }>
   }
 
   const maps = {
@@ -67,10 +67,11 @@ const kakaoMock = vi.hoisted(() => {
       state.clusterers.push(clusterer)
       return clusterer
     }),
-    CustomOverlay: vi.fn((options: { content: string | HTMLElement }) => {
+    CustomOverlay: vi.fn((options: { content: string | HTMLElement; zIndex?: number }) => {
       const overlay = {
         setMap: vi.fn(),
-        content: options.content
+        content: options.content,
+        zIndex: options.zIndex
       }
       state.overlays.push(overlay)
       return overlay
@@ -137,7 +138,8 @@ function property(propertyId: number): PropertyMapItem {
 function administrativeCluster(
   clusterId: string,
   level: AdministrativeCluster['level'],
-  label: string
+  label: string,
+  overrides: Partial<AdministrativeCluster> = {}
 ): AdministrativeCluster {
   return {
     clusterId,
@@ -150,7 +152,8 @@ function administrativeCluster(
     centerLng: 127.03,
     propertyCount: 12,
     transactionCount: 34,
-    averageDealAmount: 1500000000
+    averageDealAmount: 1500000000,
+    ...overrides
   }
 }
 
@@ -242,8 +245,8 @@ describe('KakaoMapPanel', () => {
       expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(1)
       expect(kakaoMock.state.overlays[0].content).toBeInstanceOf(HTMLElement)
       expect(kakaoMock.state.overlays[0].content.textContent).toContain('테스트 단지 1001')
-      expect(kakaoMock.state.overlays[0].content.textContent).toContain('매매 평균 11억 원')
-      expect(kakaoMock.state.overlays[0].content.textContent).toContain('전세 평균 7.8억 원')
+      expect(kakaoMock.state.overlays[0].content.textContent).toContain('매매 평균 11억원')
+      expect(kakaoMock.state.overlays[0].content.textContent).toContain('전세 평균 7.8억원')
 
       kakaoMock.state.idleHandler?.()
       vi.advanceTimersByTime(180)
@@ -356,6 +359,85 @@ describe('KakaoMapPanel', () => {
     expect(firstAdminOverlay.setMap).toHaveBeenCalledWith(null)
     expect(kakaoMock.maps.MarkerClusterer).toHaveBeenCalledTimes(2)
     expect(kakaoMock.maps.CustomOverlay).toHaveBeenCalledTimes(2)
+  })
+
+  it('colors administrative cluster badges without drawing price area ellipses', async () => {
+    kakaoMock.state.hasKey = true
+    kakaoMock.state.mapInstance.getLevel.mockReturnValue(5)
+
+    const lowCluster = administrativeCluster('legal-dong-low', 'LEGAL_DONG', 'Low', {
+      centerLat: 37.5,
+      centerLng: 127.03,
+      averageDealAmount: 900000000
+    })
+    const highCluster = administrativeCluster('legal-dong-high', 'LEGAL_DONG', 'High', {
+      centerLat: 37.52,
+      centerLng: 127.06,
+      transactionCount: 80,
+      averageDealAmount: 1800000000
+    })
+
+    const wrapper = mount(KakaoMapPanel, {
+      props: {
+        items: [property(1001), property(1002)],
+        selectedPropertyId: null,
+        administrativeClusters: [lowCluster, highCluster],
+        showAdministrativePriceLayer: false
+      }
+    })
+
+    await flushPromises()
+
+    expect(
+      kakaoMock.state.overlays.some(
+        (overlay) => overlay.content instanceof HTMLElement && overlay.content.className.includes('map-admin-price-area')
+      )
+    ).toBe(false)
+    expect(wrapper.find('[data-test="administrative-price-legend"]').exists()).toBe(false)
+
+    const propertyClusterMarkerOff = { setContent: vi.fn() }
+    kakaoMock.state.clusteredHandlers[0]([
+      {
+        getMarkers: () => kakaoMock.state.markers,
+        getClusterMarker: () => propertyClusterMarkerOff
+      }
+    ])
+    expect((propertyClusterMarkerOff.setContent.mock.calls[0][0] as HTMLElement).className).not.toContain('price-')
+
+    await wrapper.setProps({ showAdministrativePriceLayer: true })
+    await flushPromises()
+
+    const propertyClusterMarkerOn = { setContent: vi.fn() }
+    kakaoMock.state.clusteredHandlers[kakaoMock.state.clusteredHandlers.length - 1]([
+      {
+        getMarkers: () => kakaoMock.state.markers,
+        getClusterMarker: () => propertyClusterMarkerOn
+      }
+    ])
+    expect((propertyClusterMarkerOn.setContent.mock.calls[0][0] as HTMLElement).className).toContain(
+      'is-price-layered'
+    )
+
+    const priceAreas = kakaoMock.state.overlays.filter(
+      (overlay) => overlay.content instanceof HTMLElement && overlay.content.className.includes('map-admin-price-area')
+    )
+    expect(priceAreas).toHaveLength(0)
+
+    const coloredClusters = kakaoMock.state.overlays.filter(
+      (overlay) => overlay.content instanceof HTMLElement && overlay.content.className.includes('map-admin-cluster')
+    )
+    expect(coloredClusters.some((overlay) => (overlay.content as HTMLElement).className.includes('price-low'))).toBe(
+      true
+    )
+    expect(coloredClusters.some((overlay) => (overlay.content as HTMLElement).className.includes('price-high'))).toBe(
+      true
+    )
+    expect(wrapper.find('[data-test="administrative-price-legend"]').exists()).toBe(true)
+
+    await wrapper.setProps({ showAdministrativePriceLayer: false })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="administrative-price-legend"]').exists()).toBe(false)
   })
 
   it('zooms to the clicked Kakao property cluster bounds', async () => {

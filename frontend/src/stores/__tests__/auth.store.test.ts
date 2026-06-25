@@ -138,6 +138,136 @@ describe('useAuthStore', () => {
     expect(sessionStorage.getItem('accessToken')).toBeNull()
   })
 
+  it('updates the current user profile in memory', async () => {
+    vi.spyOn(authApi, 'updateProfile').mockResolvedValueOnce({
+      userId: 1,
+      email: 'user@example.com',
+      displayName: 'New Nickname',
+      roles: ['USER']
+    })
+
+    const store = useAuthStore()
+    store.setSession({
+      accessToken: 'memory-only-token',
+      user: {
+        userId: 1,
+        email: 'user@example.com',
+        displayName: 'Old Nickname',
+        roles: ['USER']
+      }
+    })
+
+    await store.updateProfile({ displayName: 'New Nickname' })
+
+    expect(store.accessToken).toBe('memory-only-token')
+    expect(store.user?.displayName).toBe('New Nickname')
+  })
+
+  it('clears the session after password change because refresh sessions are revoked', async () => {
+    vi.spyOn(authApi, 'changePassword').mockResolvedValueOnce({
+      message: '비밀번호가 변경되었습니다.'
+    })
+
+    const store = useAuthStore()
+    store.setSession({
+      accessToken: 'memory-only-token',
+      user: {
+        userId: 1,
+        email: 'user@example.com',
+        displayName: 'Test User',
+        roles: ['USER']
+      }
+    })
+
+    await store.changePassword({
+      currentPassword: 'password-8',
+      newPassword: 'new-password-8'
+    })
+
+    expect(store.accessToken).toBeNull()
+    expect(store.user).toBeNull()
+    expect(store.bootstrapped).toBe(true)
+  })
+
+  it('refreshes the access token once and retries password change when authentication expired', async () => {
+    const expiredAuthError = {
+      isAxiosError: true,
+      response: {
+        status: 401,
+        data: {
+          code: 'AUTH_REQUIRED',
+          message: '로그인이 필요합니다.',
+          path: '/api/v1/auth/account/password',
+          timestamp: '2026-06-25T00:00:00+09:00'
+        }
+      }
+    }
+    const payload = {
+      currentPassword: 'password-8',
+      newPassword: 'new-password-8'
+    }
+    const refreshSpy = vi.spyOn(authApi, 'refresh').mockResolvedValueOnce({
+      accessToken: 'refreshed-token',
+      tokenType: 'Bearer',
+      expiresIn: 900,
+      user: {
+        userId: 1,
+        email: 'user@example.com',
+        displayName: 'Test User',
+        roles: ['USER']
+      }
+    })
+    const changePasswordSpy = vi
+      .spyOn(authApi, 'changePassword')
+      .mockRejectedValueOnce(expiredAuthError)
+      .mockResolvedValueOnce({
+        message: '비밀번호가 변경되었습니다.'
+      })
+
+    const store = useAuthStore()
+    store.setSession({
+      accessToken: 'expired-token',
+      user: {
+        userId: 1,
+        email: 'user@example.com',
+        displayName: 'Test User',
+        roles: ['USER']
+      }
+    })
+
+    await store.changePassword(payload)
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1)
+    expect(changePasswordSpy).toHaveBeenCalledTimes(2)
+    expect(changePasswordSpy).toHaveBeenNthCalledWith(2, payload)
+    expect(store.accessToken).toBeNull()
+    expect(store.user).toBeNull()
+    expect(store.bootstrapped).toBe(true)
+  })
+
+  it('clears the session after account deactivation', async () => {
+    vi.spyOn(authApi, 'deactivateAccount').mockResolvedValueOnce({
+      message: '회원탈퇴가 완료되었습니다.'
+    })
+
+    const store = useAuthStore()
+    store.setSession({
+      accessToken: 'memory-only-token',
+      user: {
+        userId: 1,
+        email: 'user@example.com',
+        displayName: 'Test User',
+        roles: ['USER']
+      }
+    })
+
+    await store.deactivateAccount({ password: 'password-8' })
+
+    expect(store.accessToken).toBeNull()
+    expect(store.user).toBeNull()
+    expect(store.bootstrapped).toBe(true)
+  })
+
   it('clears memory auth state after logout', async () => {
     vi.spyOn(authApi, 'logout').mockResolvedValueOnce({
       message: '로그아웃되었습니다.'
