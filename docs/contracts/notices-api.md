@@ -71,7 +71,21 @@ Rules:
 
 ## Admin Notice APIs
 
-All admin notice mutation APIs require authentication and role `ADMIN`.
+All admin notice APIs require authentication and role `ADMIN`.
+
+### List Notices For Admin
+
+`GET /api/v1/admin/notices`
+
+Query parameters are the same as `GET /api/v1/notices`. Unlike the public list, this endpoint returns scheduled notices whose `publishedAt` is in the future. Soft-deleted notices are excluded.
+
+Response shape is the same as the public notice list.
+
+### Get Notice Detail For Admin
+
+`GET /api/v1/admin/notices/{noticeId}`
+
+Response shape is the same as the public notice detail. Unlike the public detail endpoint, this endpoint can return scheduled notices whose `publishedAt` is in the future.
 
 ### Create Notice
 

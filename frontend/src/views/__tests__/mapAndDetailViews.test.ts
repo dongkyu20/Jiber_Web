@@ -569,6 +569,16 @@ describe('MapView keyword search', () => {
     expect(router.currentRoute.value.fullPath).toBe('/properties/1001')
   })
 
+  it('routes to the property detail page when a map marker is selected', async () => {
+    propertyApiMock.getMapProperties.mockResolvedValueOnce(mapResponse([seedMapItem]))
+    const { wrapper, router } = await mountMapView()
+
+    wrapper.findComponent(KakaoMapPanel).vm.$emit('propertySelected', seedMapItem.propertyId)
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/properties/1001')
+  })
+
   it('returns to map bounds search when an empty keyword is submitted', async () => {
     propertyApiMock.getMapProperties
       .mockResolvedValueOnce(mapResponse([]))

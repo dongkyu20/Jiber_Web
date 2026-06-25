@@ -15,6 +15,8 @@ const email = ref('')
 const password = ref('')
 const passwordConfirm = ref('')
 const displayName = ref('')
+const birthDate = ref('')
+const phoneNumber = ref('')
 const agreeTerms = ref(false)
 const agreePrivacy = ref(false)
 const agreeMarketing = ref(false)
@@ -43,7 +45,14 @@ function startSocial(provider: OAuthProvider) {
 async function submit() {
   errorMessage.value = ''
 
-  if (!email.value || !password.value || !passwordConfirm.value || !displayName.value) {
+  if (
+    !email.value.trim() ||
+    !password.value ||
+    !passwordConfirm.value ||
+    !displayName.value.trim() ||
+    !birthDate.value ||
+    !phoneNumber.value.trim()
+  ) {
     errorMessage.value = '모든 항목을 입력해 주세요.'
     return
   }
@@ -64,6 +73,8 @@ async function submit() {
     await authStore.signupWithPassword({
       email: email.value.trim(),
       displayName: displayName.value.trim(),
+      birthDate: birthDate.value,
+      phoneNumber: phoneNumber.value.trim(),
       password: password.value
     })
     uiStore.closeAll()
@@ -89,19 +100,27 @@ async function submit() {
       <form @submit.prevent="submit" class="modal-form">
         <div class="modal-field">
           <label for="su-email">아이디</label>
-          <input id="su-email" v-model="email" type="email" placeholder="이메일 주소" autocomplete="email" />
+          <input id="su-email" v-model="email" type="email" placeholder="이메일 주소" autocomplete="email" required />
         </div>
         <div class="modal-field">
           <label for="su-pw">비밀번호</label>
-          <input id="su-pw" v-model="password" type="password" placeholder="8자 이상, 영문+숫자 조합" autocomplete="new-password" />
+          <input id="su-pw" v-model="password" type="password" placeholder="8자 이상, 영문+숫자 조합" autocomplete="new-password" required />
         </div>
         <div class="modal-field">
           <label for="su-pw2">비밀번호 확인</label>
-          <input id="su-pw2" v-model="passwordConfirm" type="password" placeholder="비밀번호를 한 번 더 입력하세요" autocomplete="new-password" />
+          <input id="su-pw2" v-model="passwordConfirm" type="password" placeholder="비밀번호를 한 번 더 입력하세요" autocomplete="new-password" required />
         </div>
         <div class="modal-field">
           <label for="su-name">닉네임</label>
-          <input id="su-name" v-model="displayName" type="text" placeholder="2~10자" autocomplete="name" />
+          <input id="su-name" v-model="displayName" type="text" placeholder="2~10자" autocomplete="name" required />
+        </div>
+        <div class="modal-field">
+          <label for="su-birth-date">생년월일</label>
+          <input id="su-birth-date" v-model="birthDate" type="date" autocomplete="bday" required />
+        </div>
+        <div class="modal-field">
+          <label for="su-phone-number">연락처</label>
+          <input id="su-phone-number" v-model="phoneNumber" type="tel" placeholder="010-1234-5678" autocomplete="tel" required />
         </div>
 
         <div class="modal-agree">

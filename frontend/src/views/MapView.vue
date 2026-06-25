@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { favoritesApi } from '@/api/favorites'
 import { getApiError } from '@/api/client'
@@ -28,6 +28,7 @@ const keywordSearchPageSize = 100
 const autocompleteFetchSize = 20
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const selectedTransactionTypes = ref<TransactionType[]>([...transactionTypeOptions])
 const zoomLevel = ref(SEOUL_SEED_VIEWPORT.zoomLevel)
@@ -495,12 +496,7 @@ function handleMapLoadError() {
 
 function selectProperty(propertyId: number) {
   selectedPropertyId.value = propertyId
-  window.requestAnimationFrame(() => {
-    document.getElementById(`property-result-${propertyId}`)?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest'
-    })
-  })
+  void router.push(`/properties/${propertyId}`)
 }
 
 onMounted(() => {

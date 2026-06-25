@@ -82,6 +82,14 @@ describe('canAccessRoute', () => {
     expect(router.hasRoute('login')).toBe(true)
     expect(router.hasRoute('signup')).toBe(true)
     expect(router.hasRoute('social-signup')).toBe(true)
+    expect(router.hasRoute('account-recovery')).toBe(true)
+  })
+
+  it('keeps account recovery public and guest-only', () => {
+    expect(router.getRoutes().find((route) => route.name === 'account-recovery')?.meta).toMatchObject({
+      requiresAuth: false,
+      guestOnly: true
+    })
   })
 
   it('requires USER authentication for the chat route', () => {

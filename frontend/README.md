@@ -54,10 +54,13 @@ VITE_KAKAO_MAP_APP_KEY=
 
 ## 현재 Skeleton 범위
 
-- Vue Router route: `/`, `/map`, `/properties/:propertyId`, `/favorites`, `/notices`, `/admin`, `/login/callback`
+- Vue Router route: `/`, `/map`, `/properties/:propertyId`, `/favorites`, `/notices`, `/admin`, `/login/callback`, `/account-recovery`
 - Pinia memory-only auth store와 `USER`, `ADMIN` route guard
 - Axios API client와 공통 error response 타입
-- property, favorites, notices, auth API module skeleton
+- property, favorites, notices, auth API modules
+- 관리자 공지사항 목록/작성/수정/삭제 화면
+- 관리자 회원 목록/검색, 권한 변경, 활성 상태 변경 화면
+- 아이디 찾기와 MVP 직접 비밀번호 재설정 fallback 화면
 - Kakao Maps loader, 실제 지도 인스턴스, bounds 기반 검색, marker 렌더링, key 누락 fallback
 - ECharts 거래 차트와 SHAP 요인 차트 placeholder
 
@@ -66,8 +69,9 @@ VITE_KAKAO_MAP_APP_KEY=
 - Kakao marker clustering, marker 커스텀 오버레이, 지도 검색 성능 최적화
 - 상세 화면의 실제 valuation/shap 입력 폼 세분화
 - 이메일/비밀번호 `/login`, `/signup`, social signup/link `/signup/social` 화면
+- 비밀번호 재설정 메일 발송, reset token 검증 화면
 - 즐겨찾기 추가/삭제 버튼의 실제 화면 연결
-- 공지사항 상세 화면과 관리자 수정/삭제 화면
+- 공지사항 전용 상세 화면
 - 디자인 시스템, 접근성 회귀 테스트, 브라우저 스크린샷 검증
 
 ## Backend/Auth/AI Handoff

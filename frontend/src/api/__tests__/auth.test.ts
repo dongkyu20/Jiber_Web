@@ -47,11 +47,23 @@ describe('authApi email and social endpoints', () => {
   it('posts email signup with credentials included', async () => {
     const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({ data: sessionResponse })
 
-    await authApi.signup({ email: 'user@example.com', password: 'password-8', displayName: '사용자' })
+    await authApi.signup({
+      email: 'user@example.com',
+      password: 'password-8',
+      displayName: '사용자',
+      birthDate: '1990-01-23',
+      phoneNumber: '010-1234-5678'
+    })
 
     expect(postSpy).toHaveBeenCalledWith(
       '/auth/signup',
-      { email: 'user@example.com', password: 'password-8', displayName: '사용자' },
+      {
+        email: 'user@example.com',
+        password: 'password-8',
+        displayName: '사용자',
+        birthDate: '1990-01-23',
+        phoneNumber: '010-1234-5678'
+      },
       { withCredentials: true }
     )
   })
@@ -97,5 +109,29 @@ describe('authApi email and social endpoints', () => {
       { email: 'user@example.com', password: 'password-8' },
       { withCredentials: true }
     )
+  })
+
+  it('posts account recovery requests without credentials', async () => {
+    const postSpy = vi
+      .spyOn(apiClient, 'post')
+      .mockResolvedValueOnce({ data: { message: '가입 이메일 안내를 확인해 주세요.' } })
+      .mockResolvedValueOnce({ data: { message: '비밀번호 재설정 안내를 이메일로 보낼 준비가 되었습니다.' } })
+      .mockResolvedValueOnce({ data: { message: '정보가 일치하면 비밀번호가 변경되었습니다.' } })
+
+    await authApi.recoverIdentifier({ displayName: '사용자' })
+    await authApi.requestPasswordRecovery({ email: 'user@example.com' })
+    await authApi.directPasswordReset({
+      email: 'user@example.com',
+      displayName: '사용자',
+      newPassword: 'new-valid-credential-1'
+    })
+
+    expect(postSpy).toHaveBeenNthCalledWith(1, '/auth/recovery/identifier', { displayName: '사용자' })
+    expect(postSpy).toHaveBeenNthCalledWith(2, '/auth/recovery/password', { email: 'user@example.com' })
+    expect(postSpy).toHaveBeenNthCalledWith(3, '/auth/recovery/password/direct', {
+      email: 'user@example.com',
+      displayName: '사용자',
+      newPassword: 'new-valid-credential-1'
+    })
   })
 })
