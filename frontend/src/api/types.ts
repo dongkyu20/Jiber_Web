@@ -391,7 +391,7 @@ export interface ChatResponse {
 export interface NewsFeedItem {
   title: string
   summary: string
-  naverLink: string
+  link: string
   originalLink?: string | null
   publishedAt?: string | null
   source: string

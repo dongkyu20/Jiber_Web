@@ -1,10 +1,10 @@
 package com.jiber.backend.news.client;
 
-public record NaverNewsApiItem(
+public record GoogleNewsRssItem(
         String title,
         String link,
-        String originallink,
         String description,
-        String pubDate
+        String pubDate,
+        String source
 ) {
 }

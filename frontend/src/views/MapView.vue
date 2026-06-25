@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { favoritesApi } from '@/api/favorites'
@@ -18,6 +18,7 @@ import FloatingChat from '@/components/FloatingChat.vue'
 import { SEOUL_SEED_VIEWPORT, normalizePropertyMapItems, type LatLngPoint, type MapViewport } from '@/map/kakaoMap'
 import { hasKakaoMapKey } from '@/map/kakaoLoader'
 import { useAuthStore } from '@/stores/auth'
+import { useMapSearchStore, type MapSearchSnapshot } from '@/stores/mapSearch'
 import { formatLatestTransactionAmount, propertyTypeLabel, transactionTypeLabel } from '@/utils/format'
 import { SearchTrie } from '@/utils/searchTrie'
 
@@ -28,6 +29,7 @@ const autocompleteFetchSize = 20
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const mapSearchStore = useMapSearchStore()
 const selectedPropertyTypes = ref<PropertyType[]>([...propertyTypeOptions])
 const zoomLevel = ref(SEOUL_SEED_VIEWPORT.zoomLevel)
 const loading = ref(false)
@@ -53,6 +55,9 @@ const areaFavoriteErrorMessage = ref('')
 const autocompleteTrie = new SearchTrie()
 let searchTimer: number | null = null
 let autocompleteTimer: number | null = null
+let pendingInitialViewport: MapViewport | null = null
+let restoredFromSnapshot = false
+let mounted = false
 
 const isKeywordSearch = computed(() => activeSearchKeyword.value.length > 0)
 const hasMoreKeywordResults = computed(
@@ -125,6 +130,31 @@ function readQueryNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function readQueryBoolean(value: unknown): boolean | null {
+  const rawValue = readQueryString(value)
+  if (rawValue === null) {
+    return null
+  }
+
+  return rawValue === '1' || rawValue === 'true'
+}
+
+function parsePropertyTypes(value: unknown): PropertyType[] | null {
+  const rawValue = readQueryString(value)
+  if (rawValue === null) {
+    return null
+  }
+  if (rawValue === 'none') {
+    return []
+  }
+
+  const allowed = new Set<PropertyType>(propertyTypeOptions)
+  return rawValue
+    .split(',')
+    .map((type) => type.trim())
+    .filter((type): type is PropertyType => allowed.has(type as PropertyType))
+}
+
 function clampZoomLevel(value: number | null): number {
   if (value === null) {
     return SEOUL_SEED_VIEWPORT.zoomLevel
@@ -144,6 +174,139 @@ function viewportAroundCenter(center: LatLngPoint, nextZoomLevel: number): MapVi
     neLng: roundCoordinate(center.lng + lngSpan / 2),
     zoomLevel: nextZoomLevel
   }
+}
+
+function queryViewport(): MapViewport | null {
+  const swLat = readQueryNumber(route.query.swLat)
+  const swLng = readQueryNumber(route.query.swLng)
+  const neLat = readQueryNumber(route.query.neLat)
+  const neLng = readQueryNumber(route.query.neLng)
+
+  if (swLat === null || swLng === null || neLat === null || neLng === null) {
+    return null
+  }
+
+  return {
+    swLat,
+    swLng,
+    neLat,
+    neLng,
+    zoomLevel: clampZoomLevel(readQueryNumber(route.query.zoomLevel))
+  }
+}
+
+function hasMapStateQuery() {
+  return (
+    route.query.types !== undefined ||
+    route.query.q !== undefined ||
+    route.query.swLat !== undefined ||
+    route.query.zoomLevel !== undefined ||
+    route.query.priceLayer !== undefined
+  )
+}
+
+function hasFavoriteAreaQuery() {
+  return route.query.centerLat !== undefined || route.query.centerLng !== undefined
+}
+
+function restoreMapStateFromQuery(): MapViewport | null {
+  const nextTypes = parsePropertyTypes(route.query.types)
+  if (nextTypes !== null) {
+    selectedPropertyTypes.value = nextTypes
+  }
+
+  const keyword = readQueryString(route.query.q) ?? ''
+  searchKeyword.value = keyword
+  activeSearchKeyword.value = keyword
+
+  const priceLayer = readQueryBoolean(route.query.priceLayer)
+  if (priceLayer !== null) {
+    showAdministrativePriceLayer.value = priceLayer
+  }
+
+  const propertyId = readQueryNumber(route.query.selectedPropertyId)
+  selectedPropertyId.value = propertyId === null ? null : Math.round(propertyId)
+
+  const viewport = queryViewport()
+  if (viewport) {
+    currentViewport.value = viewport
+    zoomLevel.value = viewport.zoomLevel
+    mapFocusTarget.value = viewportCenter(viewport)
+  }
+
+  return viewport
+}
+
+function restoreMapStateFromSnapshot(snapshot: MapSearchSnapshot) {
+  selectedPropertyTypes.value = [...snapshot.selectedPropertyTypes]
+  zoomLevel.value = snapshot.zoomLevel
+  currentViewport.value = { ...snapshot.currentViewport }
+  searchKeyword.value = snapshot.searchKeyword
+  activeSearchKeyword.value = snapshot.activeSearchKeyword
+  keywordSearchPage.value = snapshot.keywordSearchPage
+  keywordSearchTotal.value = snapshot.keywordSearchTotal
+  showAdministrativePriceLayer.value = snapshot.showAdministrativePriceLayer
+  selectedPropertyId.value = snapshot.selectedPropertyId
+  mapFocusTarget.value = snapshot.mapFocusTarget ? { ...snapshot.mapFocusTarget } : null
+  items.value = [...snapshot.items]
+  administrativeClusters.value = [...snapshot.administrativeClusters]
+  addAutocompleteCandidates(items.value)
+}
+
+function currentSnapshot(): MapSearchSnapshot {
+  return {
+    selectedPropertyTypes: selectedPropertyTypes.value,
+    zoomLevel: zoomLevel.value,
+    currentViewport: currentViewport.value,
+    searchKeyword: searchKeyword.value,
+    activeSearchKeyword: activeSearchKeyword.value,
+    keywordSearchPage: keywordSearchPage.value,
+    keywordSearchTotal: keywordSearchTotal.value,
+    showAdministrativePriceLayer: showAdministrativePriceLayer.value,
+    selectedPropertyId: selectedPropertyId.value,
+    mapFocusTarget: mapFocusTarget.value,
+    items: items.value,
+    administrativeClusters: administrativeClusters.value
+  }
+}
+
+function mapQuery() {
+  return {
+    types: selectedPropertyTypes.value.length ? selectedPropertyTypes.value.join(',') : 'none',
+    q: activeSearchKeyword.value || undefined,
+    swLat: String(roundCoordinate(currentViewport.value.swLat)),
+    swLng: String(roundCoordinate(currentViewport.value.swLng)),
+    neLat: String(roundCoordinate(currentViewport.value.neLat)),
+    neLng: String(roundCoordinate(currentViewport.value.neLng)),
+    zoomLevel: String(zoomLevel.value),
+    priceLayer: showAdministrativePriceLayer.value ? '1' : undefined,
+    selectedPropertyId: selectedPropertyId.value ? String(selectedPropertyId.value) : undefined
+  }
+}
+
+function sameQuery(left: Record<string, unknown>, right: Record<string, unknown>) {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)])
+  for (const key of keys) {
+    if ((left[key] ?? undefined) !== (right[key] ?? undefined)) {
+      return false
+    }
+  }
+  return true
+}
+
+function persistMapState(updateRoute = true) {
+  mapSearchStore.save(currentSnapshot())
+
+  if (!updateRoute || route.name !== 'map') {
+    return
+  }
+
+  const nextQuery = mapQuery()
+  if (sameQuery(route.query, nextQuery)) {
+    return
+  }
+
+  void router.replace({ name: 'map', query: nextQuery }).catch(() => {})
 }
 
 function restoreFavoriteAreaFromQuery(): MapViewport | null {
@@ -384,6 +547,7 @@ async function searchVisibleArea(viewport: MapViewport = currentViewport.value) 
     errorMessage.value = '실거래 데이터 API 연결에 실패했습니다. 백엔드 서버 실행 상태를 확인해 주세요.'
   } finally {
     loading.value = false
+    persistMapState()
   }
 }
 
@@ -428,6 +592,7 @@ async function searchByKeyword(keyword: string, page = 0, append = false) {
   } finally {
     loading.value = false
     keywordLoadingMore.value = false
+    persistMapState()
   }
 }
 
@@ -473,11 +638,17 @@ function scheduleSearch(viewport: MapViewport) {
 }
 
 function handleMapReady(viewport: MapViewport) {
-  currentViewport.value = viewport
-  zoomLevel.value = viewport.zoomLevel
-  if (!isKeywordSearch.value) {
-    void searchVisibleArea(viewport)
+  if (restoredFromSnapshot) {
+    return
   }
+
+  const nextViewport = pendingInitialViewport ?? viewport
+  currentViewport.value = nextViewport
+  zoomLevel.value = nextViewport.zoomLevel
+  if (!isKeywordSearch.value) {
+    void searchVisibleArea(nextViewport)
+  }
+  pendingInitialViewport = null
 }
 
 function handleBoundsChanged(viewport: MapViewport) {
@@ -492,15 +663,36 @@ function handleMapLoadError() {
 
 function selectProperty(propertyId: number) {
   selectedPropertyId.value = propertyId
+  persistMapState()
   void router.push(`/properties/${propertyId}`)
 }
 
 onMounted(() => {
-  const restoredViewport = restoreFavoriteAreaFromQuery()
+  const cachedSnapshot = mapSearchStore.snapshot
+  if (cachedSnapshot && !hasFavoriteAreaQuery()) {
+    restoreMapStateFromSnapshot(cachedSnapshot)
+    restoredFromSnapshot = true
+  }
+
+  const restoredQueryViewport = hasMapStateQuery() ? restoreMapStateFromQuery() : null
+  if (restoredQueryViewport) {
+    pendingInitialViewport = restoredQueryViewport
+  }
+  const restoredViewport = restoredQueryViewport ?? (restoredFromSnapshot ? currentViewport.value : restoreFavoriteAreaFromQuery())
 
   if (!hasMapKey) {
-    void searchVisibleArea(restoredViewport ?? SEOUL_SEED_VIEWPORT)
+    if (!restoredFromSnapshot) {
+      if (activeSearchKeyword.value) {
+        void searchByKeyword(activeSearchKeyword.value)
+      } else {
+        void searchVisibleArea(restoredViewport ?? SEOUL_SEED_VIEWPORT)
+      }
+    }
+  } else if (!restoredFromSnapshot && activeSearchKeyword.value) {
+    void searchByKeyword(activeSearchKeyword.value)
   }
+
+  mounted = true
 })
 
 onBeforeUnmount(() => {
@@ -509,6 +701,12 @@ onBeforeUnmount(() => {
   }
   clearAutocompleteTimer()
 })
+
+watch([selectedPropertyTypes, showAdministrativePriceLayer], () => {
+  if (mounted) {
+    persistMapState()
+  }
+}, { deep: true })
 </script>
 
 <template>
@@ -647,7 +845,11 @@ onBeforeUnmount(() => {
           @mouseenter="selectedPropertyId = item.propertyId"
           @focusin="selectedPropertyId = item.propertyId"
         >
-          <RouterLink :to="`/properties/${item.propertyId}`" @click="selectedPropertyId = item.propertyId" class="map-result-link">
+          <RouterLink
+            :to="`/properties/${item.propertyId}`"
+            class="map-result-link"
+            @click="selectedPropertyId = item.propertyId; persistMapState()"
+          >
             <strong class="result-name">{{ item.name }}</strong>
             <span class="result-addr">{{ item.address }}</span>
             <span v-if="item.latestTransaction" class="result-price">
