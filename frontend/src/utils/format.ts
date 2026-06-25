@@ -20,7 +20,7 @@ export interface LatestTransactionAmount {
 
 export function formatMonthlyRent(value?: number | null): string {
   if (value === undefined || value === null) {
-    return formatKrw(value)
+    return '정보 없음'
   }
 
   if (value >= 100000000) {
@@ -40,22 +40,27 @@ export function formatLatestTransactionAmount(transaction: LatestTransactionAmou
     return formatKrw(transaction.dealAmount)
   }
 
-  const hasDeposit = transaction.depositAmount !== undefined && transaction.depositAmount !== null
+  const depositAmount = transaction.depositAmount ?? transaction.dealAmount
+  const hasDeposit = depositAmount !== undefined && depositAmount !== null
   const hasMonthlyRent = transaction.monthlyRent !== undefined && transaction.monthlyRent !== null
 
   if (!hasDeposit && !hasMonthlyRent) {
-    return formatKrw(transaction.dealAmount)
+    return '보증금 정보 없음 / 월세 정보 없음'
   }
 
   if (!hasDeposit) {
     return `월세 ${formatMonthlyRent(transaction.monthlyRent)}`
   }
 
-  if (!hasMonthlyRent || transaction.monthlyRent === 0) {
-    return `보증금 ${formatKrw(transaction.depositAmount)}`
+  if (!hasMonthlyRent) {
+    return `보증금 ${formatKrw(depositAmount)} / 월세 정보 없음`
   }
 
-  return `보증금 ${formatKrw(transaction.depositAmount)} / 월세 ${formatMonthlyRent(transaction.monthlyRent)}`
+  if (transaction.monthlyRent === 0) {
+    return `보증금 ${formatKrw(depositAmount)} / 월세 0원`
+  }
+
+  return `보증금 ${formatKrw(depositAmount)} / 월세 ${formatMonthlyRent(transaction.monthlyRent)}`
 }
 
 export function formatDate(value?: string | null): string {

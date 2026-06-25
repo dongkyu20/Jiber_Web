@@ -156,6 +156,17 @@ const monthlyRentSearchItem: PropertySearchItem = {
   }
 }
 
+const monthlyRentSearchItemWithoutBreakdown: PropertySearchItem = {
+  ...importedSearchItem,
+  propertyId: 1004,
+  name: '월세 보증금만 있는 아파트',
+  latestTransaction: {
+    transactionType: 'MONTHLY_RENT',
+    dealAmount: 550000000,
+    dealDate: '2026-06-10'
+  }
+}
+
 function searchResponsePage(
   items: PropertySearchItem[],
   page: { number: number; size: number; totalElements: number; totalPages: number }
@@ -488,6 +499,18 @@ describe('MapView keyword search', () => {
 
     expect(wrapper.text()).toContain('월세')
     expect(wrapper.text()).toContain('보증금 5.5억 원 / 월세 120만 원')
+  })
+
+  it('does not show monthly rent fallback amounts as if they are monthly rent', async () => {
+    propertyApiMock.searchProperties.mockResolvedValueOnce(searchResponse([monthlyRentSearchItemWithoutBreakdown]))
+    const { wrapper } = await mountMapView()
+
+    await wrapper.get('[data-test="map-search-keyword"]').setValue('월세')
+    await wrapper.get('[data-test="map-search-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('보증금 5.5억 원 / 월세 정보 없음')
+    expect(wrapper.text()).not.toContain('월세 · 5.5억 원')
   })
 
   it('loads additional keyword result pages instead of stopping at the first page', async () => {
