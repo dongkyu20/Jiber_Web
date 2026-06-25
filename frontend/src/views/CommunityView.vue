@@ -13,6 +13,7 @@ const authStore = useAuthStore()
 
 const categoryTabs: Array<{ value: CategoryTab; label: string }> = [
   { value: 'ALL', label: '전체' },
+  { value: 'NOTICE', label: '공지' },
   { value: 'FREE', label: '자유게시판' },
   { value: 'DEAL_REVIEW', label: '매물 후기' },
   { value: 'QNA', label: 'Q&A' }
@@ -82,7 +83,9 @@ watch([activeTab, sort, currentPage, submittedKeyword], () => {
   void loadPosts()
 })
 
-onMounted(loadPosts)
+onMounted(() => {
+  void loadPosts()
+})
 </script>
 
 <template>
@@ -93,7 +96,10 @@ onMounted(loadPosts)
           <h1 class="comm-title">커뮤니티</h1>
           <p class="comm-desc">실거주 후기, 매물 경험, 주거 생활 정보를 나누는 공간입니다.</p>
         </div>
-        <RouterLink v-if="authStore.isAuthenticated" to="/community/write" class="write-btn">글쓰기</RouterLink>
+        <div class="comm-actions">
+          <RouterLink v-if="authStore.isAdmin" to="/community/write?category=NOTICE" class="write-btn notice-write-btn">공지 작성</RouterLink>
+          <RouterLink v-if="authStore.isAuthenticated" to="/community/write" class="write-btn">글쓰기</RouterLink>
+        </div>
       </div>
 
       <div class="comm-tabs">
@@ -122,7 +128,7 @@ onMounted(loadPosts)
       </div>
 
       <p v-if="errorMessage" class="notice-error">{{ errorMessage }}</p>
-      <p v-else class="comm-count">
+      <p v-if="!errorMessage" class="comm-count">
         총 {{ totalElements.toLocaleString('ko-KR') }}건
         <span v-if="submittedKeyword"> · 검색어 "{{ submittedKeyword }}"</span>
       </p>
@@ -139,7 +145,7 @@ onMounted(loadPosts)
         <div v-if="loading" class="post-empty">게시글을 불러오는 중입니다.</div>
         <div v-else-if="!posts.length" class="post-empty">표시할 게시글이 없습니다.</div>
 
-        <div v-for="post in posts" v-else :key="post.postId" class="post-row">
+        <div v-for="post in posts" v-else :key="post.postId" :class="['post-row', { 'is-notice': post.category === 'NOTICE' }]">
           <span class="col-cat">
             <span :class="['cat-badge', `cat-${post.category.toLowerCase()}`]">
               {{ categoryLabel[post.category] }}
@@ -234,19 +240,45 @@ onMounted(loadPosts)
 .write-btn:hover,
 .comm-search button:hover { background: var(--gold-light); }
 
+.comm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.notice-write-btn {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--cream);
+}
+
+.notice-write-btn:hover {
+  background: rgba(200,160,100,0.12);
+  border-color: var(--gold);
+}
+
 .comm-tabs {
   display: flex;
   gap: 4px;
+  overflow-x: auto;
   border-bottom: 1px solid var(--border);
+  scrollbar-width: none;
+}
+
+.comm-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .comm-tab {
+  flex: 0 0 auto;
   padding: 10px 18px;
   background: none;
   border: none;
   color: var(--cream-muted);
   font-size: 0.9rem;
   font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
@@ -321,6 +353,14 @@ onMounted(loadPosts)
 .post-row:last-child { border-bottom: none; }
 .post-row:hover { background: rgba(200,160,100,0.04); }
 
+.post-row.is-notice {
+  background: rgba(200,160,100,0.08);
+}
+
+.post-row.is-notice:hover {
+  background: rgba(200,160,100,0.12);
+}
+
 .post-empty {
   padding: 34px 16px;
   color: var(--cream-muted);
@@ -338,6 +378,7 @@ onMounted(loadPosts)
 .cat-free { background: rgba(100,180,100,0.12); color: #7ac97a; }
 .cat-deal_review { background: rgba(100,150,220,0.12); color: #7ab0e0; }
 .cat-qna { background: rgba(180,100,200,0.12); color: #c07ad0; }
+.cat-notice { background: rgba(201,165,110,0.16); color: var(--gold); }
 
 .col-title { min-width: 0; }
 .col-author, .col-date, .col-view {

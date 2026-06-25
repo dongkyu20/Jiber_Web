@@ -37,7 +37,6 @@ All public Spring Boot API errors should use this shape:
 | 401 | `SOCIAL_PENDING_NOT_FOUND` | Pending social signup/link session is missing, expired, consumed, or invalid. |
 | 403 | `ACCESS_DENIED` | User lacks the required role or ownership. |
 | 404 | `PROPERTY_NOT_FOUND` | Property does not exist. |
-| 404 | `NOTICE_NOT_FOUND` | Notice does not exist. |
 | 404 | `FAVORITE_NOT_FOUND` | Favorite apartment does not exist for the current user. |
 | 404 | `FAVORITE_AREA_NOT_FOUND` | Favorite area does not exist for the current user. |
 | 409 | `FAVORITE_ALREADY_EXISTS` | Favorite already exists for the user. |

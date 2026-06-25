@@ -9,11 +9,13 @@ import com.jiber.backend.community.dto.CommunityCategory;
 import com.jiber.backend.community.dto.CommunityCommentCreateRequest;
 import com.jiber.backend.community.dto.CommunityCommentUpdateRequest;
 import com.jiber.backend.community.dto.CommunityPostListRequest;
+import com.jiber.backend.community.dto.CommunityPostCreateRequest;
 import com.jiber.backend.community.dto.CommunityPostUpdateRequest;
 import com.jiber.backend.community.service.CommunityService;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class CommunityServiceTest {
@@ -78,6 +80,55 @@ class CommunityServiceTest {
     }
 
     @Test
+    void createNoticeAllowsOnlyAdmin() {
+        var mapper = new FakeCommunityMapper();
+        var service = new CommunityService(mapper);
+        var request = new CommunityPostCreateRequest(CommunityCategory.NOTICE, "Notice", "Notice body", null);
+
+        assertThatThrownBy(() -> service.createPost(request, 7L, Set.of("USER")))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
+
+        service.createPost(request, 7L, Set.of("ADMIN"));
+
+        assertThat(mapper.insertedPostCategory).isEqualTo(CommunityCategory.NOTICE);
+    }
+
+    @Test
+    void updatePostRejectsNoticeCategoryForNonAdminAuthor() {
+        var mapper = new FakeCommunityMapper();
+        mapper.post = postRow(1L, "Detail", 0L, 0L);
+        var service = new CommunityService(mapper);
+
+        assertThatThrownBy(() -> service.updatePost(
+                1L,
+                new CommunityPostUpdateRequest(CommunityCategory.NOTICE, "Notice", "Notice body", null),
+                7L,
+                Set.of("USER")
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
+
+        assertThat(mapper.updatedPostId).isNull();
+    }
+
+    @Test
+    void updateNoticePostRejectsNonAdminAuthor() {
+        var mapper = new FakeCommunityMapper();
+        mapper.post = postRow(1L, "Notice", 0L, 0L, CommunityCategory.NOTICE);
+        var service = new CommunityService(mapper);
+
+        assertThatThrownBy(() -> service.updatePost(
+                1L,
+                new CommunityPostUpdateRequest(CommunityCategory.NOTICE, "Updated", "Updated body", null),
+                7L,
+                Set.of("USER")
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
+
+        assertThat(mapper.updatedPostId).isNull();
+    }
+
+    @Test
     void deletePostRejectsOtherUser() {
         var mapper = new FakeCommunityMapper();
         mapper.post = postRow(1L, "Detail", 0L, 0L);
@@ -116,9 +167,19 @@ class CommunityServiceTest {
     }
 
     private static CommunityPostRow postRow(Long postId, String title, Long viewCount, Long commentCount) {
+        return postRow(postId, title, viewCount, commentCount, CommunityCategory.FREE);
+    }
+
+    private static CommunityPostRow postRow(
+            Long postId,
+            String title,
+            Long viewCount,
+            Long commentCount,
+            CommunityCategory category
+    ) {
         return new CommunityPostRow(
                 postId,
-                CommunityCategory.FREE,
+                category,
                 title,
                 "content",
                 7L,
@@ -145,6 +206,7 @@ class CommunityServiceTest {
         private CommunityCommentRow comment;
         private long total;
         private Long incrementedPostId;
+        private CommunityCategory insertedPostCategory;
         private Long updatedPostId;
         private String updatedPostTitle;
         private Long deletedPostId;
@@ -175,6 +237,7 @@ class CommunityServiceTest {
 
         @Override
         public int insertPost(CommunityPostCreateCommand command) {
+            insertedPostCategory = command.getCategory();
             command.setPostId(100L);
             return 1;
         }

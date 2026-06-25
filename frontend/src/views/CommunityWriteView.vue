@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { communityApi } from '@/api/community'
 import { getApiErrorMessage } from '@/api/client'
 import type { CommunityCategory } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
 
+const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
-const categoryOptions: Array<{ value: CommunityCategory; label: string }> = [
+const allCategoryOptions: Array<{ value: CommunityCategory; label: string }> = [
+  { value: 'NOTICE', label: '공지' },
   { value: 'FREE', label: '자유게시판' },
   { value: 'DEAL_REVIEW', label: '매물 후기' },
   { value: 'QNA', label: 'Q&A' }
 ]
 
-const category = ref<CommunityCategory>('FREE')
+const initialCategory = route.query.category === 'NOTICE' && authStore.isAdmin ? 'NOTICE' : 'FREE'
+const category = ref<CommunityCategory>(initialCategory)
 const title = ref('')
 const content = ref('')
 const relatedPropertyId = ref('')
@@ -22,6 +27,10 @@ const submitting = ref(false)
 const errorMessage = ref('')
 
 const canSubmit = computed(() => title.value.trim().length > 0 && content.value.trim().length > 0 && !submitting.value)
+const categoryOptions = computed(() =>
+  authStore.isAdmin ? allCategoryOptions : allCategoryOptions.filter((option) => option.value !== 'NOTICE')
+)
+const isNoticePost = computed(() => category.value === 'NOTICE')
 
 async function submitPost() {
   if (!canSubmit.value) return
@@ -48,8 +57,8 @@ async function submitPost() {
   <section class="community-write">
     <div class="page-heading">
       <p class="eyebrow">COMMUNITY</p>
-      <h1>커뮤니티 글쓰기</h1>
-      <p>실거주 후기, 매물 경험, 질문을 자유롭게 남겨주세요.</p>
+      <h1>{{ isNoticePost ? '공지사항 작성' : '커뮤니티 글쓰기' }}</h1>
+      <p>{{ isNoticePost ? '커뮤니티 상단에 노출할 공지사항을 작성합니다.' : '실거주 후기, 매물 경험, 질문을 자유롭게 남겨주세요.' }}</p>
     </div>
 
     <form class="write-panel" @submit.prevent="submitPost">

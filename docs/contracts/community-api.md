@@ -12,9 +12,10 @@ Query:
 - `size`: page size, default `20`, max `100`
 - `sort`: `createdAt,desc`, `viewCount,desc`, `commentCount,desc`
 - `keyword`: title/content keyword
-- `category`: `FREE`, `DEAL_REVIEW`, `QNA`
+- `category`: `NOTICE`, `FREE`, `DEAL_REVIEW`, `QNA`
 
 Public endpoint.
+`NOTICE` posts are sorted before normal posts.
 
 ## Get Post
 
@@ -27,6 +28,7 @@ Public endpoint. Increments `viewCount` and returns comments as a parent/reply t
 `POST /api/v1/community/posts`
 
 Requires `USER` or `ADMIN`.
+`NOTICE` category can be created or updated only by `ADMIN`.
 
 ```json
 {

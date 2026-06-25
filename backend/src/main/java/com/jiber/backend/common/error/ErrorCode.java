@@ -12,7 +12,6 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 회원을 찾을 수 없습니다."),
     ADMIN_SELF_UPDATE_NOT_ALLOWED(HttpStatus.CONFLICT, "자기 자신의 관리자 권한 또는 활성 상태는 변경할 수 없습니다."),
     PROPERTY_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 부동산 정보를 찾을 수 없습니다."),
-    NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 공지사항을 찾을 수 없습니다."),
     COMMUNITY_POST_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 커뮤니티 게시글을 찾을 수 없습니다."),
     COMMUNITY_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 커뮤니티 댓글을 찾을 수 없습니다."),
     FAVORITE_NOT_FOUND(HttpStatus.NOT_FOUND, "관심 아파트 정보를 찾을 수 없습니다."),

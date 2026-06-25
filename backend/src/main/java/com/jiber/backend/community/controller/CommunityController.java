@@ -47,7 +47,7 @@ public class CommunityController {
             @AuthenticationPrincipal AuthUserPrincipal principal,
             @Valid @RequestBody CommunityPostCreateRequest request
     ) {
-        return communityService.createPost(request, userId(principal));
+        return communityService.createPost(request, userId(principal), roles(principal));
     }
 
     @PutMapping("/{postId}")
@@ -56,7 +56,7 @@ public class CommunityController {
             @PathVariable Long postId,
             @Valid @RequestBody CommunityPostUpdateRequest request
     ) {
-        return communityService.updatePost(postId, request, userId(principal));
+        return communityService.updatePost(postId, request, userId(principal), roles(principal));
     }
 
     @DeleteMapping("/{postId}")
@@ -97,5 +97,9 @@ public class CommunityController {
 
     private Long userId(AuthUserPrincipal principal) {
         return principal == null ? null : principal.userId();
+    }
+
+    private java.util.Set<String> roles(AuthUserPrincipal principal) {
+        return principal == null ? java.util.Set.of() : principal.roles();
     }
 }

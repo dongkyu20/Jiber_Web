@@ -8,24 +8,28 @@ MYSQL_ROOT_PASSWORD="${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD for database dump 
 SOURCE_DATABASE="${DB_DUMP_SOURCE_DATABASE:-Jiber}"
 DUMP_DIR="${DB_DUMP_EXTRACT_DIR:-/dumps/extracted}"
 FORCE_IMPORT="${DB_DUMP_FORCE_IMPORT:-false}"
-COMMUNITY_SCHEMA_PATH="${COMMUNITY_SCHEMA_PATH:-/community.sql}"
+DB_SCRIPT_DIR="${DB_SCRIPT_DIR:-/db-scripts}"
 
-mysql_cmd="mysql -h${MYSQL_HOST} -P${MYSQL_PORT} -uroot -p${MYSQL_ROOT_PASSWORD}"
+mysql_cmd="mysql --default-character-set=utf8mb4 -h${MYSQL_HOST} -P${MYSQL_PORT} -uroot -p${MYSQL_ROOT_PASSWORD}"
 
-apply_community_schema() {
-  if [ ! -f "$COMMUNITY_SCHEMA_PATH" ]; then
-    echo "Community schema file not found at ${COMMUNITY_SCHEMA_PATH}; skipping."
+apply_project_migrations() {
+  if [ ! -d "$DB_SCRIPT_DIR" ]; then
+    echo "DB script directory not found at ${DB_SCRIPT_DIR}; skipping project migrations."
     return
   fi
 
   dependency_count="$($mysql_cmd -N -B "$MYSQL_DATABASE" -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('users', 'properties');")"
   if [ "$dependency_count" != "2" ]; then
-    echo "Community schema dependencies are not ready; skipping."
+    echo "Project migration dependencies are not ready; skipping."
     return
   fi
 
-  echo "Applying community schema ${COMMUNITY_SCHEMA_PATH}."
-  $mysql_cmd "$MYSQL_DATABASE" < "$COMMUNITY_SCHEMA_PATH"
+  for script in "$DB_SCRIPT_DIR"/007_community.sql "$DB_SCRIPT_DIR"/008_community_notice_category.sql; do
+    if [ -f "$script" ]; then
+      echo "Applying project migration ${script}."
+      $mysql_cmd "$MYSQL_DATABASE" < "$script"
+    fi
+  done
 }
 
 echo "Preparing database ${MYSQL_DATABASE} for dump import."
@@ -34,7 +38,7 @@ $mysql_cmd "$MYSQL_DATABASE" -e "CREATE TABLE IF NOT EXISTS jiber_import_history
 
 if [ "${DB_DUMP_SKIP_IMPORT:-false}" = "true" ]; then
   echo "DB_DUMP_SKIP_IMPORT=true; skipping database dump import."
-  apply_community_schema
+  apply_project_migrations
   exit 0
 fi
 
@@ -48,7 +52,7 @@ dump_name="$(basename "$sql_file")"
 already_imported="$($mysql_cmd -N -B "$MYSQL_DATABASE" -e "SELECT COUNT(*) FROM jiber_import_history WHERE import_name = '${dump_name}';")"
 if [ "$already_imported" != "0" ] && [ "$FORCE_IMPORT" != "true" ]; then
   echo "Database dump ${dump_name} was already imported; skipping."
-  apply_community_schema
+  apply_project_migrations
   exit 0
 fi
 
@@ -64,6 +68,6 @@ else
     | $mysql_cmd "$MYSQL_DATABASE"
 fi
 
-apply_community_schema
+apply_project_migrations
 $mysql_cmd "$MYSQL_DATABASE" -e "CREATE TABLE IF NOT EXISTS jiber_import_history (import_name VARCHAR(255) PRIMARY KEY, imported_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci; REPLACE INTO jiber_import_history (import_name) VALUES ('${dump_name}');"
 echo "Database dump import completed: ${dump_name}"

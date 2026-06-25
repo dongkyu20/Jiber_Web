@@ -11,6 +11,7 @@ import com.jiber.backend.community.CommunityPostRow;
 import com.jiber.backend.community.dto.CommunityCommentCreateRequest;
 import com.jiber.backend.community.dto.CommunityCommentResponse;
 import com.jiber.backend.community.dto.CommunityCommentUpdateRequest;
+import com.jiber.backend.community.dto.CommunityCategory;
 import com.jiber.backend.community.dto.CommunityMutationResponse;
 import com.jiber.backend.community.dto.CommunityPostCreateRequest;
 import com.jiber.backend.community.dto.CommunityPostDetailResponse;
@@ -21,6 +22,7 @@ import com.jiber.backend.community.dto.CommunityPostUpdateRequest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -51,7 +53,12 @@ public class CommunityService {
     }
 
     public CommunityMutationResponse createPost(CommunityPostCreateRequest request, Long authorUserId) {
+        return createPost(request, authorUserId, Set.of());
+    }
+
+    public CommunityMutationResponse createPost(CommunityPostCreateRequest request, Long authorUserId, Set<String> roles) {
         requireAuthenticated(authorUserId);
+        ensureNoticeWritable(request.category(), roles);
         var command = new CommunityPostCreateCommand(
                 request.category(),
                 request.title().trim(),
@@ -64,9 +71,15 @@ public class CommunityService {
     }
 
     public CommunityMutationResponse updatePost(Long postId, CommunityPostUpdateRequest request, Long userId) {
+        return updatePost(postId, request, userId, Set.of());
+    }
+
+    public CommunityMutationResponse updatePost(Long postId, CommunityPostUpdateRequest request, Long userId, Set<String> roles) {
         requireAuthenticated(userId);
         var post = findPostOrThrow(postId);
         ensureOwner(post.authorUserId(), userId);
+        ensureNoticeWritable(post.category(), roles);
+        ensureNoticeWritable(request.category(), roles);
         communityMapper.updatePost(
                 postId,
                 request.category(),
@@ -165,6 +178,12 @@ public class CommunityService {
     private void ensureOwner(Long authorUserId, Long userId) {
         if (authorUserId == null || !authorUserId.equals(userId)) {
             throw new ApiException(ErrorCode.ACCESS_DENIED);
+        }
+    }
+
+    private void ensureNoticeWritable(CommunityCategory category, Set<String> roles) {
+        if (category == CommunityCategory.NOTICE && (roles == null || !roles.contains("ADMIN"))) {
+            throw new ApiException(ErrorCode.ACCESS_DENIED, "공지사항은 관리자만 작성할 수 있습니다.");
         }
     }
 

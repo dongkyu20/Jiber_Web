@@ -12,9 +12,6 @@ import com.jiber.backend.chat.service.*;
 import com.jiber.backend.favorite.controller.*;
 import com.jiber.backend.favorite.mapper.*;
 import com.jiber.backend.favorite.service.*;
-import com.jiber.backend.notice.*;
-import com.jiber.backend.notice.controller.*;
-import com.jiber.backend.notice.service.*;
 import com.jiber.backend.property.dto.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,7 +57,6 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcTest(controllers = {
         AuthController.class,
         FavoriteController.class,
-        AdminNoticeController.class,
         AdminUserController.class,
         ChatController.class
 })
@@ -494,57 +490,6 @@ class SecurityRulesTest {
     }
 
     @Test
-    void adminNoticeMutationRequiresAdminRole() throws Exception {
-        var body = """
-                {
-                  "title": "공지",
-                  "content": "내용",
-                  "pinned": false,
-                  "publishedAt": "2026-06-15T16:00:00+09:00"
-                }
-                """;
-
-        mockMvc.perform(post("/api/v1/admin/notices")
-                        .with(user("1").roles("USER"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-    }
-
-    @Test
-    void adminNoticeReadRequiresAdminRole() throws Exception {
-        mockMvc.perform(get("/api/v1/admin/notices")
-                        .with(user("1").roles("USER")))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-
-        mockMvc.perform(get("/api/v1/admin/notices")
-                        .with(user("1").roles("ADMIN")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items").isArray());
-    }
-
-    @Test
-    void adminCanMutateNotices() throws Exception {
-        var body = """
-                {
-                  "title": "공지",
-                  "content": "내용",
-                  "pinned": false,
-                  "publishedAt": "2026-06-15T16:00:00+09:00"
-                }
-                """;
-
-        mockMvc.perform(post("/api/v1/admin/notices")
-                        .with(user("1").roles("ADMIN"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.noticeId").value(0));
-    }
-
-    @Test
     void adminUserManagementRequiresAdminRole() throws Exception {
         mockMvc.perform(get("/api/v1/admin/users"))
                 .andExpect(status().isUnauthorized())
@@ -688,27 +633,6 @@ class SecurityRulesTest {
         @Bean
         FavoriteMapper favoriteMapper() {
             return new SecurityFavoriteMapper();
-        }
-
-        @Bean
-        NoticeService noticeService(NoticeMapper noticeMapper) {
-            return NoticeService.forTesting(
-                    noticeMapper,
-                    Clock.fixed(Instant.parse("2026-06-24T01:00:00Z"), ZoneOffset.UTC)
-            );
-        }
-
-        @Bean
-        NoticeMapper noticeMapper() {
-            var noticeMapper = mock(NoticeMapper.class);
-            when(noticeMapper.findAdminNotices(any(), any(Integer.class), any(Integer.class))).thenReturn(List.of());
-            when(noticeMapper.countAdminNotices(any())).thenReturn(0L);
-            when(noticeMapper.insertNotice(any())).thenAnswer(invocation -> {
-                NoticeUpsertCommand command = invocation.getArgument(0);
-                command.setNoticeId(0L);
-                return 1;
-            });
-            return noticeMapper;
         }
 
         @Bean

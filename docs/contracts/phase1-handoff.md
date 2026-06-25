@@ -12,7 +12,7 @@ These notes summarize how the current contract changes affect Phase 1 backend, f
 - Support administrative filters: `sido`, `sigungu`, `legalDong`, `complexName`, and general `keyword`.
 - Keep property detail separate from public valuation and public SHAP routes.
 - Implement favorite apartment and favorite area endpoints from `docs/contracts/favorites-api.md`.
-- Implement public notice read and `ADMIN` notice mutation endpoints from `docs/contracts/notices-api.md`.
+- Implement community `NOTICE` category support from `docs/contracts/community-api.md`.
 - Return shared errors from `docs/contracts/error-response.md`.
 
 ## Frontend / Map Agent Impact
@@ -23,7 +23,7 @@ These notes summarize how the current contract changes affect Phase 1 backend, f
 - Send map query parameters using `zoomLevel`, plural `propertyTypes`, and plural `transactionTypes`.
 - Use `/api/v1/properties/search` for list/sidebar search and include `centerLat`/`centerLng` when distance-prioritized ordering is needed.
 - Treat property detail, valuation, and SHAP as separate API calls.
-- Use Korean UI text for empty states, validation errors, favorite actions, notice actions, and AI unsupported states.
+- Use Korean UI text for empty states, validation errors, favorite actions, community notice actions, and AI unsupported states.
 - Do not call FastAPI model-server endpoints directly.
 
 ## Auth / Security Agent Impact
@@ -39,7 +39,7 @@ These notes summarize how the current contract changes affect Phase 1 backend, f
   - first `ADMIN` is granted only by seed, migration, or controlled operational script
 - Protect all `/api/v1/favorites/**` endpoints with `USER` or `ADMIN`.
 - Protect `/api/v1/properties/{propertyId}/valuation` and `/api/v1/properties/{propertyId}/shap` with `USER` or `ADMIN`.
-- Protect all `/api/v1/admin/notices/**` endpoints with `ADMIN`.
+- Protect community `NOTICE` post creation and updates with `ADMIN`.
 - Ensure permission failures use `AUTH_REQUIRED` or `ACCESS_DENIED`.
 
 ## AI / Data Integration Agent Impact
@@ -53,9 +53,9 @@ These notes summarize how the current contract changes affect Phase 1 backend, f
 
 - Verify email signup, email login, social signup, existing-account social link, already-linked social login, refresh, logout, and protected route behavior.
 - Verify request parameter naming drift: `zoom` and `propertyType` should not be used in Phase 1 contracts.
-- Verify anonymous access for map search, filter search, property detail, and public notice reads.
+- Verify anonymous access for map search, filter search, property detail, and community post reads.
 - Verify authenticated access for favorites.
-- Verify `ADMIN`-only access for notice mutations.
+- Verify `ADMIN`-only access for community `NOTICE` mutations.
 - Verify non-apartment valuation and SHAP return `VALUATION_UNSUPPORTED_PROPERTY_TYPE`.
 - Verify frontend-facing messages remain natural Korean and avoid investment advice.
 
@@ -65,5 +65,5 @@ These notes summarize how the current contract changes affect Phase 1 backend, f
 - Actual first `ADMIN` account identity is unresolved, though the provisioning method is decided.
 - Kakao Maps API key and allowed domains are unresolved.
 - Target auth migration from provider-owned `users` to email users plus social account links is unresolved.
-- MySQL schema and indexes for social account links, pending social sessions, favorite uniqueness, and notices are unresolved.
+- MySQL schema and indexes for social account links, pending social sessions, favorite uniqueness, and community notices are unresolved.
 - Model feature set and model artifact availability are unresolved.

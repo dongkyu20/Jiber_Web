@@ -143,29 +143,6 @@ CREATE TABLE IF NOT EXISTS favorite_areas (
     CONSTRAINT chk_favorite_areas_longitude CHECK (center_lng IS NULL OR center_lng BETWEEN -180 AND 180)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE IF NOT EXISTS notices (
-    notice_id BIGINT NOT NULL AUTO_INCREMENT,
-    title VARCHAR(200) NOT NULL,
-    content TEXT NOT NULL,
-    pinned BOOLEAN NOT NULL DEFAULT FALSE,
-    published_at TIMESTAMP(6) NOT NULL,
-    created_by_user_id BIGINT NULL,
-    updated_by_user_id BIGINT NULL,
-    deleted_at TIMESTAMP(6) NULL,
-    created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-    PRIMARY KEY (notice_id),
-    KEY idx_notices_public_order (deleted_at, pinned, published_at DESC),
-    KEY idx_notices_created_at (created_at DESC),
-    FULLTEXT KEY ft_notices_title_content (title, content),
-    CONSTRAINT fk_notices_created_by
-        FOREIGN KEY (created_by_user_id) REFERENCES users (user_id)
-        ON DELETE SET NULL,
-    CONSTRAINT fk_notices_updated_by
-        FOREIGN KEY (updated_by_user_id) REFERENCES users (user_id)
-        ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
 CREATE TABLE IF NOT EXISTS apartment_price_predictions (
     prediction_id BIGINT NOT NULL AUTO_INCREMENT,
     property_id BIGINT NOT NULL,

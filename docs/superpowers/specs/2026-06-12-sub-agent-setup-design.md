@@ -4,10 +4,10 @@
 
 This project will become a real estate transaction information web platform with:
 
-- Vue 3 SPA for landing, map search, detail pages, favorites, community, notices, and admin screens.
+- Vue 3 SPA for landing, map search, detail pages, favorites, community, news, and admin screens.
 - Spring Boot API server for authentication, authorization, business logic, MySQL access, OpenAPI documentation, and integration with the model server.
 - FastAPI model server for apartment-only hedonic price prediction and SHAP explanation.
-- MySQL storage for properties, transactions, users, favorites, predictions, SHAP values, boards, comments, and notices.
+- MySQL storage for properties, transactions, users, favorites, predictions, SHAP values, boards, comments, and community notices.
 
 The workspace is currently empty except for the newly created planning directories. The first durable artifact should therefore be a project-local sub-agent operating model, not production source code.
 
@@ -100,7 +100,7 @@ Owns Spring Boot API implementation excluding security-specific policy.
 
 Responsibilities:
 
-- Implement property map search, filter search, detail APIs, transaction APIs, area averages, similar complexes, infra APIs, favorites, boards, comments, notices, and admin APIs.
+- Implement property map search, filter search, detail APIs, transaction APIs, area averages, similar complexes, infra APIs, favorites, boards, comments, community notices, and admin APIs.
 - Use MyBatis for data access.
 - Use Bean Validation for request validation.
 - Keep Swagger / Springdoc OpenAPI documentation current.
@@ -114,7 +114,7 @@ Primary outputs:
 
 Ownership paths:
 
-- Primary: `backend/src/main/java/**/property/**`, `backend/src/main/java/**/apartment/**`, `backend/src/main/java/**/valuation/**`, `backend/src/main/java/**/shap/**`, `backend/src/main/java/**/favorite/**`, `backend/src/main/java/**/board/**`, `backend/src/main/java/**/notice/**`, `backend/src/main/java/**/admin/**`, `backend/src/main/resources/mapper/**`, `backend/src/test/**`
+- Primary: `backend/src/main/java/**/property/**`, `backend/src/main/java/**/apartment/**`, `backend/src/main/java/**/valuation/**`, `backend/src/main/java/**/shap/**`, `backend/src/main/java/**/favorite/**`, `backend/src/main/java/**/board/**`, `backend/src/main/java/**/community/**`, `backend/src/main/java/**/admin/**`, `backend/src/main/resources/mapper/**`, `backend/src/test/**`
 - Shared: `backend/src/main/java/**/security/**`, `backend/src/main/java/**/auth/**`, `backend/src/main/resources/application*.yml`, `docs/api/**`, `docs/contracts/**`, `db/**`
 - Restricted: `frontend/**`, `model-server/**`
 
@@ -127,7 +127,7 @@ Responsibilities:
 - Implement OAuth2 login for Google, Kakao, and Naver.
 - Issue and validate JWTs.
 - Define role-based access for regular users and admins.
-- Protect favorites, community write actions, notice mutations, and admin pages.
+- Protect favorites, community write actions, community notice mutations, and admin pages.
 - Review CORS, token storage assumptions, validation failures, and security-sensitive logs.
 
 Primary outputs:
@@ -149,7 +149,7 @@ Owns Vue UI, routing, state, charts, and Kakao Maps integration.
 
 Responsibilities:
 
-- Implement landing page, map search, filters, marker interactions, detail page, favorites, community, notices, admin views, and login callback flow.
+- Implement landing page, map search, filters, marker interactions, detail page, favorites, community, news, admin views, and login callback flow.
 - Use Vue Router, Pinia, Axios, Kakao Maps API, and ECharts.
 - Keep the first screen useful and avoid marketing-only experiences except for the dedicated landing route.
 - Make map/list/detail workflows efficient on desktop and mobile.

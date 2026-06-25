@@ -8,11 +8,10 @@ import type { FavoriteApartmentItem, FavoriteAreaItem } from '@/api/types'
 import EmptyState from '@/components/EmptyState.vue'
 import { formatDate, formatLatestTransactionAmount, transactionTypeLabel } from '@/utils/format'
 
-type TabId = 'apartments' | 'areas' | 'alerts'
+type TabId = 'apartments' | 'areas'
 const tabs: { id: TabId; label: string }[] = [
   { id: 'apartments', label: '관심 단지' },
   { id: 'areas', label: '관심 지역' },
-  { id: 'alerts', label: '가격 알림' },
 ]
 
 const activeTab = ref<TabId>('apartments')
@@ -191,14 +190,6 @@ onMounted(fetchFavorites)
         v-else-if="!loading"
         title="관심 지역이 없습니다."
         description="지도에서 현재 영역을 관심 지역으로 등록해 보세요."
-      />
-    </div>
-
-    <!-- 가격 알림 tab -->
-    <div v-if="activeTab === 'alerts'">
-      <EmptyState
-        title="가격 알림이 없습니다."
-        description="관심 단지의 가격 변동 알림을 설정하면 여기에 표시됩니다."
       />
     </div>
   </div>

@@ -27,13 +27,16 @@ const editingCommentId = ref<number | null>(null)
 const editedCommentContent = ref('')
 const commentMutatingId = ref<number | null>(null)
 
-const categories: Array<{ value: CommunityCategory; label: string }> = [
+const allCategories: Array<{ value: CommunityCategory; label: string }> = [
+  { value: 'NOTICE', label: '공지' },
   { value: 'FREE', label: '자유게시판' },
   { value: 'DEAL_REVIEW', label: '매물 후기' },
   { value: 'QNA', label: 'Q&A' }
 ]
 
-const categoryLabels = categories.reduce(
+const categories = computed(() => (authStore.isAdmin ? allCategories : allCategories.filter((category) => category.value !== 'NOTICE')))
+
+const categoryLabels = allCategories.reduce(
   (labels, category) => ({ ...labels, [category.value]: category.label }),
   {} as Record<CommunityCategory, string>
 )
@@ -424,6 +427,7 @@ onMounted(loadPost)
 .cat-free { background: rgba(100,180,100,0.12); color: #7ac97a; }
 .cat-deal_review { background: rgba(100,150,220,0.12); color: #7ab0e0; }
 .cat-qna { background: rgba(180,100,200,0.12); color: #c07ad0; }
+.cat-notice { background: rgba(201,165,110,0.16); color: var(--gold); }
 
 .post-title {
   margin: 0 0 18px;

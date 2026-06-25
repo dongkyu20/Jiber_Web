@@ -492,41 +492,7 @@ export interface FavoriteAreaDeleteResponse {
   message: string
 }
 
-export interface NoticeSummary {
-  noticeId: number
-  title: string
-  summary: string
-  pinned: boolean
-  publishedAt: string
-  createdAt: string
-}
-
-export interface NoticeDetail extends NoticeSummary {
-  content: string
-  updatedAt?: string | null
-}
-
-export interface NoticeListParams {
-  page?: number
-  size?: number
-  sort?: 'publishedAt,desc' | 'createdAt,desc'
-  keyword?: string
-  pinnedOnly?: boolean
-}
-
-export interface NoticeUpsertRequest {
-  title: string
-  content: string
-  pinned: boolean
-  publishedAt: string
-}
-
-export interface NoticeMutationResponse {
-  noticeId: number
-  message: string
-}
-
-export type CommunityCategory = 'FREE' | 'DEAL_REVIEW' | 'QNA'
+export type CommunityCategory = 'NOTICE' | 'FREE' | 'DEAL_REVIEW' | 'QNA'
 
 export interface CommunityPostSummary {
   postId: number

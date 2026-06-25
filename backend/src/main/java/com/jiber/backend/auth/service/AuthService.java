@@ -100,7 +100,11 @@ public class AuthService {
         if (authentication == null || !authentication.isAuthenticated() || !(authentication.getPrincipal() instanceof AuthUserPrincipal principal)) {
             return AuthMeResponse.unauthenticated();
         }
-        return AuthMeResponse.authenticated(principal);
+        var user = authUserMapper.findById(principal.userId());
+        if (user == null || Boolean.FALSE.equals(user.enabled())) {
+            return AuthMeResponse.unauthenticated();
+        }
+        return AuthMeResponse.authenticated(user.toPrincipal());
     }
 
     public AuthRefreshResult signup(EmailSignupRequest request, RefreshRequestContext context) {

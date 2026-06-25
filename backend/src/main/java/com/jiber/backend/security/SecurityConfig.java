@@ -58,11 +58,8 @@ public class SecurityConfig {
                                 "/api/v1/properties/search",
                                 "/api/v1/properties/*",
                                 "/api/v1/news",
-                                "/api/v1/notices",
-                                "/api/v1/notices/*",
                                 "/api/v1/community/posts",
                                 "/api/v1/community/posts/*").permitAll()
-                        .requestMatchers("/api/v1/admin/notices/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/users/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/favorites/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.POST,

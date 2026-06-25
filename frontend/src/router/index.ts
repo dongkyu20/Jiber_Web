@@ -73,12 +73,6 @@ export const router = createRouter({
       meta: { requiresAuth: true, roles: ['USER', 'ADMIN'] }
     },
     {
-      path: '/notices',
-      name: 'notices',
-      redirect: '/community',
-      meta: { requiresAuth: false }
-    },
-    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),

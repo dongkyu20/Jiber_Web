@@ -41,7 +41,7 @@ class AuthMigrationScriptTest {
         assertThat(readme).contains("refresh_sessions");
         assertThat(readme).contains("favorite_apartments");
         assertThat(readme).contains("favorite_areas");
-        assertThat(readme).contains("notices");
+        assertThat(readme).contains("community_posts");
         assertThat(readme).contains("apartment_price_predictions");
     }
 

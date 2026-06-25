@@ -3,18 +3,16 @@ import { computed, onMounted, ref } from 'vue'
 
 import { adminUsersApi } from '@/api/adminUsers'
 import { getApiErrorMessage } from '@/api/client'
-import { noticesApi } from '@/api/notices'
-import type { AdminUserSummary, NoticeDetail, NoticeSummary, UserRole } from '@/api/types'
+import { communityApi } from '@/api/community'
+import type { AdminUserSummary, CommunityPostDetail, CommunityPostSummary, UserRole } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { formatDate } from '@/utils/format'
 
 const authStore = useAuthStore()
 
-const notices = ref<NoticeSummary[]>([])
+const noticePosts = ref<CommunityPostSummary[]>([])
 const title = ref('')
 const content = ref('')
-const pinned = ref(false)
-const publishedAt = ref(toDateTimeLocal(new Date().toISOString()))
 const editingNoticeId = ref<number | null>(null)
 const statusMessage = ref('')
 const statusIsError = ref(false)
@@ -32,15 +30,11 @@ const userStatusMessage = ref('')
 const userStatusIsError = ref(false)
 const updatingUserId = ref<number | null>(null)
 
-const totalNoticeCount = computed(() => notices.value.length)
-const pinnedNoticeCount = computed(() => notices.value.filter((notice) => notice.pinned).length)
-const scheduledNoticeCount = computed(
-  () => notices.value.filter((notice) => new Date(notice.publishedAt).getTime() > Date.now()).length
-)
+const totalNoticeCount = computed(() => noticePosts.value.length)
 const totalUserCount = computed(() => users.value.length)
 const activeUserCount = computed(() => users.value.filter((user) => user.enabled).length)
 const showEmptyNotices = computed(
-  () => !loadingNotices.value && !listError.value && !statusIsError.value && notices.value.length === 0
+  () => !loadingNotices.value && !listError.value && !statusIsError.value && noticePosts.value.length === 0
 )
 const showEmptyUsers = computed(
   () => !loadingUsers.value && !userError.value && users.value.length === 0
@@ -58,10 +52,10 @@ async function fetchAdminNotices() {
   listError.value = ''
 
   try {
-    const response = await noticesApi.adminList({ page: 0, size: 50, sort: 'publishedAt,desc' })
-    notices.value = response.items
+    const response = await communityApi.listPosts({ page: 0, size: 50, sort: 'createdAt,desc', category: 'NOTICE' })
+    noticePosts.value = response.items
   } catch (error) {
-    notices.value = []
+    noticePosts.value = []
     listError.value = getApiErrorMessage(error, '공지사항 목록을 불러오지 못했습니다.')
   } finally {
     loadingNotices.value = false
@@ -97,20 +91,14 @@ async function saveNotice() {
 
   try {
     const payload = {
+      category: 'NOTICE' as const,
       title: title.value.trim(),
       content: content.value.trim(),
-      pinned: pinned.value,
-      publishedAt: new Date(publishedAt.value).toISOString()
+      relatedPropertyId: null
     }
     const response = editingNoticeId.value
-      ? await noticesApi.update(editingNoticeId.value, payload)
-      : await noticesApi.create(payload)
-
-    if (!editingNoticeId.value && (!response.noticeId || response.noticeId <= 0)) {
-      statusMessage.value = '공지사항 저장 결과를 확인하지 못했습니다. 백엔드 API가 최신 DB 저장 기능으로 실행 중인지 확인해 주세요.'
-      statusIsError.value = true
-      return
-    }
+      ? await communityApi.updatePost(editingNoticeId.value, payload)
+      : await communityApi.createPost(payload)
 
     statusMessage.value = response.message
     resetForm()
@@ -123,17 +111,15 @@ async function saveNotice() {
   }
 }
 
-async function startEdit(notice: NoticeSummary) {
+async function startEdit(notice: CommunityPostSummary) {
   statusMessage.value = ''
   statusIsError.value = false
 
   try {
-    const detail: NoticeDetail = await noticesApi.adminGet(notice.noticeId)
-    editingNoticeId.value = detail.noticeId
+    const detail: CommunityPostDetail = await communityApi.getPost(notice.postId)
+    editingNoticeId.value = detail.postId
     title.value = detail.title
     content.value = detail.content
-    pinned.value = detail.pinned
-    publishedAt.value = toDateTimeLocal(detail.publishedAt)
   } catch (error) {
     statusMessage.value = getApiErrorMessage(error, '공지사항 상세를 불러오지 못했습니다.')
     statusIsError.value = true
@@ -146,7 +132,7 @@ async function deleteNotice(noticeId: number) {
   statusIsError.value = false
 
   try {
-    const response = await noticesApi.remove(noticeId)
+    const response = await communityApi.deletePost(noticeId)
     statusMessage.value = response.message
     if (editingNoticeId.value === noticeId) {
       resetForm()
@@ -199,14 +185,6 @@ function resetForm() {
   editingNoticeId.value = null
   title.value = ''
   content.value = ''
-  pinned.value = false
-  publishedAt.value = toDateTimeLocal(new Date().toISOString())
-}
-
-function toDateTimeLocal(value: string) {
-  const date = new Date(value)
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
 }
 
 function isSelf(user: AdminUserSummary) {
@@ -244,14 +222,6 @@ onMounted(() => {
       <article class="metric-card">
         <span class="metric-label">등록 공지</span>
         <strong>{{ totalNoticeCount }}</strong>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">상단 고정</span>
-        <strong>{{ pinnedNoticeCount }}</strong>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">예약 게시</span>
-        <strong>{{ scheduledNoticeCount }}</strong>
       </article>
       <article class="metric-card">
         <span class="metric-label">등록 회원</span>
@@ -300,18 +270,6 @@ onMounted(() => {
             />
           </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="notice-date">게시 일시</label>
-              <input id="notice-date" v-model="publishedAt" class="form-input" required type="datetime-local" />
-            </div>
-
-            <label class="pin-row">
-              <input v-model="pinned" type="checkbox" class="pin-check" />
-              <span class="pin-label">상단 고정</span>
-            </label>
-          </div>
-
           <div class="form-actions">
             <button class="submit-btn" type="submit" :disabled="saving || !authStore.isAdmin">
               {{ submitLabel }}
@@ -336,28 +294,26 @@ onMounted(() => {
         <p v-if="listError" class="status-error">{{ listError }}</p>
         <p v-else-if="loadingNotices" class="muted-text">공지사항을 불러오고 있습니다.</p>
 
-        <div v-if="notices.length" class="notice-table">
+        <div v-if="noticePosts.length" class="notice-table">
           <div class="notice-table-head">
             <span>공지</span>
-            <span>게시일</span>
+            <span>작성일</span>
             <span>상태</span>
             <span>작업</span>
           </div>
 
-          <div v-for="notice in notices" :key="notice.noticeId" class="notice-row">
+          <div v-for="notice in noticePosts" :key="notice.postId" class="notice-row">
             <div class="notice-main">
               <strong>{{ notice.title }}</strong>
-              <p>{{ notice.summary }}</p>
+              <p>{{ notice.authorDisplayName ?? '관리자' }}</p>
             </div>
-            <span>{{ formatDate(notice.publishedAt) }}</span>
-            <span class="badge" :class="{ pinned: notice.pinned }">
-              {{ notice.pinned ? '고정' : '일반' }}
-            </span>
+            <span>{{ formatDate(notice.createdAt) }}</span>
+            <span class="badge pinned">공지</span>
             <div class="row-actions">
               <button
                 class="row-btn"
                 type="button"
-                :data-test="`notice-edit-${notice.noticeId}`"
+                :data-test="`notice-edit-${notice.postId}`"
                 @click="startEdit(notice)"
               >
                 수정
@@ -365,11 +321,11 @@ onMounted(() => {
               <button
                 class="row-btn danger"
                 type="button"
-                :disabled="deletingNoticeId === notice.noticeId"
-                :data-test="`notice-delete-${notice.noticeId}`"
-                @click="deleteNotice(notice.noticeId)"
+                :disabled="deletingNoticeId === notice.postId"
+                :data-test="`notice-delete-${notice.postId}`"
+                @click="deleteNotice(notice.postId)"
               >
-                {{ deletingNoticeId === notice.noticeId ? '삭제 중' : '삭제' }}
+                {{ deletingNoticeId === notice.postId ? '삭제 중' : '삭제' }}
               </button>
             </div>
           </div>

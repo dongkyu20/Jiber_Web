@@ -3,7 +3,7 @@ SET time_zone = '+09:00';
 
 CREATE TABLE IF NOT EXISTS community_posts (
     post_id BIGINT NOT NULL AUTO_INCREMENT,
-    category ENUM('FREE', 'DEAL_REVIEW', 'QNA') NOT NULL,
+    category ENUM('NOTICE', 'FREE', 'DEAL_REVIEW', 'QNA') NOT NULL,
     title VARCHAR(200) NOT NULL,
     content TEXT NOT NULL,
     author_user_id BIGINT NULL,

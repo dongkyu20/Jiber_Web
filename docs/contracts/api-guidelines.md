@@ -21,7 +21,7 @@ This document defines the initial cross-service API rules for the Jiber Web MVP.
 
 - `docs/contracts/property-api.md`: map search, filter search, property detail, public valuation, and public SHAP routes.
 - `docs/contracts/favorites-api.md`: favorite apartment and favorite area routes.
-- `docs/contracts/notices-api.md`: public notice read and `ADMIN` notice mutation routes.
+- `docs/contracts/community-api.md`: community posts, comments, and `NOTICE` category notices.
 - `docs/contracts/auth-flow.md`: OAuth2 login, JWT/session draft, protected route rules, and required security decisions.
 - `docs/contracts/model-server.md`: internal FastAPI valuation and SHAP routes.
 - `docs/contracts/error-response.md`: shared error response shape and initial error codes.
@@ -43,8 +43,8 @@ This document defines the initial cross-service API rules for the Jiber Web MVP.
 
 ## Auth Rules
 
-- Public read endpoints are allowed for landing, map search, property detail, and notice read.
-- Favorites, valuation, SHAP, user profile, community write actions, notice mutation, and admin endpoints require authentication.
+- Public read endpoints are allowed for landing, map search, property detail, community posts, and news.
+- Favorites, valuation, SHAP, user profile, community write actions, and admin endpoints require authentication.
 - Admin endpoints require the `ADMIN` role.
 
 ## Valuation / SHAP Rules

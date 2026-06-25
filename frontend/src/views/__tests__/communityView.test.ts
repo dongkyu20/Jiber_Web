@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CommunityPostSummary } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
 import CommunityView from '@/views/CommunityView.vue'
 
 const communityApiMock = vi.hoisted(() => ({
@@ -25,6 +26,18 @@ const post: CommunityPostSummary = {
   updatedAt: '2026-06-24T10:30:00+09:00'
 }
 
+const noticePost: CommunityPostSummary = {
+  postId: 99,
+  category: 'NOTICE',
+  title: '서비스 점검 안내',
+  authorUserId: 1,
+  authorDisplayName: '관리자',
+  viewCount: 100,
+  commentCount: 0,
+  createdAt: '2026-06-25T09:00:00+09:00',
+  updatedAt: '2026-06-25T09:00:00+09:00'
+}
+
 function postPage(items: CommunityPostSummary[] = [post]) {
   return {
     items,
@@ -37,9 +50,20 @@ function postPage(items: CommunityPostSummary[] = [post]) {
   }
 }
 
-async function mountCommunityView() {
+async function mountCommunityView({ admin = false } = {}) {
   const pinia = createPinia()
   setActivePinia(pinia)
+  if (admin) {
+    useAuthStore().setSession({
+      accessToken: 'admin-token',
+      user: {
+        userId: 1,
+        email: 'admin@example.com',
+        displayName: '관리자',
+        roles: ['ADMIN']
+      }
+    })
+  }
 
   const wrapper = mount(CommunityView, {
     global: {
@@ -74,6 +98,24 @@ describe('CommunityView', () => {
     expect(wrapper.text()).toContain('Banpo review')
     expect(wrapper.text()).toContain('Reviewer')
     expect(wrapper.html()).toContain('/community/101')
+  })
+
+  it('renders notice category posts from the community API', async () => {
+    communityApiMock.listPosts.mockResolvedValueOnce(postPage([noticePost, post]))
+
+    const wrapper = await mountCommunityView()
+
+    expect(wrapper.text()).toContain('공지')
+    expect(wrapper.text()).toContain('서비스 점검 안내')
+    expect(wrapper.html()).toContain('/community/99')
+  })
+
+  it('shows notice write action to admins', async () => {
+    const wrapper = await mountCommunityView({ admin: true })
+
+    const noticeLink = wrapper.find('a[href="/community/write?category=NOTICE"]')
+    expect(noticeLink.exists()).toBe(true)
+    expect(noticeLink.text()).toContain('공지 작성')
   })
 
   it('shows a community loading error', async () => {

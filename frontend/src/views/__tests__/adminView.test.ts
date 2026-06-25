@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NoticeDetail, NoticeSummary } from '@/api/types'
+import type { CommunityPostDetail, CommunityPostSummary } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import AdminView from '@/views/AdminView.vue'
 
@@ -12,38 +12,44 @@ const adminUsersApiMock = vi.hoisted(() => ({
   updateEnabled: vi.fn()
 }))
 
-const noticesApiMock = vi.hoisted(() => ({
-  adminList: vi.fn(),
-  adminGet: vi.fn(),
-  create: vi.fn(),
-  update: vi.fn(),
-  remove: vi.fn()
+const communityApiMock = vi.hoisted(() => ({
+  listPosts: vi.fn(),
+  getPost: vi.fn(),
+  createPost: vi.fn(),
+  updatePost: vi.fn(),
+  deletePost: vi.fn()
 }))
 
-vi.mock('@/api/notices', () => ({
-  noticesApi: noticesApiMock
+vi.mock('@/api/community', () => ({
+  communityApi: communityApiMock
 }))
 
 vi.mock('@/api/adminUsers', () => ({
   adminUsersApi: adminUsersApiMock
 }))
 
-const noticeSummary: NoticeSummary = {
-  noticeId: 301,
+const noticeSummary: CommunityPostSummary = {
+  postId: 301,
+  category: 'NOTICE',
   title: '서비스 점검 안내',
-  summary: '서비스 점검 일정을 안내드립니다.',
-  pinned: true,
-  publishedAt: '2026-06-24T10:30:00+09:00',
-  createdAt: '2026-06-24T09:00:00+09:00'
-}
-
-const noticeDetail: NoticeDetail = {
-  ...noticeSummary,
-  content: '서비스 점검 일정을 안내드립니다.',
+  authorUserId: 1,
+  authorDisplayName: '관리자',
+  viewCount: 10,
+  commentCount: 0,
+  createdAt: '2026-06-24T09:00:00+09:00',
   updatedAt: '2026-06-24T09:30:00+09:00'
 }
 
-function page(items: NoticeSummary[] = [noticeSummary]) {
+const noticeDetail: CommunityPostDetail = {
+  ...noticeSummary,
+  content: '서비스 점검 일정을 안내드립니다.',
+  relatedPropertyId: null,
+  relatedPropertyName: null,
+  relatedPropertyAddress: null,
+  comments: []
+}
+
+function page(items: CommunityPostSummary[] = [noticeSummary]) {
   return {
     items,
     page: {
@@ -96,7 +102,7 @@ function createApiError(code: string, message: string) {
       data: {
         code,
         message,
-        path: '/api/v1/admin/notices',
+        path: '/api/v1/community/posts',
         timestamp: '2026-06-24T12:00:00+09:00'
       }
     }
@@ -136,24 +142,24 @@ beforeEach(() => {
     user: { ...regularUser, enabled: false },
     message: '회원 상태를 변경했습니다.'
   })
-  noticesApiMock.adminList.mockReset().mockResolvedValue(page())
-  noticesApiMock.adminGet.mockReset().mockResolvedValue(noticeDetail)
-  noticesApiMock.create.mockReset().mockResolvedValue({ noticeId: 302, message: '공지사항을 등록했습니다.' })
-  noticesApiMock.update.mockReset().mockResolvedValue({ noticeId: 301, message: '공지사항을 수정했습니다.' })
-  noticesApiMock.remove.mockReset().mockResolvedValue({ noticeId: 301, message: '공지사항을 삭제했습니다.' })
+  communityApiMock.listPosts.mockReset().mockResolvedValue(page())
+  communityApiMock.getPost.mockReset().mockResolvedValue(noticeDetail)
+  communityApiMock.createPost.mockReset().mockResolvedValue({ id: 302, message: '게시글이 등록되었습니다.' })
+  communityApiMock.updatePost.mockReset().mockResolvedValue({ id: 301, message: '게시글이 수정되었습니다.' })
+  communityApiMock.deletePost.mockReset().mockResolvedValue({ id: 301, message: '게시글이 삭제되었습니다.' })
 })
 
 describe('AdminView', () => {
-  it('loads admin notices and renders management dashboard cards', async () => {
+  it('loads admin notice posts and renders management dashboard cards', async () => {
     const wrapper = await mountAdminView()
 
-    expect(noticesApiMock.adminList).toHaveBeenCalledWith({ page: 0, size: 50, sort: 'publishedAt,desc' })
+    expect(communityApiMock.listPosts).toHaveBeenCalledWith({ page: 0, size: 50, sort: 'createdAt,desc', category: 'NOTICE' })
     expect(adminUsersApiMock.list).toHaveBeenCalledWith({ page: 0, size: 20, sort: 'createdAt,desc' })
     expect(wrapper.text()).toContain('서비스 점검 안내')
     expect(wrapper.text()).toContain('admin@example.com')
     expect(wrapper.text()).toContain('user@example.com')
     expect(wrapper.text()).toContain('등록 공지')
-    expect(wrapper.text()).toContain('상단 고정')
+    expect(wrapper.text()).toContain('등록 회원')
   })
 
   it('promotes a regular user from the member management table', async () => {
@@ -189,20 +195,21 @@ describe('AdminView', () => {
     await wrapper.get('form[data-test="notice-form"]').trigger('submit')
     await flushPromises()
 
-    expect(noticesApiMock.adminGet).toHaveBeenCalledWith(301)
-    expect(noticesApiMock.update).toHaveBeenCalledWith(
+    expect(communityApiMock.getPost).toHaveBeenCalledWith(301)
+    expect(communityApiMock.updatePost).toHaveBeenCalledWith(
       301,
       expect.objectContaining({
+        category: 'NOTICE',
         title: '서비스 점검 변경 안내',
         content: '서비스 점검 일정을 안내드립니다.',
-        pinned: true
+        relatedPropertyId: null
       })
     )
-    expect(noticesApiMock.adminList).toHaveBeenCalledTimes(2)
+    expect(communityApiMock.listPosts).toHaveBeenCalledTimes(2)
   })
 
   it('creates a new notice and refreshes the management list', async () => {
-    noticesApiMock.adminList.mockResolvedValueOnce(page([])).mockResolvedValueOnce(page([noticeSummary]))
+    communityApiMock.listPosts.mockResolvedValueOnce(page([])).mockResolvedValueOnce(page([noticeSummary]))
     const wrapper = await mountAdminView()
 
     await wrapper.get('#notice-title').setValue('새 공지')
@@ -210,30 +217,31 @@ describe('AdminView', () => {
     await wrapper.get('form[data-test="notice-form"]').trigger('submit')
     await flushPromises()
 
-    expect(noticesApiMock.create).toHaveBeenCalledWith(
+    expect(communityApiMock.createPost).toHaveBeenCalledWith(
       expect.objectContaining({
+        category: 'NOTICE',
         title: '새 공지',
         content: '새 공지 내용',
-        pinned: false
+        relatedPropertyId: null
       })
     )
-    expect(wrapper.text()).toContain('공지사항을 등록했습니다.')
-    expect(noticesApiMock.adminList).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('게시글이 등록되었습니다.')
+    expect(communityApiMock.listPosts).toHaveBeenCalledTimes(2)
   })
 
-  it('deletes a notice from the management list and refreshes notices', async () => {
+  it('deletes a notice post from the management list and refreshes notice posts', async () => {
     const wrapper = await mountAdminView()
 
     await wrapper.get('[data-test="notice-delete-301"]').trigger('click')
     await flushPromises()
 
-    expect(noticesApiMock.remove).toHaveBeenCalledWith(301)
-    expect(noticesApiMock.adminList).toHaveBeenCalledTimes(2)
+    expect(communityApiMock.deletePost).toHaveBeenCalledWith(301)
+    expect(communityApiMock.listPosts).toHaveBeenCalledTimes(2)
   })
 
   it('shows backend save failures without also showing the empty notice state', async () => {
-    noticesApiMock.adminList.mockResolvedValueOnce(page([]))
-    noticesApiMock.create.mockRejectedValueOnce(createApiError('ACCESS_DENIED', '관리자 권한이 필요합니다.'))
+    communityApiMock.listPosts.mockResolvedValueOnce(page([]))
+    communityApiMock.createPost.mockRejectedValueOnce(createApiError('ACCESS_DENIED', '관리자 권한이 필요합니다.'))
 
     const wrapper = await mountAdminView()
     await wrapper.get('#notice-title').setValue('새 공지')
@@ -245,22 +253,8 @@ describe('AdminView', () => {
     expect(wrapper.text()).not.toContain('등록된 공지사항이 없습니다.첫 공지를 작성하면 커뮤니티 상단에 노출됩니다.')
   })
 
-  it('does not treat legacy skeleton notice create responses as persisted notices', async () => {
-    noticesApiMock.adminList.mockResolvedValueOnce(page([]))
-    noticesApiMock.create.mockResolvedValueOnce({ noticeId: 0, message: '공지사항을 등록했습니다.' })
-
-    const wrapper = await mountAdminView()
-    await wrapper.get('#notice-title').setValue('새 공지')
-    await wrapper.get('#notice-content').setValue('새 공지 내용')
-    await wrapper.get('form[data-test="notice-form"]').trigger('submit')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('공지사항 저장 결과를 확인하지 못했습니다.')
-    expect(noticesApiMock.adminList).toHaveBeenCalledTimes(1)
-  })
-
   it('renders the empty notice message with readable spacing', async () => {
-    noticesApiMock.adminList.mockResolvedValueOnce(page([]))
+    communityApiMock.listPosts.mockResolvedValueOnce(page([]))
 
     const wrapper = await mountAdminView()
 

@@ -42,7 +42,6 @@ Public frontend routes:
 - `/`
 - `/map`
 - `/properties/:propertyId`
-- `/notices`
 - `/login`
 - `/signup`
 - `/signup/social`
@@ -68,11 +67,9 @@ Base path: `/api/v1`
 | New apartment address search | `GET /properties/new-analysis/address-search` | `USER` or `ADMIN` | Frontend first selects an exact address with Kakao Postcode service; Spring backend supplements coordinates server-side. |
 | Valuation | `POST /properties/{propertyId}/valuation` | `USER` or `ADMIN` | Externally exposed Spring API, but login is required in MVP. Non-apartment fallback still returns `VALUATION_UNSUPPORTED_PROPERTY_TYPE`. |
 | SHAP | `POST /properties/{propertyId}/shap` | `USER` or `ADMIN` | Externally exposed Spring API, but login is required in MVP. Non-apartment fallback still returns `VALUATION_UNSUPPORTED_PROPERTY_TYPE`. |
-| Notice list | `GET /notices` | `ANONYMOUS` | Public read API. |
-| Notice detail | `GET /notices/{noticeId}` | `ANONYMOUS` | Public read API. |
 | Favorite apartments | `/favorites/apartments/**` | `USER` or `ADMIN` | Ownership isolation required. |
 | Favorite areas | `/favorites/areas/**` | `USER` or `ADMIN` | Ownership isolation required. |
-| Admin notice mutation | `/admin/notices/**` | `ADMIN` | Create, update, delete only. |
+| Community notice mutation | `POST/PUT /community/posts/**` with `NOTICE` category | `ADMIN` | Notices are normal community posts with the `NOTICE` category. |
 | Admin page | `/admin` | `ADMIN` | Frontend route guard plus backend API enforcement. |
 | Current user | `GET /auth/me` | `ANONYMOUS` | Returns auth state; see Auth API Draft. |
 | Email signup | `POST /auth/signup` | `ANONYMOUS` | Creates a Jiber email/password account and starts a session. |
@@ -470,7 +467,7 @@ Backend API Agent:
 
 - Implement refresh session persistence with hashed token or token identifier, expiry, rotation, and revocation fields.
 - Enforce `USER` or `ADMIN` on favorites, valuation, and SHAP public Spring endpoints.
-- Enforce `ADMIN` on `/api/v1/admin/notices/**`.
+- Enforce `ADMIN` for community `NOTICE` post creation and updates.
 - Return `AUTH_REQUIRED` and `ACCESS_DENIED` using `docs/contracts/error-response.md`.
 
 Frontend / Map Agent:

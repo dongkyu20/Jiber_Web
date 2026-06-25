@@ -45,7 +45,7 @@ Jiber_Web/
   - pending social signup/link
   - property map/search/detail
   - apartment favorites and area favorites
-  - notices/admin skeleton
+  - community notice category skeleton
   - public data raw staging, Kakao REST geocoding cache, canonical upsert
   - model-server internal client skeleton
 
@@ -336,15 +336,14 @@ dry-run은 외부 API 호출과 DB write 없이 전제조건을 확인하는 용
 
 ### Backend
 
-- notices/admin mutation 완성
-- notices author/modifier display 정책 보강
+- community notice category mutation 완성
 - property search performance index 검토
 - map clustering 또는 pagination contract 검토
 - CI/Testcontainers 도입
 
 ### Frontend
 
-- notices/admin UI 완성
+- community notice admin UI 완성
 - large data map performance and clustering
 - auth.ts Vite chunk warning 추적
 - broader mobile smoke
@@ -377,5 +376,5 @@ dry-run은 외부 API 호출과 DB write 없이 전제조건을 확인하는 용
 3. `scripts/check-auth-schema.sh`, backend tests, frontend tests/build, model-server pytest를 순서대로 실행합니다.
 4. seed 기반 map/search/detail smoke를 먼저 확인합니다.
 5. public-data dry-run 후 key와 quota를 확인하고 small live import를 재시도합니다.
-6. notices/admin 구현을 마무리합니다.
+6. community notice admin 구현을 마무리합니다.
 7. 사용자가 실제 AI model, SHAP, Q&A chatbot 구현 방향을 확정하면 model-server contract에 맞춰 연결합니다.

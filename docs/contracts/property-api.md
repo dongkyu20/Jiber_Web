@@ -413,7 +413,6 @@ Draft response:
 ## Related Contracts
 
 - Favorites are documented in `docs/contracts/favorites-api.md`.
-- Notices and admin notice mutations are documented in `docs/contracts/notices-api.md`.
 - Community posts and comments are documented in `docs/contracts/community-api.md`.
 - Internal valuation and SHAP model-server contracts are documented in `docs/contracts/model-server.md`.
 - Shared error response shape is documented in `docs/contracts/error-response.md`.

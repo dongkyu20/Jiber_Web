@@ -154,10 +154,10 @@ Schema preflight가 통과한 뒤 smoke 순서:
 - `POST /api/v1/auth/recovery/password/direct` MVP 직접 비밀번호 재설정 fallback
 - OAuth2 login success handler skeleton
 - Google/Kakao/Naver OAuth2 client registration 환경 변수 연결
-- property, favorite, notice controller/DTO/service
+- property, favorite, community controller/DTO/service
 - favorite apartments의 로그인 사용자 소유권 기반 MyBatis list/add/delete와 property detail favorite flag 연동
 - favorite areas의 로그인 사용자 소유권 기반 MyBatis list/add/delete
-- public/admin notices의 MyBatis list/detail/create/update/soft-delete
+- community `NOTICE` 카테고리 기반 공지 작성/수정/삭제
 - admin users의 MyBatis list/search, role update, enabled update
 - property map/search/detail API의 canonical table 기반 MyBatis 조회 skeleton
 - Springdoc OpenAPI 설정
@@ -172,15 +172,14 @@ Schema preflight가 통과한 뒤 smoke 순서:
 - 실제 Google/Kakao/Naver OAuth app 등록 후 provider별 E2E 로그인 검증
 - refresh token reuse 감지 시 session family revocation SQL의 실제 MySQL 통합 검증
 - model-server feature mapping의 실제 DB/거래 데이터 기반 보강
-- 공지사항 작성자/수정자 표시 응답
 - 비밀번호 재설정 메일 발송, reset token 저장/검증 flow
 
 ## Auth / Security Handoff
 
 - `/api/v1/favorites/**`는 `USER` 또는 `ADMIN` 필요.
 - `POST /api/v1/properties/{propertyId}/valuation`과 `POST /api/v1/properties/{propertyId}/shap`은 `USER` 또는 `ADMIN` 필요.
-- `/api/v1/admin/notices/**`는 `ADMIN` 필요.
 - `/api/v1/admin/users/**`는 `ADMIN` 필요. MVP 정책상 관리자는 회원 목록 조회, 권한 변경, 활성 상태 변경을 할 수 있으며 자기 자신의 권한 강등/비활성화는 차단합니다.
+- 커뮤니티 `NOTICE` 카테고리 작성/수정은 `ADMIN` 필요.
 - `GET /api/v1/auth/me`는 anonymous 호출을 허용하며 미인증 시 `{"authenticated": false, "user": null}`을 반환합니다.
 - `POST /api/v1/auth/recovery/**`는 anonymous 호출을 허용합니다. 계정 존재 여부를 노출하지 않도록 동일한 안내 응답을 반환합니다.
 - `POST /api/v1/auth/recovery/password/direct`는 MVP fallback입니다. 이메일과 표시 이름이 기존 계정과 일치하면 password hash를 갱신하고 해당 user의 refresh session을 revoke합니다. 성공/불일치 모두 같은 메시지를 반환하며, 운영용 이메일 reset token flow는 후속 Auth 작업입니다.
@@ -285,7 +284,6 @@ schema 초안은 `../db/001_phase1_schema.sql`입니다.
 - `refresh_sessions`
 - `favorite_apartments`
 - `favorite_areas`
-- `notices`
 - `apartment_price_predictions`
 - `apartment_shap_values`
 
@@ -336,11 +334,11 @@ FROM (
 
 Cleanup policy:
 
-1. 각 duplicate legacy email 그룹에서 유지할 canonical user를 명시적으로 고릅니다. 최근 로그인, 실제 계정 소유 확인, 보존해야 할 favorites/notice 기록 등을 기준으로 결정합니다.
+1. 각 duplicate legacy email 그룹에서 유지할 canonical user를 명시적으로 고릅니다. 최근 로그인, 실제 계정 소유 확인, 보존해야 할 favorites/community 기록 등을 기준으로 결정합니다.
 2. canonical user가 아닌 legacy user의 provider identity는 canonical user의 `user_social_accounts`로 옮깁니다. 004가 아직 실행되지 않은 DB라면 004의 `user_social_accounts` DDL과 같은 구조를 먼저 만들고, non-canonical user의 `oauth_provider`, `provider_user_id`, `email`, `display_name`을 canonical `user_id`로 insert한 뒤 검증합니다.
 3. `refresh_sessions`는 보안상 non-canonical user의 세션을 revoke 또는 삭제하고 재로그인을 요구하는 쪽을 기본으로 합니다.
 4. `favorite_apartments`, `favorite_areas`는 canonical user로 옮기되 unique 충돌이 있으면 하나만 보존합니다.
-5. `notices.created_by_user_id`, `notices.updated_by_user_id`, `apartment_price_predictions.user_id`는 canonical user로 옮기거나 운영 판단에 따라 `NULL` 처리합니다.
+5. `community_posts.author_user_id`, `community_comments.author_user_id`, `apartment_price_predictions.user_id`는 canonical user로 옮기거나 운영 판단에 따라 `NULL` 처리합니다.
 6. FK 소유 데이터와 social account 이동을 검증한 뒤 non-canonical legacy user row를 삭제하거나 email을 제거하고 disabled 상태로 둡니다. 삭제 전에는 반드시 백업 또는 volume snapshot을 남깁니다.
 7. duplicate 진단 쿼리가 0건을 반환하면 004를 다시 실행합니다.
 
