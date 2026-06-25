@@ -32,15 +32,15 @@ const vReveal = {
 }
 
 const activeFilter = ref('전체')
-const filters = ['전체', '실거래', 'AI 분석', '안전 정보']
+const filters = ['전체', '탐색', 'AI 분석', '회원 기능']
 
 const allListings = [
-  { location: '지도 탐색', name: '서울 아파트 실거래 위치 확인', desc: '지도 이동과 검색어로 단지별 최근 거래를 빠르게 확인합니다.', price: '지도 열기', type: '실거래' },
-  { location: '상세 분석', name: '단지별 최근 실거래 내역', desc: '거래일, 전용면적, 층, 거래금액을 한 화면에서 비교합니다.', price: '상세보기', type: '실거래' },
-  { location: '가격예측', name: '아파트 적정가 추정', desc: '학습된 가격예측 모델로 최근 거래 조건 기반 추정가를 계산합니다.', price: 'AI 실행', type: 'AI 분석' },
-  { location: 'XAI', name: 'SHAP 기반 가격 요인 설명', desc: '면적, 층, 입지 등 어떤 요소가 추정가에 영향을 줬는지 보여줍니다.', price: '요인 확인', type: 'AI 분석' },
-  { location: '문서 챗봇', name: '부동산 제도·시장 문서 질의', desc: 'RAG 문서를 바탕으로 전세 체크리스트와 주택 동향 질문에 답합니다.', price: '질문하기', type: '안전 정보' },
-  { location: '관심목록', name: '관심 단지와 관심 지역 저장', desc: '로그인 후 자주 보는 단지와 지도 영역을 따로 모아 확인합니다.', price: '저장하기', type: '안전 정보' },
+  { location: '지도 검색', name: '키워드와 현재 화면 범위 검색', desc: '단지명 자동완성과 지도 이동 검색으로 보고 있는 지역의 매물을 확인합니다.', price: '지도 열기', type: '탐색', to: '/map' },
+  { location: '매물 유형', name: '아파트·오피스텔·빌라 필터', desc: '거래유형 대신 매물 유형 기준으로 필요한 주거 형태만 좁혀 봅니다.', price: '필터 적용', type: '탐색', to: '/map' },
+  { location: '상세보기', name: '거래내역별 추정가와 SHAP', desc: '매매 거래 행을 선택하면 해당 거래 기준의 추정가와 요인 차트를 확인합니다.', price: '요인 분석', type: 'AI 분석', to: '/map' },
+  { location: '신규매물 분석', name: '입력 조건 기반 적정가 분석', desc: '신규 아파트 조건을 입력하면 가격예측 모델과 SHAP 요인 분석을 실행합니다.', price: '분석하기', type: 'AI 분석', to: '/new-analysis' },
+  { location: 'AI 챗봇', name: '문서 근거 부동산 질문 답변', desc: '주택 동향, 전세 체크리스트, 법령 문서 기반 답변을 마크다운으로 확인합니다.', price: '질문하기', type: 'AI 분석', to: '/chat' },
+  { location: '관심목록', name: '관심 단지와 관심 지역 저장', desc: '자주 보는 단지와 지도 영역을 저장해 다시 탐색할 때 바로 불러옵니다.', price: '저장하기', type: '회원 기능', to: '/favorites' },
 ]
 
 const filteredListings = computed(() =>
@@ -60,8 +60,10 @@ const filteredListings = computed(() =>
         </RouterLink>
         <nav class="lp-nav">
           <a href="#listings">주요 기능</a>
-          <a href="#services">서비스</a>
+          <a href="#how-it-works">이용 흐름</a>
           <a href="#community">커뮤니티</a>
+          <a href="#data-ai">데이터·AI</a>
+          <a href="#start">시작하기</a>
         </nav>
         <div class="lp-header-actions">
           <ThemeToggle />
@@ -149,7 +151,7 @@ const filteredListings = computed(() =>
           <div class="sec-header" v-reveal>
             <div>
               <p class="sec-eyebrow">CORE FEATURES</p>
-              <h2 class="sec-title">집er에서 확인할 수 있는 것</h2>
+              <h2 class="sec-title">필요한 기능을 바로 찾으세요</h2>
             </div>
             <div class="filter-group">
               <button
@@ -172,93 +174,48 @@ const filteredListings = computed(() =>
               <p class="listing-desc">{{ item.desc }}</p>
               <div class="listing-foot">
                 <span class="listing-price">{{ item.price }}</span>
-                <RouterLink to="/map" class="listing-link">시작하기 →</RouterLink>
+                <RouterLink :to="item.to" class="listing-link">시작하기 →</RouterLink>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- PAGE 4: Services -->
-      <section class="page" id="services">
-        <div class="lp-container">
-          <div class="sec-header" v-reveal>
-            <div>
-              <p class="sec-eyebrow">WHAT 집ER DOES</p>
-              <h2 class="sec-title">데이터가 답하는<br>부동산 의사결정 플랫폼</h2>
-            </div>
-            <RouterLink to="/map" class="text-arrow-link">서비스 시작하기 →</RouterLink>
-          </div>
-          <div class="services-grid">
-            <div class="svc-card" v-reveal="{ delay: 0 }">
-              <span class="svc-num">01</span>
-              <h3>지도 기반 실거래 검색</h3>
-              <p>지도 영역과 검색어, 주거 유형, 거래방식 조건으로 실거래 정보를 탐색합니다.</p>
-            </div>
-            <div class="svc-card" v-reveal="{ delay: 70 }">
-              <span class="svc-num">02</span>
-              <h3>상세 거래 정보</h3>
-              <p>단지 기본 정보와 최근 실거래 내역을 상세보기 화면에서 함께 확인합니다.</p>
-            </div>
-            <div class="svc-card" v-reveal="{ delay: 140 }">
-              <span class="svc-num">03</span>
-              <h3>AI 적정가 추정</h3>
-              <p>아파트 상세보기에서 최근 거래 조건을 바탕으로 가격예측 모델을 실행합니다.</p>
-            </div>
-            <div class="svc-card" v-reveal="{ delay: 70 }">
-              <span class="svc-num">04</span>
-              <h3>설명가능한 AI · SHAP</h3>
-              <p>전용면적, 층, 입지 등 가격 추정에 영향을 준 요인을 차트로 확인합니다.</p>
-            </div>
-            <div class="svc-card" v-reveal="{ delay: 140 }">
-              <span class="svc-num">05</span>
-              <h3>문서 기반 AI 챗봇</h3>
-              <p>주택 동향, 전세 체크리스트, 법령 문서 등 근거 문서를 바탕으로 답변합니다.</p>
-            </div>
-            <div class="svc-card" v-reveal="{ delay: 210 }">
-              <span class="svc-num">06</span>
-              <h3>커뮤니티 &amp; 관심목록</h3>
-              <p>관심 단지와 지역을 저장하고, 공지와 커뮤니티 게시글을 함께 확인합니다.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- PAGE 5: How It Works -->
-      <section class="page page-dark-alt">
+      <!-- PAGE 4: How It Works -->
+      <section class="page page-dark-alt" id="how-it-works">
         <div class="lp-container">
           <div class="sec-header center-header" v-reveal>
             <div style="text-align:center">
               <p class="sec-eyebrow">HOW IT WORKS</p>
-              <h2 class="sec-title">4단계로 확인하는<br>부동산 데이터</h2>
+              <h2 class="sec-title">4단계로 이어지는<br>탐색 흐름</h2>
             </div>
           </div>
           <div class="how-grid">
             <div class="how-item" v-reveal="{ delay: 0 }">
               <span class="how-num">01</span>
-              <h3>지도에서 검색</h3>
-              <p>관심 지역을 지도에서 탐색하고 유형과 거래방식으로 필터링합니다.</p>
+              <h3>지도에서 좁히기</h3>
+              <p>검색어 자동완성과 현재 화면 범위 검색으로 관심 지역과 단지를 먼저 찾습니다.</p>
             </div>
             <div class="how-item" v-reveal="{ delay: 120 }">
               <span class="how-num">02</span>
-              <h3>최근 거래 확인</h3>
-              <p>상세보기에서 단지 기본 정보와 최근 실거래 내역을 확인합니다.</p>
+              <h3>거래내역 비교</h3>
+              <p>매매, 전세, 월세 거래를 구분해서 보고 월세는 보증금과 월세를 따로 확인합니다.</p>
             </div>
             <div class="how-item" v-reveal="{ delay: 240 }">
               <span class="how-num">03</span>
-              <h3>AI 적정가 · XAI</h3>
-              <p>아파트라면 가격예측과 SHAP 기반 가격 형성 요인을 확인합니다.</p>
+              <h3>매매 거래 AI 확인</h3>
+              <p>매매 거래 행을 선택하거나 신규매물 조건을 입력해 적정가와 요인 분석을 확인합니다.</p>
             </div>
             <div class="how-item" v-reveal="{ delay: 360 }">
               <span class="how-num">04</span>
-              <h3>챗봇에 질문</h3>
-              <p>전세, 주택 동향, 실거래 관련 궁금한 점을 문서 기반 챗봇에 질문합니다.</p>
+              <h3>저장하고 질문하기</h3>
+              <p>관심목록에 저장하거나 커뮤니티와 문서 기반 챗봇에서 추가 정보를 확인합니다.</p>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- PAGE 6: Community -->
+      <!-- PAGE 5: Community -->
       <section class="page" id="community">
         <div class="lp-container">
           <div class="sec-header" v-reveal>
@@ -291,23 +248,13 @@ const filteredListings = computed(() =>
                 <div><p class="cat-name">질문 / 답변</p><p class="cat-desc">서비스와 데이터 질문</p></div>
                 <span class="cat-count">Q&amp;A</span>
               </div>
-              <div class="comm-cat">
-                <div><p class="cat-name">관심목록</p><p class="cat-desc">단지와 지역 저장</p></div>
-                <span class="cat-count">회원</span>
-              </div>
-              <div class="comm-meta">
-                <p class="meta-label">로그인하면 가능한 기능</p>
-                <div class="meta-row"><span>관심 단지 저장</span><span>지원</span></div>
-                <div class="meta-row"><span>관심 지역 저장</span><span>지원</span></div>
-                <div class="meta-row"><span>챗봇 컨텍스트</span><span>지원</span></div>
-              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- PAGE 7: Data Sources -->
-      <section class="page page-dark-alt">
+      <!-- PAGE 6: Data Sources -->
+      <section class="page page-dark-alt" id="data-ai">
         <div class="lp-container">
           <div v-reveal style="text-align:center; margin-bottom: 48px;">
             <p class="sec-eyebrow">DATA & AI</p>
@@ -315,7 +262,7 @@ const filteredListings = computed(() =>
           </div>
           <div class="review-grid">
             <div class="review-card" v-reveal="{ delay: 0 }">
-              <p class="review-quote">실거래 정보는 지도와 상세보기에서 확인하고, AI 가격예측은 아파트 상세보기의 별도 버튼으로 실행합니다.</p>
+              <p class="review-quote">실거래 정보는 지도와 상세보기에서 확인하고, AI 가격예측은 아파트 상세보기에서 매매 거래내역을 클릭하면 표시됩니다.</p>
               <div class="review-author">
                 <div class="author-avatar" />
                 <div>
@@ -338,21 +285,19 @@ const filteredListings = computed(() =>
         </div>
       </section>
 
-      <!-- PAGE 8: Contact + Footer -->
-      <section class="page page-contact-footer">
+      <!-- PAGE 7: Contact + Footer -->
+      <section class="page page-contact-footer" id="start">
         <div class="lp-container">
           <div class="contact-card" v-reveal>
             <div class="contact-left">
               <p class="sec-eyebrow" style="color:#8a7060">START EXPLORING</p>
               <h2 class="contact-heading">지도에서 시작해<br>AI 설명까지 확인하세요</h2>
               <p class="contact-desc">집er는 중개나 투자 판단 대신, 실거래와 모델 설명을 이해하기 쉽게 모아 보여주는 데이터 서비스입니다.</p>
-              <p class="contact-phone">Jiber Web</p>
             </div>
             <form class="contact-form" @submit.prevent>
               <input type="text" value="지도 기반 실거래 탐색" readonly />
               <input type="text" value="아파트 가격예측 모델" readonly />
               <input type="text" value="SHAP 기반 XAI 설명" readonly />
-              <RouterLink to="/map" class="contact-submit">지도 열기</RouterLink>
             </form>
           </div>
         </div>
@@ -490,7 +435,8 @@ const filteredListings = computed(() =>
 .lp-nav {
   display: flex;
   justify-content: center;
-  gap: 64px;
+  gap: clamp(20px, 3vw, 48px);
+  flex-wrap: wrap;
 }
 
 .lp-nav a {
@@ -821,26 +767,7 @@ const filteredListings = computed(() =>
 .listing-link { font-size: 0.8rem; color: var(--cream-muted); text-decoration: none; transition: color 0.2s; }
 .listing-link:hover { color: var(--cream); }
 
-/* ── PAGE 4: SERVICES ── */
-.services-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-
-.svc-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
-  border-radius: 14px;
-  padding: 24px 22px;
-  transition: border-color 0.25s;
-}
-.svc-card:hover { border-color: rgba(200,160,100,.3); }
-.svc-num { display: block; font-size: 0.78rem; color: var(--gold-dim); letter-spacing: 0.12em; margin-bottom: 12px; }
-.svc-card h3 { font-size: 1rem; font-weight: 700; margin: 0 0 10px; }
-.svc-card p { font-size: 0.82rem; color: var(--cream-muted); line-height: 1.7; margin: 0; }
-
-/* ── PAGE 5: HOW IT WORKS ── */
+/* ── PAGE 4: HOW IT WORKS ── */
 .how-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -880,12 +807,6 @@ const filteredListings = computed(() =>
 .cat-name { font-size: 0.92rem; font-weight: 700; margin: 0 0 3px; }
 .cat-desc { font-size: 0.75rem; color: var(--cream-muted); margin: 0; }
 .cat-count { font-size: 1.3rem; font-weight: 700; color: var(--gold); white-space: nowrap; }
-
-.comm-meta { background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 14px; padding: 16px 20px; }
-.meta-label { font-size: 0.7rem; color: var(--cream-muted); letter-spacing: 0.1em; margin: 0 0 10px; }
-.meta-row { display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 7px; color: var(--cream-muted); }
-.meta-row:last-child { margin-bottom: 0; }
-.meta-row span:last-child { color: var(--cream); font-weight: 700; }
 
 /* ── PAGE 7: REVIEWS ── */
 .review-grid {
@@ -945,25 +866,6 @@ const filteredListings = computed(() =>
 }
 .contact-form input::placeholder { color: #9a8060; }
 .contact-form input:focus { border-color: rgba(100,80,50,.6); }
-.contact-submit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #1a1208;
-  color: var(--cream);
-  border: none;
-  border-radius: 9px;
-  padding: 14px;
-  text-decoration: none;
-  font-size: 0.92rem;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  margin-top: 2px;
-  transition: background 0.2s;
-}
-.contact-submit:hover { background: #0d0804; }
-
 /* ── FOOTER (inside last page) ── */
 .lp-footer {
   background: #0d0804;
@@ -992,7 +894,7 @@ const filteredListings = computed(() =>
 /* ── RESPONSIVE ── */
 @media (max-width: 1100px) {
   .lp-container { width: calc(100% - 48px); }
-  .listings-grid, .services-grid { grid-template-columns: repeat(2, 1fr); }
+  .listings-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 900px) {
@@ -1019,7 +921,7 @@ const filteredListings = computed(() =>
   .hero-search { flex-wrap: wrap; }
   .search-field { min-width: 42%; }
   .search-btn { min-height: 46px; justify-content: center; flex: 1 0 100%; margin-left: 0; }
-  .listings-grid, .services-grid, .how-grid, .review-grid { grid-template-columns: 1fr; }
+  .listings-grid, .how-grid, .review-grid { grid-template-columns: 1fr; }
   .how-item { border-right: none; }
   .sec-header { flex-direction: column; align-items: flex-start; }
   .stats-page-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
