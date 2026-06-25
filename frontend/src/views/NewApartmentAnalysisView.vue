@@ -21,7 +21,7 @@ const form = ref({
   floor: 10,
   builtYear: 2010,
   asOfDate: today,
-  distanceToStationM: 420 as number | null
+  distanceToStationM: null as number | null
 })
 
 const loading = ref(false)

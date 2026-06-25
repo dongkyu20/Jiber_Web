@@ -49,8 +49,11 @@ class ValuationPredictionRepository(Protocol):
 class ValuationModelRepository:
     def __init__(self, artifacts_dir: str | Path, data_dir: str | Path | None = None) -> None:
         self.artifacts_dir = self._resolve_artifacts_dir(artifacts_dir)
-        self.data_dir = self._resolve_data_dir(data_dir or "../data")
-        self.data_repository = LocalValuationDataRepository(self.data_dir)
+        self.data_dir = self._resolve_data_dir(data_dir or "../data/valuation")
+        self.data_repository = LocalValuationDataRepository(
+            self.data_dir,
+            accept_remaining_matches=True,
+        )
         self._manifests: dict[str, dict[str, Any]] | None = None
         self._models: dict[str, Any] = {}
 
@@ -111,7 +114,13 @@ class ValuationModelRepository:
         city_code: str,
         model: Any,
     ) -> dict[str, Any]:
-        row: dict[str, Any] = {"__bias__": 1}
+        row: dict[str, Any] = {
+            "__bias__": 1,
+            "log_land_area_m2": 0.0,
+            "has_land_area": 0,
+            "property_type": "apartment",
+            "house_type": "unknown",
+        }
         if features.sigungu:
             row["district"] = features.sigungu
         if features.legalDong:
@@ -119,7 +128,7 @@ class ValuationModelRepository:
 
         area = self._positive_number(features.exclusiveAreaM2)
         if area is not None:
-            row["log_area_m2"] = math.log(area)
+            row["log_area_m2"] = math.log1p(area)
 
         floor = self._integer(features.floor)
         if floor is not None:
@@ -142,14 +151,15 @@ class ValuationModelRepository:
         if deal_year is not None:
             row["deal_year"] = deal_year
         if deal_year is not None and deal_month is not None:
-            row["deal_month_index"] = deal_year * 12 + deal_month
+            row["deal_month_index"] = self._deal_month_index(model, deal_year, deal_month)
             row["calendar_month"] = str(deal_month)
 
+        row.update(self.data_repository.features_for(features, city_code))
         subway_distance = self._number(features.distanceToStationM)
         if subway_distance is not None:
             row["log_nearest_subway_distance_m"] = math.log1p(max(subway_distance, 0))
+            row["nearest_subway_distance_m_missing"] = 0
 
-        row.update(self.data_repository.features_for(features, city_code))
         self._add_target_encoding_features(row, features, model)
         return row
 
@@ -227,6 +237,15 @@ class ValuationModelRepository:
         if age <= 39:
             return "age_30_39"
         return "age_40_plus"
+
+    def _deal_month_index(self, model: Any, deal_year: int, deal_month: int) -> int:
+        first_month = str(getattr(model, "first_month", "") or "")
+        if len(first_month) == 6 and first_month.isdigit():
+            first_year = int(first_month[:4])
+            first_month_number = int(first_month[4:])
+            if 1 <= first_month_number <= 12:
+                return (deal_year - first_year) * 12 + (deal_month - first_month_number)
+        return deal_year * 12 + deal_month
 
     def _integer(self, value: Optional[int]) -> int | None:
         if value is None:

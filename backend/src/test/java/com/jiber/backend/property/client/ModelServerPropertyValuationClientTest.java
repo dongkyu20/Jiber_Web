@@ -2,6 +2,7 @@ package com.jiber.backend.property.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -55,7 +56,7 @@ class ModelServerPropertyValuationClientTest {
                 .andExpect(jsonPath("$.features.builtYear").value(2010))
                 .andExpect(jsonPath("$.features.dealYear").value(2026))
                 .andExpect(jsonPath("$.features.dealMonth").value(6))
-                .andExpect(jsonPath("$.features.distanceToStationM").value(420))
+                .andExpect(jsonPath("$.features.distanceToStationM").value(nullValue()))
                 .andRespond(withSuccess("""
                         {
                           "supported": true,

@@ -259,15 +259,17 @@ Provider console에는 Spring Boot 기본 callback 경로를 등록합니다.
 - model-server 연결 실패, 5xx, timeout, 잘못된 internal auth 등 RestClient 예외는 `MODEL_SERVER_UNAVAILABLE`로 변환합니다.
 - 비아파트 valuation/shap은 `PropertyAiEligibilityService`에서 `VALUATION_UNSUPPORTED_PROPERTY_TYPE`으로 처리하는 경로를 유지해야 합니다.
 
-### Phase 1 Feature Mapping Skeleton
+### Apartment Feature Mapping
 
-현재 DB query가 없으므로 `ModelServerApartmentFeatureMapper`는 public request와 고정 skeleton 값을 조합합니다.
+`ModelServerApartmentFeatureMapper`는 부동산 상세 row와 public request를 조합해 model-server feature payload를 생성합니다.
 
-- public request에서 전달: `propertyId`, `asOfDate`, `exclusiveAreaM2`, `floor`
+- property row에서 전달: `propertyId`, `sido`, `sigungu`, `legalDong`, `propertyName`, `latitude`, `longitude`, `householdCount`, `builtYear`
+- public request에서 전달: `asOfDate`, `exclusiveAreaM2`, `floor`
 - `asOfDate`에서 계산: `dealYear`, `dealMonth`
-- Phase 1 skeleton default: `sido=서울특별시`, `sigungu=강남구`, `legalDong=예시동`, `builtYear=2010`, `distanceToStationM=420`
+- 기존 매물 valuation/SHAP 경로의 `distanceToStationM`은 추정 기본값을 넣지 않고 `null`로 전달합니다.
+- 신규 아파트 분석 경로의 `distanceToStationM`은 사용자가 입력한 경우에만 전달합니다.
 
-다음 Backend/Data 작업에서 `properties`, `property_transactions`, 교통/인프라 데이터 기반으로 위 feature를 채워야 합니다. feature 이름은 `docs/contracts/model-server.md`와 `model-server/app/schemas/apartment.py`의 camelCase 필드를 유지합니다.
+교통/인프라 feature는 model-server inference feature generator가 학습 feature 생성 방식과 같은 보조 데이터로 채웁니다. API payload의 camelCase feature 이름은 `docs/contracts/model-server.md`와 `model-server/app/schemas/apartment.py`를 유지합니다.
 
 ## Database
 

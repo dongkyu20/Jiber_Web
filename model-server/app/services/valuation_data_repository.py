@@ -4,6 +4,8 @@ import re
 import unicodedata
 import zipfile
 from dataclasses import dataclass
+from functools import lru_cache
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
@@ -14,6 +16,51 @@ from app.schemas.apartment import ApartmentFeatures
 FACILITY_RADIUS_M = 1000.0
 EARTH_RADIUS_M = 6_371_000.0
 CSV_ENCODINGS = ("utf-8-sig", "cp949", "euc-kr", "utf-8")
+ACCESS_TIME_FIELD_BY_FACILITY_MODE = {
+    ("버스터미널", "승용차"): "car_intercity_bus_terminal_minutes",
+    ("공항", "승용차"): "car_airport_minutes",
+    ("철도역", "승용차"): "car_rail_station_minutes",
+    ("종합병원", "승용차"): "car_general_hospital_minutes",
+    ("버스터미널", "대중교통/도보"): "transit_intercity_bus_terminal_minutes",
+    ("공항", "대중교통/도보"): "transit_airport_minutes",
+    ("철도역", "대중교통/도보"): "transit_rail_station_minutes",
+    ("종합병원", "대중교통/도보"): "transit_general_hospital_minutes",
+}
+ACCESS_TIME_FEATURES = tuple(ACCESS_TIME_FIELD_BY_FACILITY_MODE.values())
+LOG1P_TRAINING_FEATURES = (
+    "household_count",
+    "total_parking_spaces",
+    "nearest_subway_distance_m",
+    "nearest_bus_stop_distance_m",
+    *ACCESS_TIME_FEATURES,
+    "nearest_elementary_school_distance_m",
+    "nearest_middle_school_distance_m",
+    "nearest_hospital_distance_m",
+    "nearest_pharmacy_distance_m",
+    "nearest_park_distance_m",
+    "park_area_total_m2_radius",
+)
+COUNT_BIN_TRAINING_FEATURES = (
+    "subway_count_radius",
+    "bus_stop_count_radius",
+    "school_count_radius",
+    "academy_count_radius",
+    "recent_transaction_count",
+)
+SUPPORTED_ACCESS_TIME_CITIES = {
+    "서울특별시": "seoul",
+    "부산광역시": "busan",
+}
+HEALTHCARE_FILES = {
+    "seoul": {
+        "hospital": ("건강_병원_서울특별시.csv", "건강_의원_서울특별시.csv"),
+        "pharmacy": ("건강_약국_서울특별시.csv",),
+    },
+    "busan": {
+        "hospital": ("건강_병원_부산광역시.csv", "건강_의원_부산광역시.csv"),
+        "pharmacy": ("건강_약국_부산광역시.csv",),
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -24,16 +71,37 @@ class GeoPoint:
     area_m2: float | None = None
 
 
+@dataclass(frozen=True)
+class KaptComplexMatch:
+    kind: str
+    score: float
+    record: dict[str, Any] | None = None
+    candidates: tuple[dict[str, Any], ...] = ()
+
+
 class LocalValuationDataRepository:
-    def __init__(self, data_dir: str | Path) -> None:
+    def __init__(
+        self,
+        data_dir: str | Path,
+        *,
+        accept_remaining_matches: bool = False,
+    ) -> None:
         self.data_dir = Path(data_dir)
+        self.accept_remaining_matches = accept_remaining_matches
         self._complex_floor_records: list[dict[str, Any]] | None = None
         self._academy_records: list[dict[str, Any]] | None = None
         self._kapt_records: list[dict[str, Any]] | None = None
+        self.last_kapt_match: KaptComplexMatch | None = None
         self._bus_points: list[GeoPoint] | None = None
         self._rail_points: list[GeoPoint] | None = None
         self._park_points: list[GeoPoint] | None = None
         self._school_points: list[GeoPoint] | None = None
+        self._access_time_metrics: tuple[
+            dict[tuple[str, str, str], dict[str, float]],
+            dict[tuple[str, str], dict[str, float]],
+        ] | None = None
+        self._hospital_points_by_city: dict[str, list[GeoPoint]] | None = None
+        self._pharmacy_points_by_city: dict[str, list[GeoPoint]] | None = None
 
     def features_for(self, features: ApartmentFeatures, city_code: str) -> dict[str, Any]:
         row: dict[str, Any] = {}
@@ -43,22 +111,23 @@ class LocalValuationDataRepository:
         kapt_record = self._find_kapt(features, city_code)
         academy_record = self._find_academy(features, city_code)
 
-        estimated_max_floor = _first_int(
-            kapt_record.get("kapt_max_floor") if kapt_record else None,
-            complex_record.get("estimated_max_floor") if complex_record else None,
-        )
+        estimated_max_floor, max_floor_source = self._estimated_max_floor_context(floor, complex_record)
         if estimated_max_floor is not None:
             row["estimated_max_floor"] = estimated_max_floor
+            row["max_floor_source"] = max_floor_source
             self._add_top_floor_features(row, floor, estimated_max_floor, "estimated")
 
         kapt_max_floor = _integer(kapt_record.get("kapt_max_floor")) if kapt_record else None
-        if kapt_max_floor is not None:
+        if kapt_max_floor is not None and (floor is None or kapt_max_floor >= floor):
             row["kapt_max_floor"] = kapt_max_floor
             row["kapt_max_floor_missing"] = 0
             self._add_top_floor_features(row, floor, kapt_max_floor, "kapt")
         else:
+            row["kapt_max_floor"] = 0.0
             row["kapt_max_floor_missing"] = 1
+            row["floors_below_kapt_top"] = 0
             row["floors_below_kapt_top_bin"] = "missing"
+            row["kapt_relative_floor"] = 0.0
             row["kapt_relative_floor_bin"] = "missing"
 
         observation_count = _integer(complex_record.get("observation_count")) if complex_record else None
@@ -70,14 +139,14 @@ class LocalValuationDataRepository:
             kapt_record.get("household_count") if kapt_record else None,
             academy_record.get("household_count") if academy_record else None,
         )
-        if household_count is not None and household_count > 0:
+        if household_count is not None and household_count >= 0:
             row["log_household_count"] = math.log1p(household_count)
 
         building_count = _first_int(
             kapt_record.get("building_count") if kapt_record else None,
             academy_record.get("building_count") if academy_record else None,
         )
-        if household_count and building_count and building_count > 0:
+        if household_count is not None and building_count is not None and building_count > 0:
             row["households_per_building"] = household_count / building_count
 
         total_parking_spaces = _integer(kapt_record.get("total_parking_spaces")) if kapt_record else None
@@ -97,7 +166,10 @@ class LocalValuationDataRepository:
         longitude = _number(features.longitude)
         if latitude is not None and longitude is not None:
             self._add_spatial_features(row, latitude, longitude, city_code)
+            self._add_healthcare_features(row, latitude, longitude, city_code)
 
+        self._add_access_time_features(row, features, city_code)
+        self._add_training_feature_defaults(row, city_code)
         return row
 
     def _add_top_floor_features(
@@ -168,6 +240,89 @@ class LocalValuationDataRepository:
         if middle_summary:
             row["log_nearest_middle_school_distance_m"] = math.log1p(middle_summary["nearest_m"])
 
+    def _add_access_time_features(
+        self,
+        row: dict[str, Any],
+        features: ApartmentFeatures,
+        city_code: str,
+    ) -> None:
+        by_dong, by_district = self._access_time_metric_maps()
+        district_name = _normalize_access_name(features.sigungu)
+        if not district_name:
+            return
+
+        metrics = None
+        for legal_dong in _legal_dong_keys(features.legalDong):
+            metrics = by_dong.get((city_code, district_name, _normalize_access_name(legal_dong)))
+            if metrics is not None:
+                break
+        if metrics is None:
+            metrics = by_district.get((city_code, district_name))
+        if metrics is None:
+            return
+
+        for feature_name, value in metrics.items():
+            row[f"log_{feature_name}"] = math.log1p(max(value, 0))
+
+    def _add_healthcare_features(
+        self,
+        row: dict[str, Any],
+        latitude: float,
+        longitude: float,
+        city_code: str,
+    ) -> None:
+        hospital_distance = _nearest_distance(
+            self._hospital_points_for_city(city_code),
+            latitude,
+            longitude,
+        )
+        if hospital_distance is not None:
+            row["log_nearest_hospital_distance_m"] = math.log1p(hospital_distance)
+
+        pharmacy_distance = _nearest_distance(
+            self._pharmacy_points_for_city(city_code),
+            latitude,
+            longitude,
+        )
+        if pharmacy_distance is not None:
+            row["log_nearest_pharmacy_distance_m"] = math.log1p(pharmacy_distance)
+
+    def _add_training_feature_defaults(self, row: dict[str, Any], city_code: str) -> None:
+        row.setdefault("city_code", city_code)
+        for feature_name in (
+            "households_per_building",
+            "parking_spaces_per_household",
+            "has_community_facilities",
+        ):
+            has_value = feature_name in row
+            row.setdefault(feature_name, 0.0)
+            row.setdefault(f"{feature_name}_missing", 0 if has_value else 1)
+
+        for feature_name in LOG1P_TRAINING_FEATURES:
+            has_value = f"log_{feature_name}" in row
+            row.setdefault(f"log_{feature_name}", 0.0)
+            row.setdefault(f"{feature_name}_missing", 0 if has_value else 1)
+
+        for feature_name in COUNT_BIN_TRAINING_FEATURES:
+            row.setdefault(f"{feature_name}_bin", "missing")
+
+        park_area_log = _number(row.get("log_park_area_total_m2_radius"))
+        row.setdefault("park_exists", 1 if park_area_log and park_area_log > 0 else 0)
+
+    def _estimated_max_floor_context(
+        self,
+        floor: int | None,
+        complex_record: dict[str, Any] | None,
+    ) -> tuple[int | None, str | None]:
+        if floor is None:
+            return None, None
+
+        current_floor_estimate = floor
+        mapped_floor = _integer(complex_record.get("estimated_max_floor")) if complex_record else None
+        if mapped_floor is not None and mapped_floor >= current_floor_estimate:
+            return mapped_floor, "transaction_estimate"
+        return current_floor_estimate, "current_floor_estimate"
+
     def _find_complex_floor(
         self,
         features: ApartmentFeatures,
@@ -191,9 +346,150 @@ class LocalValuationDataRepository:
         features: ApartmentFeatures,
         city_code: str,
     ) -> dict[str, Any] | None:
-        if not _normalize_name(features.propertyName):
-            return None
-        return self._best_named_record(self._kapt_rows(), features, city_code)
+        result = self.match_kapt(features, city_code)
+        self.last_kapt_match = result
+        return result.record
+
+    def match_kapt(
+        self,
+        features: ApartmentFeatures,
+        city_code: str,
+    ) -> KaptComplexMatch:
+        wanted_name = _normalize_kapt_exact_name(features.propertyName)
+        if not wanted_name:
+            return KaptComplexMatch(kind="unmatched", score=0.0)
+
+        district = _collapse_spaces(features.sigungu)
+        legal_dong_keys = _legal_dong_keys(features.legalDong)
+        records = [
+            record
+            for record in self._kapt_rows()
+            if _is_allowed_kapt_complex_type(record.get("complex_type"))
+            and _same_city(record.get("city_code"), city_code)
+            and _collapse_spaces(record.get("district")) == district
+        ]
+
+        dong_exact = [
+            record
+            for record in records
+            if wanted_name == _kapt_record_exact_name(record)
+            and _record_has_legal_dong_key(record, legal_dong_keys)
+        ]
+        if len(dong_exact) == 1:
+            return self._matched_kapt("dong", 1.0, dong_exact[0])
+        if len(dong_exact) > 1:
+            return KaptComplexMatch(
+                kind="ambiguous_district",
+                score=1.0,
+                candidates=tuple(_sorted_kapt_records(dong_exact)),
+            )
+
+        district_exact = [
+            record
+            for record in records
+            if wanted_name == _kapt_record_exact_name(record)
+        ]
+        if len(district_exact) == 1:
+            return self._matched_kapt("district_unique", 1.0, district_exact[0])
+        if len(district_exact) > 1:
+            return KaptComplexMatch(
+                kind="ambiguous_district",
+                score=1.0,
+                candidates=tuple(_sorted_kapt_records(district_exact)),
+            )
+
+        return self._fuzzy_kapt_match(features, records, legal_dong_keys)
+
+    def _fuzzy_kapt_match(
+        self,
+        features: ApartmentFeatures,
+        records: list[dict[str, Any]],
+        legal_dong_keys: set[str],
+    ) -> KaptComplexMatch:
+        wanted_name = _normalize_kapt_fuzzy_name(features.propertyName)
+        if not wanted_name or not records:
+            return KaptComplexMatch(kind="unmatched", score=0.0)
+
+        scored = [
+            (
+                _kapt_name_similarity(wanted_name, _kapt_record_fuzzy_name(record)),
+                _record_has_legal_dong_key(record, legal_dong_keys),
+                record,
+            )
+            for record in records
+            if _kapt_record_fuzzy_name(record)
+        ]
+        if not scored:
+            return KaptComplexMatch(kind="unmatched", score=0.0)
+
+        best_score = max(score for score, _, _ in scored)
+        top_records = [
+            (same_dong, record)
+            for score, same_dong, record in scored
+            if math.isclose(score, best_score, abs_tol=1e-12)
+        ]
+        top_records.sort(key=lambda item: (not item[0], _source_complex_code(item[1]), str(item[1].get("name") or "")))
+        best_records = [record for _, record in top_records]
+
+        if best_score < 0.72:
+            same_dong_scored = [
+                (score, record)
+                for score, same_dong, record in scored
+                if same_dong
+            ]
+            if self.accept_remaining_matches and same_dong_scored:
+                same_dong_scored.sort(
+                    key=lambda item: (-item[0], _source_complex_code(item[1]), str(item[1].get("name") or ""))
+                )
+                score, record = same_dong_scored[0]
+                return self._matched_kapt(
+                    "counterpart_has_dong_but_name_absent",
+                    score,
+                    record,
+                    needs_manual_review=True,
+                )
+            return KaptComplexMatch(kind="unmatched", score=best_score)
+
+        if len(best_records) > 1:
+            selected = best_records[0] if self.accept_remaining_matches else None
+            record = (
+                _kapt_record_with_match(
+                    selected,
+                    "ambiguous_name_variant",
+                    best_score,
+                    needs_manual_review=True,
+                )
+                if selected is not None
+                else None
+            )
+            return KaptComplexMatch(
+                kind="ambiguous_name_variant",
+                score=best_score,
+                record=record,
+                candidates=tuple(_sorted_kapt_records(best_records)),
+            )
+
+        kind = "likely_name_variant" if best_score >= 0.90 else "possible_name_variant"
+        return self._matched_kapt(kind, best_score, best_records[0])
+
+    def _matched_kapt(
+        self,
+        kind: str,
+        score: float,
+        record: dict[str, Any],
+        *,
+        needs_manual_review: bool = False,
+    ) -> KaptComplexMatch:
+        return KaptComplexMatch(
+            kind=kind,
+            score=score,
+            record=_kapt_record_with_match(
+                record,
+                kind,
+                score,
+                needs_manual_review=needs_manual_review,
+            ),
+        )
 
     def _best_named_record(
         self,
@@ -317,15 +613,23 @@ class LocalValuationDataRepository:
         for row in _read_xlsx_dicts(path, required_headers=("시도", "시군구", "단지명")):
             name = str(row.get("단지명") or "")
             community = str(row.get("부대복리시설") or "").strip()
+            address = _clean_text(row.get("법정동주소"))
+            city_code = (
+                _city_code_from_text(str(row.get("시도") or ""))
+                or _city_code_from_text(address)
+                or _city_code_from_text(str(row.get("도로명주소") or ""))
+            )
             records.append(
                 {
-                    "city_code": _city_code_from_text(str(row.get("시도") or "")),
+                    "city_code": city_code,
                     "district": _clean_text(row.get("시군구")),
                     "legal_dong": _clean_text(row.get("동리") or row.get("읍면")),
-                    "address": _clean_text(row.get("법정동주소")),
+                    "address": address,
                     "name": name,
-                    "normalized_name": _normalize_name(name),
-                    "normalized_name_variant": _normalize_name_variant(name),
+                    "source_complex_code": _clean_text(row.get("단지코드") or row.get("KAPT코드")),
+                    "complex_type": _clean_text(row.get("단지분류")),
+                    "normalized_name": _normalize_kapt_exact_name(name),
+                    "normalized_name_variant": _normalize_kapt_fuzzy_name(name),
                     "building_count": _integer(row.get("동수")),
                     "household_count": _integer(row.get("세대수")),
                     "total_parking_spaces": _integer(row.get("총주차대수")),
@@ -348,12 +652,10 @@ class LocalValuationDataRepository:
 
     def _rail_station_points(self, city_code: str) -> list[GeoPoint]:
         if self._rail_points is None:
-            path = _resolve_data_path(self.data_dir, "국가철도공단_철도역 정보_20250711.csv")
-            self._rail_points = [
-                point
-                for row in _read_csv_dicts(path)
-                if (point := _point_from_row(row, "위도좌표", "경도좌표", kind=str(row.get("주소") or ""))) is not None
-            ]
+            self._rail_points = []
+            for filename in ("seoul_busan_subway_station_locations.csv", "subway_station_locations.csv"):
+                path = _resolve_data_path(self.data_dir, filename)
+                self._rail_points.extend(_located_subway_points_from_csv(path))
         return _filter_city_points(self._rail_points, city_code)
 
     def _park_points_for_city(self, city_code: str) -> list[GeoPoint]:
@@ -392,6 +694,64 @@ class LocalValuationDataRepository:
                 is not None
             ]
         return _filter_city_points(self._school_points, city_code)
+
+    def _access_time_metric_maps(
+        self,
+    ) -> tuple[dict[tuple[str, str, str], dict[str, float]], dict[tuple[str, str], dict[str, float]]]:
+        if self._access_time_metrics is not None:
+            return self._access_time_metrics
+
+        by_dong: dict[tuple[str, str, str], dict[str, float]] = {}
+        by_district: dict[tuple[str, str], dict[str, float]] = {}
+        path = _resolve_data_path(self.data_dir, "01_평균접근시간_2023.xlsx")
+        for row in _read_xlsx_dicts(
+            path,
+            required_headers=("Year", "HDCD_Lev", "Faci_NM", "Time_Zone", "Mode_NM", "평균접근시간(분)"),
+        ):
+            field_name = ACCESS_TIME_FIELD_BY_FACILITY_MODE.get(
+                (_clean_text(row.get("Faci_NM")), _clean_text(row.get("Mode_NM")))
+            )
+            if field_name is None:
+                continue
+            if _clean_text(row.get("Time_Zone")) != "0_AllDay":
+                continue
+            level = _clean_text(row.get("HDCD_Lev"))
+            if level not in {"2", "4"}:
+                continue
+            city_code = SUPPORTED_ACCESS_TIME_CITIES.get(_clean_text(row.get("HDCD_SD_NM")))
+            value = _number(row.get("평균접근시간(분)"))
+            if city_code is None or value is None:
+                continue
+
+            district = _normalize_access_name(row.get("HDCD_SGG_NM"))
+            dong = _normalize_access_name(row.get("HDCD_EMD_NM"))
+            if level == "4" and district and dong and dong != "-":
+                by_dong.setdefault((city_code, district, dong), {})[field_name] = value
+            elif level == "2" and district and district != "-":
+                by_district.setdefault((city_code, district), {})[field_name] = value
+
+        self._access_time_metrics = (by_dong, by_district)
+        return self._access_time_metrics
+
+    def _hospital_points_for_city(self, city_code: str) -> list[GeoPoint]:
+        if self._hospital_points_by_city is None:
+            self._hospital_points_by_city = self._healthcare_points_by_kind("hospital")
+        return self._hospital_points_by_city.get(city_code, [])
+
+    def _pharmacy_points_for_city(self, city_code: str) -> list[GeoPoint]:
+        if self._pharmacy_points_by_city is None:
+            self._pharmacy_points_by_city = self._healthcare_points_by_kind("pharmacy")
+        return self._pharmacy_points_by_city.get(city_code, [])
+
+    def _healthcare_points_by_kind(self, facility_kind: str) -> dict[str, list[GeoPoint]]:
+        points_by_city: dict[str, list[GeoPoint]] = {}
+        for city_code, filenames_by_kind in HEALTHCARE_FILES.items():
+            points: list[GeoPoint] = []
+            for filename in filenames_by_kind.get(facility_kind, ()):
+                path = _resolve_data_path(self.data_dir, filename)
+                points.extend(_healthcare_points_from_csv(path))
+            points_by_city[city_code] = points
+        return points_by_city
 
 
 def _read_csv_dicts(path: Path, delimiter: str = ",") -> list[dict[str, Any]]:
@@ -517,8 +877,11 @@ def _xlsx_rows(
     for row in root.findall("a:sheetData/a:row", namespace):
         values: dict[int, str] = {}
         for cell in row.findall("a:c", namespace):
-            value_node = cell.find("a:v", namespace)
-            value = "" if value_node is None else value_node.text or ""
+            if cell.attrib.get("t") == "inlineStr":
+                value = "".join(text.text or "" for text in cell.findall(".//a:t", namespace))
+            else:
+                value_node = cell.find("a:v", namespace)
+                value = "" if value_node is None else value_node.text or ""
             if cell.attrib.get("t") == "s" and value:
                 value = shared_strings[int(value)]
             column_index = _xlsx_column_index(cell.attrib.get("r", "A1"))
@@ -542,12 +905,16 @@ def _nearest_summary(
     latitude: float,
     longitude: float,
 ) -> dict[str, float] | None:
+    candidates = [
+        point
+        for point in points
+        if abs(point.latitude - latitude) <= 0.02 and abs(point.longitude - longitude) <= 0.02
+    ]
+    search_points = candidates or points
     nearest = None
     count = 0
     area_total_m2 = 0.0
-    for point in points:
-        if abs(point.latitude - latitude) > 0.02 or abs(point.longitude - longitude) > 0.02:
-            continue
+    for point in search_points:
         distance = _haversine_m(latitude, longitude, point.latitude, point.longitude)
         if nearest is None or distance < nearest:
             nearest = distance
@@ -558,6 +925,28 @@ def _nearest_summary(
     if nearest is None:
         return None
     return {"nearest_m": nearest, "count": count, "area_total_m2": area_total_m2}
+
+
+def _nearest_distance(
+    points: list[GeoPoint],
+    latitude: float,
+    longitude: float,
+) -> float | None:
+    if not points:
+        return None
+
+    candidates = [
+        point
+        for point in points
+        if abs(point.latitude - latitude) <= 0.05 and abs(point.longitude - longitude) <= 0.05
+    ]
+    search_points = candidates or points
+    nearest = None
+    for point in search_points:
+        distance = _haversine_m(latitude, longitude, point.latitude, point.longitude)
+        if nearest is None or distance < nearest:
+            nearest = distance
+    return nearest
 
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -583,6 +972,77 @@ def _point_from_row(
     return GeoPoint(latitude=latitude, longitude=longitude, kind=kind, area_m2=area_m2)
 
 
+def _healthcare_points_from_csv(path: Path) -> list[GeoPoint]:
+    points = []
+    for row in _read_csv_dicts(path):
+        if not _is_open_healthcare(row):
+            continue
+        x = _number(row.get("좌표정보(X)"))
+        y = _number(row.get("좌표정보(Y)"))
+        if x is None or y is None:
+            continue
+        point = _healthcare_point_from_xy(x, y)
+        if point is not None:
+            points.append(point)
+    return points
+
+
+def _located_subway_points_from_csv(path: Path) -> list[GeoPoint]:
+    points = []
+    for row in _read_csv_dicts(path):
+        latitude = _first_number(row.get("latitude"), row.get("위도"), row.get("lat"))
+        longitude = _first_number(row.get("longitude"), row.get("경도"), row.get("lon"), row.get("lng"))
+        if latitude is None or longitude is None:
+            continue
+        city_code = _clean_text(row.get("city_code") or row.get("service_area"))
+        if not city_code:
+            city_code = _city_code_from_text(
+                " ".join(
+                    [
+                        _clean_text(row.get("시도")),
+                        _clean_text(row.get("주소")),
+                        _clean_text(row.get("도로명주소")),
+                        _clean_text(row.get("지번주소")),
+                    ]
+                )
+            )
+        points.append(GeoPoint(latitude=latitude, longitude=longitude, kind=city_code))
+    return points
+
+
+def _is_open_healthcare(row: dict[str, Any]) -> bool:
+    return _clean_text(row.get("영업상태명")) == "영업/정상" or _clean_text(row.get("상세영업상태명")) == "영업중"
+
+
+def _healthcare_point_from_xy(x: float, y: float) -> GeoPoint | None:
+    if 124 <= x <= 132 and 33 <= y <= 39:
+        return GeoPoint(latitude=y, longitude=x)
+
+    converted = _projected_xy_to_wgs84(x, y)
+    if converted is None:
+        return None
+    latitude, longitude = converted
+    if not (33 <= latitude <= 39 and 124 <= longitude <= 132):
+        return None
+    return GeoPoint(latitude=latitude, longitude=longitude)
+
+
+def _projected_xy_to_wgs84(x: float, y: float) -> tuple[float, float] | None:
+    try:
+        transformer = _projected_xy_to_wgs84_transformer()
+    except ImportError:
+        return None
+    longitude, latitude = transformer.transform(x, y)
+    return float(latitude), float(longitude)
+
+
+@lru_cache(maxsize=1)
+def _projected_xy_to_wgs84_transformer() -> Any:
+    from pyproj import Transformer
+
+    return Transformer.from_crs("EPSG:5174", "EPSG:4326", always_xy=True)
+
+
 def _resolve_data_path(data_dir: Path, filename: str) -> Path:
     path = data_dir / filename
     if path.is_file():
@@ -600,8 +1060,16 @@ def _resolve_data_path(data_dir: Path, filename: str) -> Path:
 
 def _filter_city_points(points: list[GeoPoint], city_code: str) -> list[GeoPoint]:
     city_label = "서울" if city_code == "seoul" else "부산"
-    filtered = [point for point in points if not point.kind or city_label in point.kind]
+    filtered = [
+        point
+        for point in points
+        if not point.kind or city_label in point.kind or city_code in point.kind
+    ]
     return filtered if filtered else points
+
+
+def _normalize_access_name(value: Any) -> str:
+    return re.sub(r"\s+", "", str(value or "").strip())
 
 
 def _count_bin(count: int) -> str:
@@ -635,11 +1103,114 @@ def _relative_floor_bin(relative_floor: float) -> str:
         return "relative_floor_0_25"
     if relative_floor <= 0.5:
         return "relative_floor_25_50"
-    if relative_floor < 0.75:
+    if relative_floor <= 0.75:
         return "relative_floor_50_75"
     if relative_floor < 1:
         return "relative_floor_75_100"
     return "relative_floor_100"
+
+
+ALLOWED_KAPT_COMPLEX_TYPES = {
+    "아파트",
+    "주상복합",
+    "도시형 생활주택(아파트)",
+    "도시형 생활주택(주상복합)",
+}
+KAPT_NAME_REMOVE_RE = re.compile(r"[\s·ㆍ\-_()\[\]{}（）]+")
+KAPT_FUZZY_REMOVE_WORDS = (
+    "공공임대",
+    "영구임대",
+    "민간임대",
+    "아파트",
+    "분양",
+    "임대",
+    "apt",
+)
+
+
+def _is_allowed_kapt_complex_type(value: Any) -> bool:
+    return _clean_text(value) in ALLOWED_KAPT_COMPLEX_TYPES
+
+
+def _same_city(record_city_code: Any, wanted_city_code: str) -> bool:
+    city_code = str(record_city_code or "").strip().lower()
+    return not city_code or city_code == str(wanted_city_code or "").strip().lower()
+
+
+def _collapse_spaces(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip())
+
+
+def _legal_dong_keys(value: Any) -> set[str]:
+    legal_dong = _collapse_spaces(value)
+    if not legal_dong:
+        return set()
+
+    keys = {legal_dong}
+    parts = legal_dong.split()
+    if len(parts) >= 2 and (parts[-2].endswith("읍") or parts[-2].endswith("면")) and parts[-1].endswith("리"):
+        keys.add(parts[-1])
+    return keys
+
+
+def _record_has_legal_dong_key(record: dict[str, Any], wanted_keys: set[str]) -> bool:
+    if not wanted_keys:
+        return False
+    return bool(_legal_dong_keys(record.get("legal_dong")) & wanted_keys)
+
+
+def _normalize_kapt_exact_name(value: Any) -> str:
+    if value is None:
+        return ""
+    return KAPT_NAME_REMOVE_RE.sub("", str(value).strip().lower())
+
+
+def _normalize_kapt_fuzzy_name(value: Any) -> str:
+    name = _normalize_kapt_exact_name(value)
+    for old, new in _APT_BRAND_REPLACEMENTS:
+        name = name.replace(old, new)
+    for word in KAPT_FUZZY_REMOVE_WORDS:
+        name = name.replace(word, "")
+    return name
+
+
+def _kapt_record_exact_name(record: dict[str, Any]) -> str:
+    return str(record.get("normalized_name") or "") or _normalize_kapt_exact_name(record.get("name"))
+
+
+def _kapt_record_fuzzy_name(record: dict[str, Any]) -> str:
+    return str(record.get("normalized_name_variant") or "") or _normalize_kapt_fuzzy_name(record.get("name"))
+
+
+def _kapt_name_similarity(wanted_name: str, candidate_name: str) -> float:
+    if not wanted_name or not candidate_name:
+        return 0.0
+    score = SequenceMatcher(None, wanted_name, candidate_name).ratio()
+    if wanted_name in candidate_name or candidate_name in wanted_name:
+        score = max(score, 0.92)
+    return score
+
+
+def _source_complex_code(record: dict[str, Any]) -> str:
+    return str(record.get("source_complex_code") or record.get("name") or "")
+
+
+def _sorted_kapt_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(records, key=lambda record: (_source_complex_code(record), str(record.get("name") or "")))
+
+
+def _kapt_record_with_match(
+    record: dict[str, Any],
+    kind: str,
+    score: float,
+    *,
+    needs_manual_review: bool = False,
+) -> dict[str, Any]:
+    matched = dict(record)
+    matched["match_kind"] = kind
+    matched["match_score"] = score
+    matched["needs_manual_review"] = needs_manual_review
+    return matched
 
 
 _APT_SUFFIXES = ("아파트", "apt")
@@ -710,6 +1281,14 @@ def _first_int(*values: Any) -> int | None:
         integer = _integer(value)
         if integer is not None:
             return integer
+    return None
+
+
+def _first_number(*values: Any) -> float | None:
+    for value in values:
+        number = _number(value)
+        if number is not None:
+            return number
     return None
 
 

@@ -334,7 +334,7 @@ Draft request:
   "floor": 15,
   "builtYear": 2010,
   "asOfDate": "2026-06-25",
-  "distanceToStationM": 420
+  "distanceToStationM": null
 }
 ```
 

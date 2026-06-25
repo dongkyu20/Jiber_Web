@@ -2,6 +2,8 @@ import math
 import pickle
 from pathlib import Path
 
+import pytest
+
 from app.core.config import Settings
 from app.schemas.apartment import ApartmentFeatures, ApartmentInferenceRequest
 from app.services.valuation_service import (
@@ -37,6 +39,8 @@ SHAP_GROUP_LABELS = [
 
 
 class FakePredictModel:
+    first_month = "202307"
+
     def __init__(self, predicted_log_price: float) -> None:
         self.predicted_log_price = predicted_log_price
         self.rows: list[dict] = []
@@ -83,7 +87,11 @@ def test_repository_loads_city_artifact_and_predicts_krw(tmp_path: Path) -> None
     row = loaded_model.rows[0]
     assert prediction.feature_row == row
     assert row["__bias__"] == 1
-    assert row["log_area_m2"] == math.log(84.95)
+    assert row["log_land_area_m2"] == 0.0
+    assert row["has_land_area"] == 0
+    assert row["property_type"] == "apartment"
+    assert row["house_type"] == "unknown"
+    assert row["log_area_m2"] == math.log1p(84.95)
     assert row["floor"] == 15
     assert row["floor_band"] == "floor_13_18"
     assert row["low_floor"] == 0
@@ -93,11 +101,23 @@ def test_repository_loads_city_artifact_and_predicts_krw(tmp_path: Path) -> None
     assert row["age"] == 16
     assert row["age_band"] == "age_10_19"
     assert row["deal_year"] == 2026
-    assert row["deal_month_index"] == 2026 * 12 + 6
+    assert row["deal_month_index"] == 35
     assert row["calendar_month"] == "6"
     assert row["log_nearest_subway_distance_m"] == math.log1p(420)
+    assert row["nearest_subway_distance_m_missing"] == 0
+    assert row["estimated_max_floor"] == 15
+    assert row["max_floor_source"] == "current_floor_estimate"
+    assert row["relative_floor"] == 1.0
+    assert row["relative_floor_bin"] == "relative_floor_100"
+    assert row["floors_below_estimated_top"] == 0
+    assert row["floors_below_estimated_top_bin"] == "below_top_0"
+    assert row["is_estimated_top_floor"] == 1
+    assert row["is_near_estimated_top_floor"] == 1
+    assert row["kapt_max_floor"] == 0.0
     assert row["kapt_max_floor_missing"] == 1
+    assert row["floors_below_kapt_top"] == 0
     assert row["floors_below_kapt_top_bin"] == "missing"
+    assert row["kapt_relative_floor"] == 0.0
     assert row["kapt_relative_floor_bin"] == "missing"
     return
     assert loaded_model.rows == [
@@ -148,6 +168,75 @@ def test_repository_selects_busan_artifact(tmp_path: Path) -> None:
     assert prediction.model_version == "busan-run"
     assert "seoul" not in repository._models
     assert repository._models["busan"].rows[0]["district"] == "해운대구"
+
+
+def test_repository_uses_current_floor_as_estimated_top_when_complex_history_is_absent(tmp_path: Path) -> None:
+    model = FakePredictModel(math.log(700_000_000))
+    _write_artifact(tmp_path, "seoul", "seoul-run", model)
+    repository = ValuationModelRepository(tmp_path)
+
+    repository.predict(
+        ApartmentFeatures(
+            sido="서울특별시",
+            sigungu="강남구",
+            legalDong="논현동",
+            propertyName="규칙테스트",
+            householdCount=0,
+            exclusiveAreaM2=59.5,
+            floor=3,
+            builtYear=2020,
+            dealYear=2026,
+            dealMonth=1,
+        )
+    )
+
+    row = repository._models["seoul"].rows[0]
+    assert row["estimated_max_floor"] == 3
+    assert row["relative_floor"] == 1.0
+    assert row["relative_floor_bin"] == "relative_floor_100"
+    assert row["floors_below_estimated_top"] == 0
+    assert row["floors_below_estimated_top_bin"] == "below_top_0"
+    assert row["is_estimated_top_floor"] == 1
+    assert row["log_household_count"] == 0.0
+    assert row["household_count_missing"] == 0
+
+
+def test_repository_keeps_relative_floor_075_in_50_75_bucket(tmp_path: Path) -> None:
+    model = FakePredictModel(math.log(700_000_000))
+    _write_artifact(tmp_path, "seoul", "seoul-run", model)
+    repository = ValuationModelRepository(tmp_path)
+    repository.data_repository._complex_floor_records = [
+        {
+            "city_code": "seoul",
+            "district": "강남구",
+            "legal_dong": "논현동",
+            "name": "경계테스트",
+            "normalized_name": "경계테스트",
+            "normalized_name_variant": "경계테스트",
+            "estimated_max_floor": 4,
+            "observation_count": 1,
+        }
+    ]
+    repository.data_repository._kapt_records = []
+    repository.data_repository._academy_records = []
+
+    repository.predict(
+        ApartmentFeatures(
+            sido="서울특별시",
+            sigungu="강남구",
+            legalDong="논현동",
+            propertyName="경계테스트",
+            exclusiveAreaM2=59.5,
+            floor=3,
+            builtYear=2020,
+            dealYear=2026,
+            dealMonth=1,
+        )
+    )
+
+    row = repository._models["seoul"].rows[0]
+    assert row["relative_floor"] == pytest.approx(0.75)
+    assert row["relative_floor_bin"] == "relative_floor_50_75"
 
 
 def test_repository_finds_artifact_when_zip_extracts_nested_directory(tmp_path: Path) -> None:
