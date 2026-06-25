@@ -28,6 +28,10 @@ public record PropertySearchRequest(
         List<TransactionType> transactionTypes,
         @PositiveOrZero Long minDealAmount,
         @PositiveOrZero Long maxDealAmount,
+        @PositiveOrZero Long minSaleAmount,
+        @PositiveOrZero Long maxSaleAmount,
+        @PositiveOrZero Long minJeonseDepositAmount,
+        @PositiveOrZero Long maxJeonseDepositAmount,
         @PositiveOrZero BigDecimal minAreaM2,
         @PositiveOrZero BigDecimal maxAreaM2,
         @Min(1900) Integer dealYearFrom,
@@ -56,6 +60,13 @@ public record PropertySearchRequest(
         }
         if (minDealAmount != null && maxDealAmount != null && minDealAmount > maxDealAmount) {
             details.add(new ErrorDetail("minDealAmount", "minDealAmount는 maxDealAmount보다 작거나 같아야 합니다."));
+        }
+        if (minSaleAmount != null && maxSaleAmount != null && minSaleAmount > maxSaleAmount) {
+            details.add(new ErrorDetail("minSaleAmount", "minSaleAmount는 maxSaleAmount보다 작거나 같아야 합니다."));
+        }
+        if (minJeonseDepositAmount != null && maxJeonseDepositAmount != null
+                && minJeonseDepositAmount > maxJeonseDepositAmount) {
+            details.add(new ErrorDetail("minJeonseDepositAmount", "minJeonseDepositAmount는 maxJeonseDepositAmount보다 작거나 같아야 합니다."));
         }
         if (minAreaM2 != null && maxAreaM2 != null && minAreaM2.compareTo(maxAreaM2) > 0) {
             details.add(new ErrorDetail("minAreaM2", "minAreaM2는 maxAreaM2보다 작거나 같아야 합니다."));

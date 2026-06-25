@@ -39,7 +39,8 @@ VITE_KAKAO_MAP_APP_KEY=
 
 - `VITE_API_BASE_URL`: Spring Boot public API base URL입니다. 프론트엔드는 `/api/v1/**`만 호출합니다.
 - `VITE_KAKAO_MAP_APP_KEY`: Kakao Maps JavaScript app key입니다. 비어 있으면 지도 fallback 안내를 보여줍니다. 값은 출력하거나 커밋하지 않습니다.
-- `KAKAO_REST_API_KEY`: backend Kakao Local geocoding용 key입니다. frontend Kakao 지도 SDK key가 아닙니다.
+- Kakao Postcode service: 신규매물 분석 주소 선택에 사용하는 브라우저 주소 검색 UI입니다. 별도 secret을 frontend 코드에 넣지 않습니다.
+- `KAKAO_REST_API_KEY`: backend Kakao Local geocoding용 key입니다. Kakao Postcode에서 선택한 주소의 좌표 보완에도 사용되며, frontend Kakao 지도 SDK key가 아닙니다.
 
 실행 환경의 process env에 같은 이름의 값이 있으면 root `.env`보다 우선합니다. 로컬에서 다른 backend 포트를 볼 때는 `VITE_API_BASE_URL`만 일회성으로 override하세요.
 

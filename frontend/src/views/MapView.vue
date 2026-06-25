@@ -25,12 +25,21 @@ import { SearchTrie } from '@/utils/searchTrie'
 const propertyTypeOptions: PropertyType[] = ['APARTMENT', 'OFFICETEL', 'VILLA']
 const keywordSearchPageSize = 100
 const autocompleteFetchSize = 20
+const PRICE_STEP_KRW = 50_000_000
+const SALE_PRICE_BOUNDS = { min: 0, max: 5_000_000_000 }
+const JEONSE_PRICE_BOUNDS = { min: 0, max: 3_000_000_000 }
+
+type PriceRangeBounds = typeof SALE_PRICE_BOUNDS
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const mapSearchStore = useMapSearchStore()
 const selectedPropertyTypes = ref<PropertyType[]>([...propertyTypeOptions])
+const salePriceMin = ref(SALE_PRICE_BOUNDS.min)
+const salePriceMax = ref(SALE_PRICE_BOUNDS.max)
+const jeonsePriceMin = ref(JEONSE_PRICE_BOUNDS.min)
+const jeonsePriceMax = ref(JEONSE_PRICE_BOUNDS.max)
 const zoomLevel = ref(SEOUL_SEED_VIEWPORT.zoomLevel)
 const loading = ref(false)
 const errorMessage = ref('')
@@ -60,6 +69,12 @@ let restoredFromSnapshot = false
 let mounted = false
 
 const isKeywordSearch = computed(() => activeSearchKeyword.value.length > 0)
+const salePriceRangeLabel = computed(() =>
+  formatPriceRangeLabel(salePriceMin.value, salePriceMax.value, SALE_PRICE_BOUNDS)
+)
+const jeonsePriceRangeLabel = computed(() =>
+  formatPriceRangeLabel(jeonsePriceMin.value, jeonsePriceMax.value, JEONSE_PRICE_BOUNDS)
+)
 const hasMoreKeywordResults = computed(
   () => isKeywordSearch.value && keywordSearchTotal.value !== null && items.value.length < keywordSearchTotal.value
 )
@@ -79,6 +94,9 @@ const currentAreaLabel = computed(() => {
   const keyword = activeSearchKeyword.value.trim()
   return keyword ? `검색: ${keyword}` : '현재 지도 영역'
 })
+const pricedItems = computed<PropertyMapItem[]>(() => items.value.map(withPriceFilterState))
+const priceDimmedCount = computed(() => pricedItems.value.filter((item) => item.priceFilterDimmed).length)
+const hasActivePriceFilter = computed(() => hasActiveSalePriceFilter() || hasActiveJeonsePriceFilter())
 
 const resultDescription = computed(() => {
   if (loading.value) {
@@ -89,9 +107,17 @@ const resultDescription = computed(() => {
 
   if (items.value.length > 0) {
     const count = items.value.length.toLocaleString('ko-KR')
+    const priceHint =
+      hasActivePriceFilter.value && priceDimmedCount.value > 0
+        ? ` 가격 범위 안 ${(
+            items.value.length - priceDimmedCount.value
+          ).toLocaleString('ko-KR')}건을 우선 표시하고, 범위 밖 ${priceDimmedCount.value.toLocaleString(
+            'ko-KR'
+          )}건은 흐리게 표시합니다.`
+        : ''
     return isKeywordSearch.value
-      ? `"${activeSearchKeyword.value}" 검색 결과 ${count}건을 찾았습니다.`
-      : `${count}건의 실거래 위치를 찾았습니다.`
+      ? `"${activeSearchKeyword.value}" 검색 결과 ${count}건을 찾았습니다.${priceHint}`
+      : `${count}건의 실거래 위치를 찾았습니다.${priceHint}`
   }
 
   return isKeywordSearch.value
@@ -137,6 +163,174 @@ function readQueryBoolean(value: unknown): boolean | null {
   }
 
   return rawValue === '1' || rawValue === 'true'
+}
+
+function normalizePriceValue(value: number, bounds: PriceRangeBounds) {
+  if (!Number.isFinite(value)) {
+    return bounds.min
+  }
+
+  const stepped = Math.round(value / PRICE_STEP_KRW) * PRICE_STEP_KRW
+  return Math.min(bounds.max, Math.max(bounds.min, stepped))
+}
+
+function readQueryPrice(value: unknown, bounds: PriceRangeBounds): number | null {
+  const parsed = readQueryNumber(value)
+  return parsed === null ? null : normalizePriceValue(parsed, bounds)
+}
+
+function setPriceRange(minRef: typeof salePriceMin, maxRef: typeof salePriceMax, nextMin: number, nextMax: number, bounds: PriceRangeBounds) {
+  const normalizedMin = normalizePriceValue(nextMin, bounds)
+  const normalizedMax = normalizePriceValue(nextMax, bounds)
+  minRef.value = Math.min(normalizedMin, normalizedMax)
+  maxRef.value = Math.max(normalizedMin, normalizedMax)
+}
+
+function readPriceInput(event: Event, bounds: PriceRangeBounds) {
+  const target = event.target as HTMLInputElement | null
+  return normalizePriceValue(Number(target?.value ?? bounds.min), bounds)
+}
+
+function setSalePriceMin(event: Event) {
+  salePriceMin.value = Math.min(readPriceInput(event, SALE_PRICE_BOUNDS), salePriceMax.value)
+}
+
+function setSalePriceMax(event: Event) {
+  salePriceMax.value = Math.max(readPriceInput(event, SALE_PRICE_BOUNDS), salePriceMin.value)
+}
+
+function setJeonsePriceMin(event: Event) {
+  jeonsePriceMin.value = Math.min(readPriceInput(event, JEONSE_PRICE_BOUNDS), jeonsePriceMax.value)
+}
+
+function setJeonsePriceMax(event: Event) {
+  jeonsePriceMax.value = Math.max(readPriceInput(event, JEONSE_PRICE_BOUNDS), jeonsePriceMin.value)
+}
+
+function formatKoreanPrice(value: number) {
+  if (value === 0) {
+    return '0'
+  }
+
+  const eok = value / 100_000_000
+  return `${eok.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}억`
+}
+
+function formatPriceRangeLabel(min: number, max: number, bounds: PriceRangeBounds) {
+  if (min === bounds.min && max === bounds.max) {
+    return '전체'
+  }
+
+  return `${formatKoreanPrice(min)} ~ ${formatKoreanPrice(max)}`
+}
+
+function priceRangeTrackStyle(min: number, max: number, bounds: PriceRangeBounds) {
+  const span = bounds.max - bounds.min
+  const start = span === 0 ? 0 : ((min - bounds.min) / span) * 100
+  const end = span === 0 ? 100 : ((max - bounds.min) / span) * 100
+  return {
+    '--range-start': `${start}%`,
+    '--range-end': `${end}%`
+  }
+}
+
+function priceFilterParams() {
+  return {
+    minSaleAmount: salePriceMin.value === SALE_PRICE_BOUNDS.min ? undefined : salePriceMin.value,
+    maxSaleAmount: salePriceMax.value === SALE_PRICE_BOUNDS.max ? undefined : salePriceMax.value,
+    minJeonseDepositAmount: jeonsePriceMin.value === JEONSE_PRICE_BOUNDS.min ? undefined : jeonsePriceMin.value,
+    maxJeonseDepositAmount: jeonsePriceMax.value === JEONSE_PRICE_BOUNDS.max ? undefined : jeonsePriceMax.value
+  }
+}
+
+function hasActiveSalePriceFilter() {
+  return salePriceMin.value !== SALE_PRICE_BOUNDS.min || salePriceMax.value !== SALE_PRICE_BOUNDS.max
+}
+
+function hasActiveJeonsePriceFilter() {
+  return jeonsePriceMin.value !== JEONSE_PRICE_BOUNDS.min || jeonsePriceMax.value !== JEONSE_PRICE_BOUNDS.max
+}
+
+function finiteAmount(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function latestSaleAmount(item: PropertyMapItem): number | null {
+  return item.latestTransaction?.transactionType === 'SALE' ? finiteAmount(item.latestTransaction.dealAmount) : null
+}
+
+function latestJeonseAmount(item: PropertyMapItem): number | null {
+  if (item.latestTransaction?.transactionType !== 'JEONSE') {
+    return null
+  }
+
+  return finiteAmount(item.latestTransaction.depositAmount) ?? finiteAmount(item.latestTransaction.dealAmount)
+}
+
+function saleAmountForPriceFilter(item: PropertyMapItem): number | null {
+  return finiteAmount(item.recentYearAverageDealAmount) ?? latestSaleAmount(item)
+}
+
+function jeonseAmountForPriceFilter(item: PropertyMapItem): number | null {
+  return finiteAmount(item.recentYearAverageJeonseDepositAmount) ?? latestJeonseAmount(item)
+}
+
+function amountInRange(amount: number | null, min: number, max: number) {
+  return amount !== null && amount >= min && amount <= max
+}
+
+function matchesActivePriceFilters(item: PropertyMapItem) {
+  const saleActive = hasActiveSalePriceFilter()
+  const jeonseActive = hasActiveJeonsePriceFilter()
+
+  if (!saleActive && !jeonseActive) {
+    return true
+  }
+
+  const saleMatches =
+    saleActive && amountInRange(saleAmountForPriceFilter(item), salePriceMin.value, salePriceMax.value)
+  const jeonseMatches =
+    jeonseActive &&
+    amountInRange(jeonseAmountForPriceFilter(item), jeonsePriceMin.value, jeonsePriceMax.value)
+
+  return saleMatches || jeonseMatches
+}
+
+function withPriceFilterState(item: PropertyMapItem): PropertyMapItem {
+  const priceFilterDimmed = !matchesActivePriceFilters(item)
+
+  if (item.priceFilterDimmed === priceFilterDimmed) {
+    return item
+  }
+
+  return {
+    ...item,
+    priceFilterDimmed
+  }
+}
+
+function priceRouteQuery() {
+  const filters = priceFilterParams()
+  return {
+    minSaleAmount: filters.minSaleAmount === undefined ? undefined : String(filters.minSaleAmount),
+    maxSaleAmount: filters.maxSaleAmount === undefined ? undefined : String(filters.maxSaleAmount),
+    minJeonseDepositAmount:
+      filters.minJeonseDepositAmount === undefined ? undefined : String(filters.minJeonseDepositAmount),
+    maxJeonseDepositAmount:
+      filters.maxJeonseDepositAmount === undefined ? undefined : String(filters.maxJeonseDepositAmount)
+  }
+}
+
+function restorePriceRangesFromQuery() {
+  const nextSaleMin = readQueryPrice(route.query.minSaleAmount, SALE_PRICE_BOUNDS) ?? SALE_PRICE_BOUNDS.min
+  const nextSaleMax = readQueryPrice(route.query.maxSaleAmount, SALE_PRICE_BOUNDS) ?? SALE_PRICE_BOUNDS.max
+  const nextJeonseMin =
+    readQueryPrice(route.query.minJeonseDepositAmount, JEONSE_PRICE_BOUNDS) ?? JEONSE_PRICE_BOUNDS.min
+  const nextJeonseMax =
+    readQueryPrice(route.query.maxJeonseDepositAmount, JEONSE_PRICE_BOUNDS) ?? JEONSE_PRICE_BOUNDS.max
+
+  setPriceRange(salePriceMin, salePriceMax, nextSaleMin, nextSaleMax, SALE_PRICE_BOUNDS)
+  setPriceRange(jeonsePriceMin, jeonsePriceMax, nextJeonseMin, nextJeonseMax, JEONSE_PRICE_BOUNDS)
 }
 
 function parsePropertyTypes(value: unknown): PropertyType[] | null {
@@ -201,7 +395,11 @@ function hasMapStateQuery() {
     route.query.q !== undefined ||
     route.query.swLat !== undefined ||
     route.query.zoomLevel !== undefined ||
-    route.query.priceLayer !== undefined
+    route.query.priceLayer !== undefined ||
+    route.query.minSaleAmount !== undefined ||
+    route.query.maxSaleAmount !== undefined ||
+    route.query.minJeonseDepositAmount !== undefined ||
+    route.query.maxJeonseDepositAmount !== undefined
   )
 }
 
@@ -223,6 +421,7 @@ function restoreMapStateFromQuery(): MapViewport | null {
   if (priceLayer !== null) {
     showAdministrativePriceLayer.value = priceLayer
   }
+  restorePriceRangesFromQuery()
 
   const propertyId = readQueryNumber(route.query.selectedPropertyId)
   selectedPropertyId.value = propertyId === null ? null : Math.round(propertyId)
@@ -239,6 +438,10 @@ function restoreMapStateFromQuery(): MapViewport | null {
 
 function restoreMapStateFromSnapshot(snapshot: MapSearchSnapshot) {
   selectedPropertyTypes.value = [...snapshot.selectedPropertyTypes]
+  salePriceMin.value = snapshot.salePriceMin ?? SALE_PRICE_BOUNDS.min
+  salePriceMax.value = snapshot.salePriceMax ?? SALE_PRICE_BOUNDS.max
+  jeonsePriceMin.value = snapshot.jeonsePriceMin ?? JEONSE_PRICE_BOUNDS.min
+  jeonsePriceMax.value = snapshot.jeonsePriceMax ?? JEONSE_PRICE_BOUNDS.max
   zoomLevel.value = snapshot.zoomLevel
   currentViewport.value = { ...snapshot.currentViewport }
   searchKeyword.value = snapshot.searchKeyword
@@ -256,6 +459,10 @@ function restoreMapStateFromSnapshot(snapshot: MapSearchSnapshot) {
 function currentSnapshot(): MapSearchSnapshot {
   return {
     selectedPropertyTypes: selectedPropertyTypes.value,
+    salePriceMin: salePriceMin.value,
+    salePriceMax: salePriceMax.value,
+    jeonsePriceMin: jeonsePriceMin.value,
+    jeonsePriceMax: jeonsePriceMax.value,
     zoomLevel: zoomLevel.value,
     currentViewport: currentViewport.value,
     searchKeyword: searchKeyword.value,
@@ -279,6 +486,7 @@ function mapQuery() {
     neLat: String(roundCoordinate(currentViewport.value.neLat)),
     neLng: String(roundCoordinate(currentViewport.value.neLng)),
     zoomLevel: String(zoomLevel.value),
+    ...priceRouteQuery(),
     priceLayer: showAdministrativePriceLayer.value ? '1' : undefined,
     selectedPropertyId: selectedPropertyId.value ? String(selectedPropertyId.value) : undefined
   }
@@ -702,7 +910,14 @@ onBeforeUnmount(() => {
   clearAutocompleteTimer()
 })
 
-watch([selectedPropertyTypes, showAdministrativePriceLayer], () => {
+watch([
+  selectedPropertyTypes,
+  showAdministrativePriceLayer,
+  salePriceMin,
+  salePriceMax,
+  jeonsePriceMin,
+  jeonsePriceMax
+], () => {
   if (mounted) {
     persistMapState()
   }
@@ -800,6 +1015,84 @@ watch([selectedPropertyTypes, showAdministrativePriceLayer], () => {
           </label>
         </fieldset>
 
+        <fieldset class="price-filter-fieldset">
+          <legend>가격 범위</legend>
+          <div class="price-range-control">
+            <div class="range-header">
+              <span>매매가</span>
+              <output for="sale-price-min sale-price-max">{{ salePriceRangeLabel }}</output>
+            </div>
+            <div
+              class="dual-range"
+              :style="priceRangeTrackStyle(salePriceMin, salePriceMax, SALE_PRICE_BOUNDS)"
+            >
+              <label class="sr-only" for="sale-price-min">매매 최저가</label>
+              <input
+                id="sale-price-min"
+                class="range-min"
+                data-test="sale-price-min"
+                type="range"
+                :min="SALE_PRICE_BOUNDS.min"
+                :max="SALE_PRICE_BOUNDS.max"
+                :step="PRICE_STEP_KRW"
+                :value="salePriceMin"
+                :aria-valuetext="salePriceRangeLabel"
+                @input="setSalePriceMin"
+              />
+              <label class="sr-only" for="sale-price-max">매매 최고가</label>
+              <input
+                id="sale-price-max"
+                class="range-max"
+                data-test="sale-price-max"
+                type="range"
+                :min="SALE_PRICE_BOUNDS.min"
+                :max="SALE_PRICE_BOUNDS.max"
+                :step="PRICE_STEP_KRW"
+                :value="salePriceMax"
+                :aria-valuetext="salePriceRangeLabel"
+                @input="setSalePriceMax"
+              />
+            </div>
+          </div>
+
+          <div class="price-range-control">
+            <div class="range-header">
+              <span>전세가</span>
+              <output for="jeonse-price-min jeonse-price-max">{{ jeonsePriceRangeLabel }}</output>
+            </div>
+            <div
+              class="dual-range"
+              :style="priceRangeTrackStyle(jeonsePriceMin, jeonsePriceMax, JEONSE_PRICE_BOUNDS)"
+            >
+              <label class="sr-only" for="jeonse-price-min">전세 최저가</label>
+              <input
+                id="jeonse-price-min"
+                class="range-min"
+                data-test="jeonse-price-min"
+                type="range"
+                :min="JEONSE_PRICE_BOUNDS.min"
+                :max="JEONSE_PRICE_BOUNDS.max"
+                :step="PRICE_STEP_KRW"
+                :value="jeonsePriceMin"
+                :aria-valuetext="jeonsePriceRangeLabel"
+                @input="setJeonsePriceMin"
+              />
+              <label class="sr-only" for="jeonse-price-max">전세 최고가</label>
+              <input
+                id="jeonse-price-max"
+                class="range-max"
+                data-test="jeonse-price-max"
+                type="range"
+                :min="JEONSE_PRICE_BOUNDS.min"
+                :max="JEONSE_PRICE_BOUNDS.max"
+                :step="PRICE_STEP_KRW"
+                :value="jeonsePriceMax"
+                :aria-valuetext="jeonsePriceRangeLabel"
+                @input="setJeonsePriceMax"
+              />
+            </div>
+          </div>
+        </fieldset>
       </div>
 
       <button class="search-area-btn" type="button" :disabled="loading" @click="resetToVisibleArea">
@@ -834,12 +1127,15 @@ watch([selectedPropertyTypes, showAdministrativePriceLayer], () => {
 
       <p class="helper-text" style="font-size:0.78rem; padding: 0 16px 8px;">{{ resultDescription }}</p>
 
-      <ul v-if="items.length" class="map-result-list result-list">
+      <ul v-if="pricedItems.length" class="map-result-list result-list">
         <li
-          v-for="item in items"
+          v-for="item in pricedItems"
           :id="`property-result-${item.propertyId}`"
           :key="item.propertyId"
-          :class="{ 'is-selected': selectedPropertyId === item.propertyId }"
+          :class="{
+            'is-selected': selectedPropertyId === item.propertyId,
+            'is-price-dimmed': item.priceFilterDimmed
+          }"
           @mouseenter="selectedPropertyId = item.propertyId"
           @focusin="selectedPropertyId = item.propertyId"
         >
@@ -853,6 +1149,7 @@ watch([selectedPropertyTypes, showAdministrativePriceLayer], () => {
             <span v-if="item.latestTransaction" class="result-price">
               {{ transactionTypeLabel(item.latestTransaction.transactionType) }} · {{ formatLatestTransactionAmount(item.latestTransaction) }}
             </span>
+            <span v-if="item.priceFilterDimmed" class="result-filter-note">가격 범위 밖</span>
           </RouterLink>
         </li>
       </ul>
@@ -878,7 +1175,7 @@ watch([selectedPropertyTypes, showAdministrativePriceLayer], () => {
     <!-- Map -->
     <div class="map-right">
       <KakaoMapPanel
-        :items="items"
+        :items="pricedItems"
         :administrative-clusters="administrativeClusters"
         :show-administrative-price-layer="showAdministrativePriceLayer"
         :selected-property-id="selectedPropertyId"
@@ -1014,6 +1311,132 @@ watch([selectedPropertyTypes, showAdministrativePriceLayer], () => {
   letter-spacing: 0.08em;
   margin-bottom: 6px;
 }
+
+.price-filter-fieldset {
+  margin-top: 2px;
+}
+
+.price-range-control {
+  display: grid;
+  gap: 6px;
+}
+
+.price-range-control + .price-range-control {
+  margin-top: 12px;
+}
+
+.range-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.range-header span {
+  color: var(--cream);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.range-header output {
+  color: var(--gold);
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dual-range {
+  --range-start: 0%;
+  --range-end: 100%;
+  position: relative;
+  height: 30px;
+}
+
+.dual-range::before,
+.dual-range::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  height: 4px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.dual-range::before {
+  left: 0;
+  right: 0;
+  background: rgba(154,128,96,0.24);
+}
+
+.dual-range::after {
+  left: var(--range-start);
+  right: calc(100% - var(--range-end));
+  background: var(--gold);
+}
+
+.dual-range input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+
+.dual-range input[type="range"]:focus {
+  outline: none;
+}
+
+.dual-range input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+}
+
+.dual-range input[type="range"]::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  appearance: none;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.dual-range input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: transparent;
+}
+
+.dual-range input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.dual-range input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(200,160,100,0.26), 0 2px 8px rgba(0,0,0,0.28);
+}
+
+.dual-range input[type="range"]:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(200,160,100,0.26), 0 2px 8px rgba(0,0,0,0.28);
+}
+
+.range-min { z-index: 2; }
+.range-max { z-index: 3; }
 
 .search-area-btn {
   margin: 10px 14px;

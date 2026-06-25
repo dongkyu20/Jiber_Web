@@ -1,0 +1,341 @@
+@startuml Jiber_Backend_Class_Diagram
+' Jiber_Web Backend UML Class Diagram
+' Format: PlantUML / UML Class Diagram
+' Scope: backend/src/main/java/com/jiber/backend
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide empty members
+
+legend right
+  <<Controller>> Spring REST Controller
+  <<Service>> Business Service
+  <<Mapper>> MyBatis Mapper Interface
+  <<DTO>> Request/Response DTO
+  <<Record>> DB Row / Command Record
+  <<Config>> Spring/Security Config
+  <<Client>> External API Client
+endlegend
+
+package "com.jiber.backend" {
+  class JiberBackendApplication <<Application>>
+}
+
+package "auth" {
+  package "auth.controller" {
+    class AuthController <<Controller>> {
+      +me(authentication)
+      +signup(request)
+      +login(request)
+      +refresh(refreshToken)
+      +logout(refreshToken)
+      +updateProfile(authentication, request)
+      +changePassword(authentication, request)
+      +deactivateAccount(authentication, request)
+      +socialPending(pendingToken)
+      +socialSignup(pendingToken, request)
+      +socialLink(pendingToken, request)
+    }
+  }
+
+  package "auth.service" {
+    class AuthService <<Service>>
+    class SocialLoginService <<Service>>
+    class JwtTokenService <<Service>>
+    class RefreshTokenService <<Service>>
+    class RefreshTokenCookieService <<Service>>
+    class PendingSocialCookieService <<Service>>
+    class PendingSocialSessionService <<Service>>
+    class LocalOAuth2UserProvisioningService <<Service>>
+    class OAuth2LoginSuccessHandler <<Service>>
+    class OAuth2ProviderUserResolver <<Service>>
+    class JwtAuthenticationFilter <<Filter>>
+    class PasswordPolicy <<Policy>>
+    class EmailNormalizer <<Utility>>
+    class RefreshRequestContext <<DTO>>
+  }
+
+  package "auth.mapper" {
+    interface AuthUserMapper <<Mapper>>
+    class AuthUserRecord <<Record>>
+    class PendingSocialSessionInsertCommand <<Record>>
+  }
+
+  package "auth.dto" {
+    class EmailSignupRequest <<DTO>>
+    class EmailLoginRequest <<DTO>>
+    class AuthTokenResponse <<DTO>>
+    class AuthMeResponse <<DTO>>
+    class AuthUserResponse <<DTO>>
+    class UpdateProfileRequest <<DTO>>
+    class ChangePasswordRequest <<DTO>>
+    class DeactivateAccountRequest <<DTO>>
+    class AuthLogoutRequest <<DTO>>
+    class AuthLogoutResponse <<DTO>>
+    class SocialSignupRequest <<DTO>>
+    class SocialLinkRequest <<DTO>>
+    class SocialPendingResponse <<DTO>>
+    class AccountIdentifierRecoveryRequest <<DTO>>
+    class PasswordRecoveryRequest <<DTO>>
+    class DirectPasswordResetRequest <<DTO>>
+    class AccountRecoveryResponse <<DTO>>
+    class AccountMutationResponse <<DTO>>
+  }
+}
+
+package "security" {
+  class SecurityConfig <<Config>>
+  class OAuth2AuthorizationEndpointGuardFilter <<Filter>>
+  class SecurityErrorResponseWriter <<Component>>
+}
+
+package "property" {
+  package "property.controller" {
+    class PropertyController <<Controller>>
+  }
+  package "property.service" {
+    class PropertyService <<Service>>
+    class PropertyAiEligibilityService <<Service>>
+  }
+  package "property.mapper" {
+    interface PropertyMapper <<Mapper>>
+  }
+  package "property.client" {
+    class PublicDataPropertyClient <<Client>>
+    class PropertyAiClient <<Client>>
+  }
+  package "property.dto" {
+    class PropertySearchRequest <<DTO>>
+    class PropertySearchResponse <<DTO>>
+    class PropertyDetailResponse <<DTO>>
+    class PropertyDealResponse <<DTO>>
+    class PropertyAiEligibilityResponse <<DTO>>
+    class PropertyAiPredictionRequest <<DTO>>
+    class PropertyAiPredictionResponse <<DTO>>
+    class PropertyRow <<Record>>
+    class PropertyDealRow <<Record>>
+  }
+}
+
+package "favorite" {
+  class FavoriteController <<Controller>>
+  class FavoriteService <<Service>>
+  interface FavoriteMapper <<Mapper>>
+  class FavoriteRegionRequest <<DTO>>
+  class FavoriteApartmentRequest <<DTO>>
+  class FavoriteResponse <<DTO>>
+  class FavoriteRegionRow <<Record>>
+  class FavoriteApartmentRow <<Record>>
+}
+
+package "community" {
+  package "community.controller" {
+    class CommunityController <<Controller>>
+  }
+  package "community.service" {
+    class CommunityService <<Service>>
+  }
+  package "community.dto" {
+    class CommunityPostRequest <<DTO>>
+    class CommunityPostResponse <<DTO>>
+    class CommunityCommentRequest <<DTO>>
+    class CommunityCommentResponse <<DTO>>
+  }
+  interface CommunityMapper <<Mapper>>
+  class CommunityPostRow <<Record>>
+  class CommunityCommentRow <<Record>>
+  class CommunityPostCreateCommand <<Record>>
+  class CommunityCommentCreateCommand <<Record>>
+}
+
+package "notice" {
+  class NoticeController <<Controller>>
+  class NoticeService <<Service>>
+  interface NoticeMapper <<Mapper>>
+  class NoticeRequest <<DTO>>
+  class NoticeResponse <<DTO>>
+  class NoticeRow <<Record>>
+}
+
+package "admin" {
+  class AdminUserController <<Controller>>
+  class AdminUserService <<Service>>
+  interface AdminUserMapper <<Mapper>>
+  enum AdminUserRole <<Enum>>
+  class AdminUserListRequest <<DTO>>
+  class AdminUserListResponse <<DTO>>
+  class AdminUserSummaryResponse <<DTO>>
+  class AdminUserEnabledUpdateRequest <<DTO>>
+  class AdminUserRoleUpdateRequest <<DTO>>
+  class AdminUserMutationResponse <<DTO>>
+  class AdminUserRow <<Record>>
+}
+
+package "news" {
+  class NewsController <<Controller>>
+  class NewsService <<Service>>
+  class NewsClient <<Client>>
+  class NewsSearchRequest <<DTO>>
+  class NewsSearchResponse <<DTO>>
+  class NewsArticleResponse <<DTO>>
+}
+
+package "chat" {
+  package "chat.controller" {
+    class ChatController <<Controller>>
+  }
+  package "chat.service" {
+    class ChatService <<Service>>
+  }
+  package "chat.client" {
+    class ChatClient <<Client>>
+  }
+  package "chat.dto" {
+    class ChatRequest <<DTO>>
+    class ChatResponse <<DTO>>
+    class ChatMessage <<DTO>>
+  }
+}
+
+package "publicdata" {
+  class PublicDataController <<Controller>>
+  class PublicDataService <<Service>>
+  class PublicDataClient <<Client>>
+  class PublicDataSyncRequest <<DTO>>
+  class PublicDataSyncResponse <<DTO>>
+}
+
+' ===== Auth dependencies =====
+AuthController --> AuthService
+AuthController --> SocialLoginService
+AuthController --> RefreshTokenCookieService
+AuthController --> PendingSocialCookieService
+AuthController ..> EmailSignupRequest
+AuthController ..> EmailLoginRequest
+AuthController ..> AuthTokenResponse
+AuthController ..> AuthMeResponse
+AuthController ..> AuthUserResponse
+AuthController ..> UpdateProfileRequest
+AuthController ..> ChangePasswordRequest
+AuthController ..> DeactivateAccountRequest
+AuthController ..> SocialSignupRequest
+AuthController ..> SocialLinkRequest
+AuthController ..> SocialPendingResponse
+AuthController ..> AccountIdentifierRecoveryRequest
+AuthController ..> PasswordRecoveryRequest
+AuthController ..> DirectPasswordResetRequest
+AuthController ..> AccountRecoveryResponse
+AuthController ..> AccountMutationResponse
+
+AuthService --> AuthUserMapper
+AuthService --> JwtTokenService
+AuthService --> RefreshTokenService
+AuthService --> PasswordPolicy
+AuthService --> EmailNormalizer
+AuthService ..> AuthUserRecord
+AuthService ..> RefreshRequestContext
+AuthService ..> AuthTokenResponse
+AuthService ..> AuthMeResponse
+AuthService ..> AuthUserResponse
+
+SocialLoginService --> AuthUserMapper
+SocialLoginService --> PendingSocialSessionService
+SocialLoginService --> RefreshTokenService
+SocialLoginService --> JwtTokenService
+SocialLoginService ..> SocialSignupRequest
+SocialLoginService ..> SocialLinkRequest
+SocialLoginService ..> SocialPendingResponse
+
+PendingSocialSessionService --> AuthUserMapper
+PendingSocialSessionService ..> PendingSocialSessionInsertCommand
+LocalOAuth2UserProvisioningService --> AuthUserMapper
+OAuth2LoginSuccessHandler --> JwtTokenService
+OAuth2LoginSuccessHandler --> RefreshTokenCookieService
+OAuth2LoginSuccessHandler --> PendingSocialCookieService
+OAuth2LoginSuccessHandler --> PendingSocialSessionService
+JwtAuthenticationFilter --> JwtTokenService
+AuthUserMapper ..> AuthUserRecord
+AuthUserMapper ..> PendingSocialSessionInsertCommand
+
+SecurityConfig --> JwtAuthenticationFilter
+SecurityConfig --> OAuth2LoginSuccessHandler
+SecurityConfig --> OAuth2AuthorizationEndpointGuardFilter
+SecurityConfig --> SecurityErrorResponseWriter
+OAuth2AuthorizationEndpointGuardFilter --> SecurityErrorResponseWriter
+
+' ===== Property dependencies =====
+PropertyController --> PropertyService
+PropertyController --> PropertyAiEligibilityService
+PropertyController ..> PropertySearchRequest
+PropertyController ..> PropertySearchResponse
+PropertyController ..> PropertyDetailResponse
+PropertyController ..> PropertyAiEligibilityResponse
+PropertyService --> PropertyMapper
+PropertyService --> PublicDataPropertyClient
+PropertyService ..> PropertyRow
+PropertyService ..> PropertyDealRow
+PropertyAiEligibilityService --> PropertyMapper
+PropertyAiEligibilityService --> PropertyAiClient
+PropertyMapper ..> PropertyRow
+PropertyMapper ..> PropertyDealRow
+
+' ===== Favorite dependencies =====
+FavoriteController --> FavoriteService
+FavoriteController ..> FavoriteRegionRequest
+FavoriteController ..> FavoriteApartmentRequest
+FavoriteController ..> FavoriteResponse
+FavoriteService --> FavoriteMapper
+FavoriteService ..> FavoriteRegionRow
+FavoriteService ..> FavoriteApartmentRow
+FavoriteMapper ..> FavoriteRegionRow
+FavoriteMapper ..> FavoriteApartmentRow
+
+' ===== Community dependencies =====
+CommunityController --> CommunityService
+CommunityController ..> CommunityPostRequest
+CommunityController ..> CommunityCommentRequest
+CommunityController ..> CommunityPostResponse
+CommunityController ..> CommunityCommentResponse
+CommunityService --> CommunityMapper
+CommunityService ..> CommunityPostCreateCommand
+CommunityService ..> CommunityCommentCreateCommand
+CommunityMapper ..> CommunityPostRow
+CommunityMapper ..> CommunityCommentRow
+
+' ===== Notice dependencies =====
+NoticeController --> NoticeService
+NoticeController ..> NoticeRequest
+NoticeController ..> NoticeResponse
+NoticeService --> NoticeMapper
+NoticeMapper ..> NoticeRow
+
+' ===== Admin dependencies =====
+AdminUserController --> AdminUserService
+AdminUserController ..> AdminUserListRequest
+AdminUserController ..> AdminUserEnabledUpdateRequest
+AdminUserController ..> AdminUserRoleUpdateRequest
+AdminUserService --> AdminUserMapper
+AdminUserService ..> AdminUserRole
+AdminUserService ..> AdminUserRow
+AdminUserMapper ..> AdminUserRow
+
+' ===== News / Chat / PublicData dependencies =====
+NewsController --> NewsService
+NewsService --> NewsClient
+NewsController ..> NewsSearchRequest
+NewsService ..> NewsSearchResponse
+NewsSearchResponse *-- NewsArticleResponse
+
+ChatController --> ChatService
+ChatService --> ChatClient
+ChatController ..> ChatRequest
+ChatService ..> ChatResponse
+ChatResponse *-- ChatMessage
+
+PublicDataController --> PublicDataService
+PublicDataService --> PublicDataClient
+PublicDataController ..> PublicDataSyncRequest
+PublicDataService ..> PublicDataSyncResponse
+
+@enduml

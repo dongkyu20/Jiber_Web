@@ -65,6 +65,7 @@ Base path: `/api/v1`
 | Map search | `GET /properties/map` | `ANONYMOUS` | Public read API. |
 | Filter search | `GET /properties/search` | `ANONYMOUS` | Public read API. |
 | Property detail | `GET /properties/{propertyId}` | `ANONYMOUS` | Public read API. User-specific favorite state must be false or omitted when unauthenticated. |
+| New apartment address search | `GET /properties/new-analysis/address-search` | `USER` or `ADMIN` | Frontend first selects an exact address with Kakao Postcode service; Spring backend supplements coordinates server-side. |
 | Valuation | `POST /properties/{propertyId}/valuation` | `USER` or `ADMIN` | Externally exposed Spring API, but login is required in MVP. Non-apartment fallback still returns `VALUATION_UNSUPPORTED_PROPERTY_TYPE`. |
 | SHAP | `POST /properties/{propertyId}/shap` | `USER` or `ADMIN` | Externally exposed Spring API, but login is required in MVP. Non-apartment fallback still returns `VALUATION_UNSUPPORTED_PROPERTY_TYPE`. |
 | Notice list | `GET /notices` | `ANONYMOUS` | Public read API. |

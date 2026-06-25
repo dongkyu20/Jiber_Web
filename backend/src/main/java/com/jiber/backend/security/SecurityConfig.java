@@ -52,6 +52,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                         .requestMatchers("/api/v1/auth/account/**").authenticated()
                         .requestMatchers(HttpMethod.GET,
+                                "/api/v1/properties/new-analysis/address-search").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET,
                                 "/api/v1/properties/map",
                                 "/api/v1/properties/search",
                                 "/api/v1/properties/*",

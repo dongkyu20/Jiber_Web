@@ -114,6 +114,47 @@ class PropertyMapperMyBatisTest {
     }
 
     @Test
+    void findMapPropertiesAppliesSaleAndJeonsePriceRangesToTheirOwnTransactionColumns() {
+        insertProperty(1L, PropertyType.APARTMENT, "매매 범위 아파트", "서울특별시", "강남구", "역삼동", "37.5000000", "127.0300000");
+        insertProperty(2L, PropertyType.APARTMENT, "전세 범위 아파트", "서울특별시", "강남구", "역삼동", "37.5100000", "127.0400000");
+        insertProperty(3L, PropertyType.APARTMENT, "범위 밖 아파트", "서울특별시", "강남구", "역삼동", "37.5200000", "127.0500000");
+        insertProperty(4L, PropertyType.APARTMENT, "월세 제외 아파트", "서울특별시", "강남구", "역삼동", "37.5300000", "127.0600000");
+        insertTransaction(101L, 1L, TransactionType.SALE, 1_500_000_000L, null, LocalDate.of(2026, 1, 10));
+        insertTransaction(201L, 2L, TransactionType.SALE, 3_000_000_000L, null, LocalDate.of(2026, 2, 10));
+        insertTransaction(202L, 2L, TransactionType.JEONSE, null, 800_000_000L, LocalDate.of(2026, 1, 20));
+        insertTransaction(301L, 3L, TransactionType.SALE, 900_000_000L, null, LocalDate.of(2026, 3, 10));
+        insertTransaction(302L, 3L, TransactionType.JEONSE, null, 1_500_000_000L, LocalDate.of(2026, 3, 20));
+        insertTransaction(401L, 4L, TransactionType.MONTHLY_RENT, null, 800_000_000L, LocalDate.of(2026, 4, 10));
+
+        var rows = propertyMapper.findMapProperties(
+                new MapSearchRequest(
+                        new BigDecimal("37.4500000"),
+                        new BigDecimal("126.9500000"),
+                        new BigDecimal("37.6000000"),
+                        new BigDecimal("127.1500000"),
+                        7,
+                        List.of(PropertyType.APARTMENT),
+                        allTransactionTypes(),
+                        null,
+                        null,
+                        1_000_000_000L,
+                        2_000_000_000L,
+                        700_000_000L,
+                        1_000_000_000L,
+                        null,
+                        null,
+                        null,
+                        null
+                ),
+                RECENT_SINCE
+        );
+
+        assertThat(rows).extracting(PropertyListRow::getPropertyId).containsExactly(2L, 1L);
+        assertThat(row(rows, 2L).getLatestTransactionType()).isEqualTo(TransactionType.JEONSE);
+        assertThat(row(rows, 2L).getLatestDepositAmount()).isEqualTo(800_000_000L);
+    }
+
+    @Test
     void findLegalDongClustersAggregatesVisiblePropertiesBySidoSigunguLegalDong() {
         insertProperty(1L, PropertyType.APARTMENT, "역삼 A", "서울특별시", "강남구", "역삼동", "37.5000000", "127.0300000");
         insertProperty(2L, PropertyType.APARTMENT, "역삼 B", "서울특별시", "강남구", "역삼동", "37.5200000", "127.0500000");
@@ -215,6 +256,7 @@ class PropertyMapperMyBatisTest {
                 null,
                 new BigDecimal("84.95"),
                 15,
+                null,
                 2010,
                 LocalDate.of(2026, 6, 12),
                 null
@@ -245,6 +287,7 @@ class PropertyMapperMyBatisTest {
                 null,
                 new BigDecimal("84.95"),
                 15,
+                null,
                 2010,
                 LocalDate.of(2026, 6, 12),
                 null
@@ -271,6 +314,10 @@ class PropertyMapperMyBatisTest {
                 zoomLevel,
                 List.of(PropertyType.APARTMENT),
                 transactionTypes,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

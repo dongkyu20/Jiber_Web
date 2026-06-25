@@ -28,6 +28,17 @@ let chart: echarts.ECharts | null = null
 
 const hasData = computed(() => props.values.length > 0)
 
+function formatShapAxisAmount(value: number) {
+  const eok = value / 100000000
+  const absEok = Math.abs(eok)
+  if (absEok < 0.005) {
+    return '0억'
+  }
+
+  const maximumFractionDigits = absEok < 0.1 ? 2 : 1
+  return `${eok.toLocaleString('ko-KR', { maximumFractionDigits })}억`
+}
+
 async function renderChart() {
   await nextTick()
 
@@ -57,7 +68,7 @@ async function renderChart() {
     xAxis: {
       type: 'value',
       axisLabel: {
-        formatter: (value: number) => `${Math.round(value / 100000000)}억`
+        formatter: formatShapAxisAmount
       }
     },
     yAxis: {

@@ -15,6 +15,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.jiber.backend.common.error.ApiException;
 import com.jiber.backend.common.error.ErrorCode;
+import com.jiber.backend.property.dto.NewApartmentAnalysisRequest;
 import com.jiber.backend.property.dto.PropertyType;
 import com.jiber.backend.property.dto.ShapDirection;
 import com.jiber.backend.property.dto.ShapRequest;
@@ -190,6 +191,32 @@ class ModelServerPropertyValuationClientTest {
         server.verify();
     }
 
+    @Test
+    void sendsTopFloorForNewApartmentAnalysis() {
+        var client = newClient("");
+        server.expect(requestTo("http://model.test/internal/v1/valuation/apartments"))
+                .andExpect(method(POST))
+                .andExpect(jsonPath("$.propertyId").value(0))
+                .andExpect(jsonPath("$.features.floor").value(15))
+                .andExpect(jsonPath("$.features.topFloor").value(30))
+                .andRespond(withSuccess("""
+                        {
+                          "supported": true,
+                          "estimatedPrice": 1,
+                          "currency": "KRW",
+                          "predictionInterval": {"lower": 1, "upper": 1},
+                          "modelVersion": "hedonic-skeleton-v1",
+                          "baselineDate": "2026-06-12",
+                          "featureSetVersion": "apartment-basic-skeleton-v1",
+                          "warnings": []
+                        }
+                        """, APPLICATION_JSON));
+
+        client.valuateNewApartment(newApartmentAnalysisRequest());
+
+        server.verify();
+    }
+
     private ModelServerPropertyValuationClient newClient(String internalToken) {
         var builder = RestClient.builder().baseUrl("http://model.test");
         server = MockRestServiceServer.bindTo(builder).build();
@@ -202,6 +229,24 @@ class ModelServerPropertyValuationClientTest {
 
     private ShapRequest shapRequest() {
         return new ShapRequest(new BigDecimal("84.95"), 15, LocalDate.of(2026, 6, 12));
+    }
+
+    private NewApartmentAnalysisRequest newApartmentAnalysisRequest() {
+        return new NewApartmentAnalysisRequest(
+                "Raemian Samsung",
+                "Seoul",
+                "Gangnam",
+                "Samseong",
+                new BigDecimal("37.5123"),
+                new BigDecimal("127.0567"),
+                1200,
+                new BigDecimal("84.95"),
+                15,
+                30,
+                2010,
+                LocalDate.of(2026, 6, 12),
+                null
+        );
     }
 
     private PropertyDetailRow sampleProperty(PropertyType propertyType) {

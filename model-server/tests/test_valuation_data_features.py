@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.schemas.apartment import ApartmentFeatures
+from app.services.valuation_data_repository import LocalValuationDataRepository
 from app.services.valuation_service import ValuationModelRepository
 
 
@@ -104,6 +105,74 @@ def test_repository_uses_aggressive_kapt_matching_in_service_path(tmp_path: Path
     repository = ValuationModelRepository(tmp_path / "artifacts", data_dir=tmp_path / "data")
 
     assert repository.data_repository.accept_remaining_matches is True
+
+
+def test_repository_uses_user_top_floor_for_relative_floor_when_no_complex_match(tmp_path: Path) -> None:
+    row = LocalValuationDataRepository(tmp_path / "data").features_for(
+        ApartmentFeatures(
+            sido=SEOUL,
+            sigungu=JUNGRANG_GU,
+            legalDong=SINNAE_DONG,
+            propertyName="미래 신규아파트",
+            exclusiveAreaM2=84.95,
+            floor=15,
+            topFloor=30,
+            builtYear=2026,
+            dealYear=2026,
+            dealMonth=6,
+        ),
+        "seoul",
+    )
+
+    assert row["estimated_max_floor"] == 30
+    assert row["max_floor_source"] == "user_input"
+    assert row["floors_below_estimated_top"] == 15
+    assert row["relative_floor"] == pytest.approx(0.5)
+    assert row["relative_floor_bin"] == "relative_floor_25_50"
+
+
+def test_repository_uses_national_subway_address_file_for_subway_features(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / _nfd("국가철도공단_서울경기도_지하철_주소데이터_20250630.csv")).write_text(
+        "\n".join(
+            [
+                "철도운영기관명,선명,역명,지번주소,도로명주소",
+                f"코레일,테스트선,신내,{SEOUL} {JUNGRANG_GU} {SINNAE_DONG} 1,{SEOUL} {JUNGRANG_GU} 신내역로 1",
+            ]
+        ),
+        encoding="cp949",
+    )
+    (data_dir / _nfd("국가철도공단_철도역 정보_20250711.csv")).write_text(
+        "\n".join(
+            [
+                "주소,위도좌표,역등급,관련노선,열차정차횟수,역이름,소속지사,역연혁,경도좌표",
+                f"{SEOUL} {JUNGRANG_GU} 신내역로 1,37.6154,1,테스트선,전동열차 정차,신내역,서울본부,,127.1104",
+            ]
+        ),
+        encoding="cp949",
+    )
+
+    row = LocalValuationDataRepository(data_dir).features_for(
+        ApartmentFeatures(
+            sido=SEOUL,
+            sigungu=JUNGRANG_GU,
+            legalDong=SINNAE_DONG,
+            propertyName=SINNAE_COMPLEX,
+            latitude=37.6151579,
+            longitude=127.1101263,
+            exclusiveAreaM2=84.95,
+            floor=15,
+            builtYear=2010,
+            dealYear=2026,
+            dealMonth=6,
+        ),
+        "seoul",
+    )
+
+    assert row["nearest_subway_distance_m_missing"] == 0
+    assert row["subway_count_radius_bin"] == "count_1_2"
+    assert row["log_nearest_subway_distance_m"] > 0
 
 
 def _write_artifact(root: Path, model: FakePredictModel) -> None:
