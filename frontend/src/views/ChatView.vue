@@ -6,6 +6,7 @@ import { chatApi } from '@/api/chat'
 import type { ChatContext } from '@/api/types'
 import { useChatContextStore } from '@/stores/chatContext'
 import { formatKrw } from '@/utils/format'
+import { renderMarkdown } from '@/utils/markdown'
 
 interface ChatMessage {
   id: number
@@ -38,14 +39,6 @@ const chatContextStore = useChatContextStore()
 const canSubmit = computed(() => question.value.trim().length > 0 && !loading.value)
 const activeContext = computed(() => chatContextStore.runtimeContext)
 const estimatedPriceText = computed(() => formatKrw(activeContext.value?.valuation?.estimatedPrice))
-
-function renderMessage(content: string): string {
-  return content
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-}
 
 function sourceLabel(source: string): string {
   const normalizedSource = source.split('#')[0]
@@ -147,7 +140,7 @@ onMounted(() => {
           class="msg"
           :class="`msg-${msg.role}`"
         >
-          <p v-html="renderMessage(msg.content)" />
+          <div v-html="renderMarkdown(msg.content)" />
           <details v-if="msg.contexts?.length" class="msg-sources">
             <summary>참고 문서 {{ sourceSummaries(msg.contexts).length }}개</summary>
             <ol>
@@ -297,7 +290,52 @@ onMounted(() => {
   line-height: 1.65;
 }
 
-.msg p { margin: 0; white-space: pre-wrap; }
+.msg :deep(.markdown-body) {
+  display: grid;
+  gap: 8px;
+}
+
+.msg :deep(.markdown-body > *:first-child) { margin-top: 0; }
+.msg :deep(.markdown-body > *:last-child) { margin-bottom: 0; }
+.msg :deep(p) { margin: 0; }
+.msg :deep(ul),
+.msg :deep(ol) {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+.msg :deep(h3),
+.msg :deep(h4),
+.msg :deep(h5) {
+  margin: 2px 0 0;
+  color: var(--cream);
+  font-size: 0.94rem;
+}
+.msg :deep(code) {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 5px;
+  color: var(--gold-light);
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 0.84em;
+}
+.msg :deep(pre) {
+  margin: 0;
+  overflow-x: auto;
+}
+.msg :deep(pre code) {
+  display: block;
+  padding: 10px;
+  white-space: pre;
+}
+.msg :deep(a) {
+  color: var(--gold-light);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 .msg-user {
   align-self: flex-end;

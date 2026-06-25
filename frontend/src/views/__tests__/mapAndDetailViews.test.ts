@@ -298,6 +298,41 @@ function detailWithTransactionMix(): PropertyDetail {
   }
 }
 
+function detailWithManyTransactions(): PropertyDetail {
+  return {
+    ...importedDetail,
+    transactions: [
+      ...detailWithTransactionMix().transactions,
+      {
+        transactionId: 7004,
+        transactionType: 'SALE',
+        dealAmount: 1110000000,
+        dealDate: '2026-04-20',
+        exclusiveAreaM2: 84.95,
+        floor: 12
+      },
+      {
+        transactionId: 7005,
+        transactionType: 'JEONSE',
+        dealAmount: null,
+        depositAmount: 900000000,
+        monthlyRent: 0,
+        dealDate: '2026-04-10',
+        exclusiveAreaM2: 84.95,
+        floor: 8
+      },
+      {
+        transactionId: 7006,
+        transactionType: 'SALE',
+        dealAmount: 990000000,
+        dealDate: '2026-04-01',
+        exclusiveAreaM2: 59.97,
+        floor: 3
+      }
+    ]
+  }
+}
+
 function createApiError(code: string) {
   return {
     isAxiosError: true,
@@ -729,6 +764,21 @@ describe('PropertyDetailView transaction summary', () => {
     expect(wrapper.text()).toContain('층수')
     expect(wrapper.text()).toContain('10.8억 원')
     expect(wrapper.text()).toContain('보증금 5억 원 / 월세 120만 원')
+  })
+
+  it('paginates long transaction history lists', async () => {
+    const wrapper = await mountPropertyDetailView({ detail: detailWithManyTransactions() })
+
+    expect(wrapper.findAll('[data-test="transaction-row"]')).toHaveLength(5)
+    expect(wrapper.text()).toContain('1-5건 표시')
+    expect(wrapper.text()).not.toContain('2026년 4월 1일')
+
+    await wrapper.get('[data-test="transaction-next-page"]').trigger('click')
+
+    const rows = wrapper.findAll('[data-test="transaction-row"]')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].text()).toContain('2026년 4월 1일')
+    expect(wrapper.text()).toContain('6-6건 표시')
   })
 
   it('filters the transaction history by selected transaction types', async () => {

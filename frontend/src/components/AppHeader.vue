@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
 import brandLogoUrl from '@/assets/brand/jiper-estate-real-logo-cropped.png'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
@@ -33,6 +34,7 @@ async function logout() {
     </nav>
 
     <div class="auth-actions">
+      <ThemeToggle />
       <template v-if="authStore.isAuthenticated">
         <div class="user-avatar" :title="displayName">{{ displayInitial }}</div>
         <span class="user-label">{{ displayName }}님</span>

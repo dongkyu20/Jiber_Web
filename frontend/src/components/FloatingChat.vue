@@ -6,6 +6,7 @@ import type { ChatContext } from '@/api/types'
 import { useChatContextStore } from '@/stores/chatContext'
 import { useAuthStore } from '@/stores/auth'
 import { formatKrw } from '@/utils/format'
+import { renderMarkdown } from '@/utils/markdown'
 
 interface Message {
   id: number
@@ -27,12 +28,6 @@ let idCtr = 1
 
 const activeContext = computed(() => chatContextStore.runtimeContext)
 const estimatedPriceText = computed(() => formatKrw(activeContext.value?.valuation?.estimatedPrice))
-
-function renderMsg(content: string) {
-  return content
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-}
 
 async function scrollToBottom() {
   await nextTick()
@@ -96,7 +91,7 @@ async function submit() {
             class="msg"
             :class="`msg-${msg.role}`"
           >
-            <p v-html="renderMsg(msg.content)" />
+            <div v-html="renderMarkdown(msg.content)" />
           </div>
           <div v-if="loading" class="msg msg-assistant">
             <span class="typing"><span /><span /><span /></span>
@@ -232,7 +227,52 @@ async function submit() {
   line-height: 1.65;
 }
 
-.msg p { margin: 0; white-space: pre-wrap; }
+.msg :deep(.markdown-body) {
+  display: grid;
+  gap: 7px;
+}
+
+.msg :deep(.markdown-body > *:first-child) { margin-top: 0; }
+.msg :deep(.markdown-body > *:last-child) { margin-bottom: 0; }
+.msg :deep(p) { margin: 0; }
+.msg :deep(ul),
+.msg :deep(ol) {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 17px;
+}
+.msg :deep(h3),
+.msg :deep(h4),
+.msg :deep(h5) {
+  margin: 2px 0 0;
+  color: var(--cream);
+  font-size: 0.9rem;
+}
+.msg :deep(code) {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(255,255,255,0.05);
+  padding: 1px 5px;
+  color: var(--gold-light);
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 0.84em;
+}
+.msg :deep(pre) {
+  margin: 0;
+  overflow-x: auto;
+}
+.msg :deep(pre code) {
+  display: block;
+  padding: 9px;
+  white-space: pre;
+}
+.msg :deep(a) {
+  color: var(--gold-light);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 .msg-user {
   align-self: flex-end;

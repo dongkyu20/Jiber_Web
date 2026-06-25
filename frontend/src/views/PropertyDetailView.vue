@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { favoritesApi } from '@/api/favorites'
@@ -39,6 +39,8 @@ const valuation = ref<ValuationResponse | null>(null)
 const shapValues = ref<ShapValue[]>([])
 const transactionTypeOptions: TransactionType[] = ['SALE', 'JEONSE', 'MONTHLY_RENT']
 const selectedTransactionTypes = ref<TransactionType[]>([...transactionTypeOptions])
+const transactionPage = ref(1)
+const transactionsPerPage = 5
 const transactionSort = ref<{ key: TransactionSortKey; direction: SortDirection }>({
   key: 'dealDate',
   direction: 'desc'
@@ -66,6 +68,17 @@ const sortedTransactions = computed(() => {
     return compareTransactions(left, right, transactionSort.value.key, transactionSort.value.direction)
   })
 })
+const transactionTotalPages = computed(() => Math.max(1, Math.ceil(sortedTransactions.value.length / transactionsPerPage)))
+const transactionPageStart = computed(() => (transactionPage.value - 1) * transactionsPerPage)
+const pagedTransactions = computed(() =>
+  sortedTransactions.value.slice(transactionPageStart.value, transactionPageStart.value + transactionsPerPage)
+)
+const transactionVisibleStart = computed(() =>
+  sortedTransactions.value.length ? transactionPageStart.value + 1 : 0
+)
+const transactionVisibleEnd = computed(() =>
+  Math.min(transactionPageStart.value + pagedTransactions.value.length, sortedTransactions.value.length)
+)
 const isApartmentFavorite = computed(() => Boolean(property.value?.favorite?.apartmentFavorited))
 const canRequestAi = computed(() => {
   return Boolean(
@@ -107,7 +120,22 @@ function setTransactionSort(key: TransactionSortKey) {
           key,
           direction: key === 'dealDate' ? 'desc' : 'asc'
         }
+  transactionPage.value = 1
 }
+
+function goToTransactionPage(page: number) {
+  transactionPage.value = Math.min(Math.max(page, 1), transactionTotalPages.value)
+}
+
+watch(selectedTransactionTypes, () => {
+  transactionPage.value = 1
+})
+
+watch(transactionTotalPages, (totalPages) => {
+  if (transactionPage.value > totalPages) {
+    transactionPage.value = totalPages
+  }
+})
 
 function transactionSortAria(key: TransactionSortKey) {
   if (transactionSort.value.key !== key) {
@@ -557,7 +585,8 @@ onMounted(fetchProperty)
           </label>
         </fieldset>
         <p class="muted">
-          {{ sortedTransactions.length.toLocaleString('ko-KR') }}건 표시 / 전체
+          {{ transactionVisibleStart.toLocaleString('ko-KR') }}-{{ transactionVisibleEnd.toLocaleString('ko-KR') }}건 표시 / 필터 결과
+          {{ sortedTransactions.length.toLocaleString('ko-KR') }}건 / 전체
           {{ property.transactions.length.toLocaleString('ko-KR') }}건
         </p>
       </div>
@@ -614,18 +643,49 @@ onMounted(fetchProperty)
           </thead>
           <tbody>
             <tr
-              v-for="transaction in sortedTransactions"
+              v-for="transaction in pagedTransactions"
               :key="transaction.transactionId ?? `${transaction.dealDate}-${transaction.transactionType}-${transaction.floor}`"
               data-test="transaction-row"
             >
               <td>{{ formatDate(transaction.dealDate) }}</td>
-              <td>{{ transactionTypeLabel(transaction.transactionType) }}</td>
-              <td>{{ formatTransactionAmount(transaction) }}</td>
+              <td>
+                <span :class="['transaction-chip', `transaction-chip--${transaction.transactionType.toLowerCase()}`]">
+                  {{ transactionTypeLabel(transaction.transactionType) }}
+                </span>
+              </td>
+              <td><strong class="transaction-amount">{{ formatTransactionAmount(transaction) }}</strong></td>
               <td>{{ formatArea(transaction.exclusiveAreaM2) }}</td>
               <td>{{ formatFloor(transaction.floor) }}</td>
             </tr>
           </tbody>
         </table>
+        <nav
+          v-if="transactionTotalPages > 1"
+          class="transaction-pagination"
+          aria-label="거래내역 페이지"
+        >
+          <button
+            class="transaction-page-btn"
+            data-test="transaction-prev-page"
+            type="button"
+            :disabled="transactionPage === 1"
+            @click="goToTransactionPage(transactionPage - 1)"
+          >
+            이전
+          </button>
+          <span class="transaction-page-state">
+            {{ transactionPage.toLocaleString('ko-KR') }} / {{ transactionTotalPages.toLocaleString('ko-KR') }}
+          </span>
+          <button
+            class="transaction-page-btn"
+            data-test="transaction-next-page"
+            type="button"
+            :disabled="transactionPage === transactionTotalPages"
+            @click="goToTransactionPage(transactionPage + 1)"
+          >
+            다음
+          </button>
+        </nav>
       </div>
       <EmptyState
         v-else

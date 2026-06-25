@@ -4,6 +4,13 @@ import { RouterLink } from 'vue-router'
 import type { DirectiveBinding } from 'vue'
 
 import brandLogoUrl from '@/assets/brand/jiper-estate-real-logo-cropped.png'
+import heroCityDayUrl from '@/assets/landing/seoul-city-day.png'
+import heroCityNightUrl from '@/assets/landing/seoul-city-night.png'
+import ThemeToggle from '@/components/ThemeToggle.vue'
+import { useUiStore } from '@/stores/ui'
+
+const uiStore = useUiStore()
+const heroCityUrl = computed(() => (uiStore.isDarkMode ? heroCityNightUrl : heroCityDayUrl))
 
 const vReveal = {
   mounted(el: HTMLElement, binding: DirectiveBinding<{ delay?: number } | undefined>) {
@@ -44,7 +51,7 @@ const filteredListings = computed(() =>
 </script>
 
 <template>
-  <div class="lp">
+  <div :class="['lp', uiStore.isDarkMode ? 'lp--dark' : 'lp--light']">
     <!-- Fixed header above the scroll container -->
     <header class="lp-header">
       <div class="lp-container lp-header-inner">
@@ -56,7 +63,10 @@ const filteredListings = computed(() =>
           <a href="#services">서비스</a>
           <a href="#community">커뮤니티</a>
         </nav>
-        <RouterLink to="/login" class="lp-cta-btn">로그인</RouterLink>
+        <div class="lp-header-actions">
+          <ThemeToggle />
+          <RouterLink to="/login" class="lp-cta-btn">로그인</RouterLink>
+        </div>
       </div>
     </header>
 
@@ -93,11 +103,7 @@ const filteredListings = computed(() =>
           </div>
           <div class="hero-visual" v-reveal="{ delay: 150 }">
             <div class="hero-img">
-              <div class="arch-v" />
-              <div class="arch-h arch-h-1" />
-              <div class="arch-h arch-h-2" />
-              <div class="arch-d arch-d-1" />
-              <div class="arch-d arch-d-2" />
+              <img class="hero-photo" :src="heroCityUrl" alt="서울 도심 야경" />
             </div>
             <div class="hero-badge">
               <p class="badge-label">상세보기에서 바로 확인</p>
@@ -396,6 +402,7 @@ const filteredListings = computed(() =>
   --cream-card: #ede0c4;
   --border: rgba(200, 160, 100, 0.15);
   --border-card: rgba(200, 160, 100, 0.12);
+  --lp-header-bg: rgba(22, 13, 4, 0.88);
   --header-h: 65px;
 
   /* Full-screen container */
@@ -405,6 +412,20 @@ const filteredListings = computed(() =>
   background: var(--bg);
   font-family: var(--font-body);
   color: var(--cream);
+}
+
+.lp.lp--light {
+  --bg: #f7f2e8;
+  --bg-alt: #efe5d4;
+  --bg-card: #fffaf1;
+  --gold: #9d6b27;
+  --gold-dim: #b98945;
+  --cream: #25180c;
+  --cream-muted: #725f47;
+  --cream-card: #ffffff;
+  --border: rgba(121, 84, 37, 0.18);
+  --border-card: rgba(121, 84, 37, 0.14);
+  --lp-header-bg: rgba(247, 242, 232, 0.88);
 }
 
 /* ── Scroll reveal ── */
@@ -435,7 +456,7 @@ const filteredListings = computed(() =>
   left: 0;
   right: 0;
   z-index: 200;
-  background: rgba(22, 13, 4, 0.88);
+  background: var(--lp-header-bg);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
 }
@@ -446,6 +467,13 @@ const filteredListings = computed(() =>
   align-items: center;
   gap: 40px;
   height: var(--header-h);
+}
+
+.lp-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
 }
 
 .lp-brand {
@@ -556,6 +584,8 @@ const filteredListings = computed(() =>
   border-radius: 12px;
   overflow: hidden;
   max-width: 560px;
+  padding: 4px;
+  border: 1px solid var(--border-card);
 }
 
 .search-field {
@@ -599,6 +629,10 @@ const filteredListings = computed(() =>
   align-self: stretch;
   display: flex;
   align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  border: 0;
+  border-radius: 8px;
   text-decoration: none;
   letter-spacing: 0.04em;
   transition: background 0.2s;
@@ -607,26 +641,42 @@ const filteredListings = computed(() =>
 
 .search-btn:hover { background: #0d0804; }
 
+.lp.lp--light .search-btn {
+  background: #8f6126;
+  color: #fffaf1;
+}
+
+.lp.lp--light .search-btn:hover { background: #704a1d; }
+
 .hero-visual { position: relative; }
 
 .hero-img {
   border-radius: 18px;
   overflow: hidden;
   height: clamp(280px, 44vh, 420px);
-  background: radial-gradient(ellipse at 30% 20%, #3a2a14 0%, #241a0a 40%, #120c04 100%);
+  background: #120c04;
   position: relative;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
 }
 
-.arch-v {
-  position: absolute; left: 42%; top: 0; bottom: 0; width: 1px;
-  background: linear-gradient(to bottom, transparent, rgba(200,160,100,.18) 30%, rgba(200,160,100,.1) 70%, transparent);
+.hero-img::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(18, 12, 4, 0.04), rgba(18, 12, 4, 0.32));
+  pointer-events: none;
 }
-.arch-h { position: absolute; left: 0; right: 0; height: 1px; }
-.arch-h-1 { top: 28%; background: linear-gradient(to right, transparent, rgba(200,160,100,.14), transparent); transform: rotate(-3deg); }
-.arch-h-2 { top: 55%; background: linear-gradient(to right, rgba(200,160,100,.1), rgba(200,160,100,.06), transparent); }
-.arch-d { position: absolute; height: 1px; width: 140%; background: rgba(200,160,100,.08); transform-origin: left center; }
-.arch-d-1 { top: 40%; transform: rotate(-28deg); }
-.arch-d-2 { top: 65%; transform: rotate(-18deg); opacity: .6; }
+
+.lp.lp--light .hero-img::after {
+  background: linear-gradient(180deg, rgba(255, 250, 241, 0.02), rgba(37, 24, 12, 0.12));
+}
+
+.hero-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
 .hero-badge {
   position: absolute;
@@ -947,7 +997,7 @@ const filteredListings = computed(() =>
 
 @media (max-width: 900px) {
   .lp-cta-btn { display: none; }
-  .lp-header-inner { grid-template-columns: auto 1fr; }
+  .lp-header-inner { grid-template-columns: auto 1fr auto; gap: 20px; }
   .lp-nav { justify-content: flex-end; gap: 32px; }
 
   .hero-inner { grid-template-columns: 1fr; gap: 32px; }
@@ -968,7 +1018,7 @@ const filteredListings = computed(() =>
   .lp-nav { gap: 20px; font-size: 0.8rem; }
   .hero-search { flex-wrap: wrap; }
   .search-field { min-width: 42%; }
-  .search-btn { min-height: 46px; justify-content: center; flex: 1 0 100%; }
+  .search-btn { min-height: 46px; justify-content: center; flex: 1 0 100%; margin-left: 0; }
   .listings-grid, .services-grid, .how-grid, .review-grid { grid-template-columns: 1fr; }
   .how-item { border-right: none; }
   .sec-header { flex-direction: column; align-items: flex-start; }
