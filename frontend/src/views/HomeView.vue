@@ -37,8 +37,9 @@ const filters = ['전체', '탐색', 'AI 분석', '회원 기능']
 const allListings = [
   { location: '지도 검색', name: '키워드와 현재 화면 범위 검색', desc: '단지명 자동완성과 지도 이동 검색으로 보고 있는 지역의 매물을 확인합니다.', price: '지도 열기', type: '탐색', to: '/map' },
   { location: '매물 유형', name: '아파트·오피스텔·빌라 필터', desc: '거래유형 대신 매물 유형 기준으로 필요한 주거 형태만 좁혀 봅니다.', price: '필터 적용', type: '탐색', to: '/map' },
-  { location: '상세보기', name: '거래내역별 추정가와 SHAP', desc: '매매 거래 행을 선택하면 해당 거래 기준의 추정가와 요인 차트를 확인합니다.', price: '요인 분석', type: 'AI 분석', to: '/map' },
-  { location: '신규매물 분석', name: '입력 조건 기반 적정가 분석', desc: '신규 아파트 조건을 입력하면 가격예측 모델과 SHAP 요인 분석을 실행합니다.', price: '분석하기', type: 'AI 분석', to: '/new-analysis' },
+  { location: '뉴스', name: '최신 부동산 뉴스 피드', desc: 'Google 뉴스 RSS 기반으로 부동산 관련 최신 기사 흐름을 빠르게 확인합니다.', price: '뉴스 보기', type: '탐색', to: '/news' },
+  { location: '상세보기', name: '거래내역별 추정가와 요인 설명', desc: '매매 거래 행을 선택하면 해당 거래 기준의 추정가와 가격 요인 차트를 확인합니다.', price: '요인 분석', type: 'AI 분석', to: '/map' },
+  { location: '신규매물 분석', name: '입력 조건 기반 적정가 분석', desc: '신규 아파트 조건을 입력하면 가격예측 모델과 가격 요인 분석을 실행합니다.', price: '분석하기', type: 'AI 분석', to: '/new-analysis' },
   { location: 'AI 챗봇', name: '문서 근거 부동산 질문 답변', desc: '주택 동향, 전세 체크리스트, 법령 문서 기반 답변을 마크다운으로 확인합니다.', price: '질문하기', type: 'AI 분석', to: '/chat' },
   { location: '관심목록', name: '관심 단지와 관심 지역 저장', desc: '자주 보는 단지와 지도 영역을 저장해 다시 탐색할 때 바로 불러옵니다.', price: '저장하기', type: '회원 기능', to: '/favorites' },
 ]
@@ -82,8 +83,8 @@ const filteredListings = computed(() =>
             <p class="eyebrow-tag" v-reveal="{ delay: 0 }">REAL TRANSACTION DATA PLATFORM</p>
             <h1 class="hero-heading" v-reveal="{ delay: 100 }">부동산 거래 정보를<br>데이터로 확인하는 곳</h1>
             <p class="hero-desc" v-reveal="{ delay: 200 }">
-              지도 기반 실거래 탐색부터 아파트 가격예측, SHAP 기반 설명,
-              문서 근거 챗봇까지 집er에서 한 번에 확인하세요.
+              지도 기반 실거래 탐색부터 최신 부동산 뉴스, 아파트 가격예측,
+              가격 요인 설명과 문서 근거 챗봇까지 집er에서 한 번에 확인하세요.
             </p>
             <div class="hero-search" v-reveal="{ delay: 300 }">
               <div class="search-field">
@@ -109,7 +110,7 @@ const filteredListings = computed(() =>
             </div>
             <div class="hero-badge">
               <p class="badge-label">상세보기에서 바로 확인</p>
-              <h3 class="badge-name">AI 적정가 · SHAP 설명</h3>
+              <h3 class="badge-name">AI 적정가 · 요인 설명</h3>
               <p class="badge-desc">최근 실거래 조건 기반 가격예측과 요인 분석</p>
               <div class="badge-row">
                 <RouterLink to="/map" class="badge-link">지도에서 보기 →</RouterLink>
@@ -214,13 +215,13 @@ const filteredListings = computed(() =>
         </div>
       </section>
 
-      <!-- PAGE 5: Community -->
+      <!-- PAGE 5: Community & News -->
       <section class="page" id="community">
         <div class="lp-container">
           <div class="sec-header" v-reveal>
             <div>
               <p class="sec-eyebrow">COMMUNITY</p>
-              <h2 class="sec-title">공지와 커뮤니티를<br>함께 확인하세요</h2>
+              <h2 class="sec-title">커뮤니티에서 경험을 나누고<br>뉴스로 흐름을 확인하세요</h2>
             </div>
             <RouterLink to="/community" class="text-arrow-link">커뮤니티 바로가기 →</RouterLink>
           </div>
@@ -228,11 +229,11 @@ const filteredListings = computed(() =>
             <div class="hot-posts" v-reveal="{ delay: 0 }">
               <div class="hot-header">
                 <span aria-hidden="true">•</span>
-                <strong>이런 주제를 다룹니다</strong>
+                <strong>커뮤니티에서 이런 주제를 다룹니다</strong>
               </div>
               <ol class="post-list">
-                <li><span class="post-rank">1</span><span class="post-tag">공지</span><span class="post-title">서비스 업데이트와 데이터 반영 내역을 확인합니다</span><span class="post-cmts">안내</span></li>
-                <li><span class="post-rank">2</span><span class="post-tag">Q&amp;A</span><span class="post-title">가격예측과 SHAP 결과를 어떻게 읽는지 질문합니다</span><span class="post-cmts">질문</span></li>
+                <li><span class="post-rank">1</span><span class="post-tag">후기</span><span class="post-title">실거주 후기와 매물 방문 경험을 공유합니다</span><span class="post-cmts">소통</span></li>
+                <li><span class="post-rank">2</span><span class="post-tag">Q&amp;A</span><span class="post-title">가격예측과 요인 설명 결과를 어떻게 읽는지 질문합니다</span><span class="post-cmts">질문</span></li>
                 <li><span class="post-rank">3</span><span class="post-tag">정보</span><span class="post-title">전세 계약 전 체크리스트와 실거래 확인 팁을 공유합니다</span><span class="post-cmts">공유</span></li>
                 <li><span class="post-rank">4</span><span class="post-tag">지역</span><span class="post-title">관심 지역의 거래 흐름과 주변 단지 정보를 살펴봅니다</span><span class="post-cmts">토론</span></li>
                 <li><span class="post-rank">5</span><span class="post-tag">문의</span><span class="post-title">서비스 사용 중 불편한 점이나 개선 의견을 남깁니다</span><span class="post-cmts">피드백</span></li>
@@ -240,12 +241,16 @@ const filteredListings = computed(() =>
             </div>
             <div class="comm-stats" v-reveal="{ delay: 150 }">
               <div class="comm-cat">
-                <div><p class="cat-name">공지사항</p><p class="cat-desc">운영 안내와 변경 내역</p></div>
-                <span class="cat-count">운영</span>
+                <div><p class="cat-name">뉴스 페이지</p><p class="cat-desc">Google 뉴스 RSS 기반 최신 부동산 기사</p></div>
+                <RouterLink to="/news" class="cat-count">보기</RouterLink>
               </div>
               <div class="comm-cat">
-                <div><p class="cat-name">질문 / 답변</p><p class="cat-desc">서비스와 데이터 질문</p></div>
-                <span class="cat-count">Q&amp;A</span>
+                <div><p class="cat-name">주요 키워드</p><p class="cat-desc">부동산, 아파트, 전세, 재건축, 청약</p></div>
+                <span class="cat-count">RSS</span>
+              </div>
+              <div class="comm-cat">
+                <div><p class="cat-name">활용 방식</p><p class="cat-desc">커뮤니티 의견과 별도로 시장 흐름을 빠르게 확인</p></div>
+                <span class="cat-count">NEWS</span>
               </div>
             </div>
           </div>
@@ -271,12 +276,12 @@ const filteredListings = computed(() =>
               </div>
             </div>
             <div class="review-card" v-reveal="{ delay: 150 }">
-              <p class="review-quote">챗봇 답변은 프로젝트 문서와 부동산 관련 공개 문서를 근거로 제공되며, 계약 판단은 참고용으로만 사용합니다.</p>
+              <p class="review-quote">뉴스 화면에서는 Google 뉴스 RSS 기반 최신 부동산 기사를 확인하고, 챗봇에서는 문서 근거 답변을 참고용으로 확인합니다.</p>
               <div class="review-author">
                 <div class="author-avatar" />
                 <div>
-                  <p class="author-name">RAG 문서 기반 답변</p>
-                  <p class="author-loc">전세 · 주택 동향 · 법령 문서</p>
+                  <p class="author-name">뉴스와 문서 기반 답변</p>
+                  <p class="author-loc">Google 뉴스 RSS · 전세 · 법령 문서</p>
                 </div>
               </div>
             </div>
@@ -295,8 +300,9 @@ const filteredListings = computed(() =>
             </div>
             <form class="contact-form" @submit.prevent>
               <input type="text" value="지도 기반 실거래 탐색" readonly />
+              <input type="text" value="Google 뉴스 RSS 기반 부동산 뉴스" readonly />
               <input type="text" value="아파트 가격예측 모델" readonly />
-              <input type="text" value="SHAP 기반 XAI 설명" readonly />
+              <input type="text" value="가격 요인 설명" readonly />
             </form>
           </div>
         </div>
@@ -313,13 +319,14 @@ const filteredListings = computed(() =>
             <nav class="footer-nav">
               <p class="footer-nav-title">EXPLORE</p>
               <RouterLink to="/map">지도 검색</RouterLink>
+              <RouterLink to="/news">뉴스</RouterLink>
               <RouterLink to="/chat">AI 챗봇</RouterLink>
               <RouterLink to="/favorites">관심목록</RouterLink>
             </nav>
             <nav class="footer-nav">
               <p class="footer-nav-title">COMPANY</p>
               <RouterLink to="/community">커뮤니티</RouterLink>
-              <RouterLink to="/community">공지사항</RouterLink>
+              <RouterLink to="/news">뉴스</RouterLink>
               <RouterLink to="/login">로그인</RouterLink>
             </nav>
           </div>
