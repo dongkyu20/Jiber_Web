@@ -1,6 +1,7 @@
 package com.jiber.backend.property.mapper;
 
 import com.jiber.backend.property.dto.MapSearchRequest;
+import com.jiber.backend.property.dto.NewApartmentAnalysisRequest;
 import com.jiber.backend.property.dto.PropertySearchRequest;
 import com.jiber.backend.property.dto.PropertyType;
 import java.time.LocalDate;
@@ -40,6 +41,10 @@ public interface PropertyMapper {
     List<PropertyTransactionRow> findTransactionsByPropertyId(@Param("propertyId") Long propertyId);
 
     List<String> findApartmentNameHintsByPropertyId(@Param("propertyId") Long propertyId);
+
+    Optional<PropertyDetailRow> findBestApartmentForNewAnalysis(@Param("request") NewApartmentAnalysisRequest request);
+
+    Optional<PropertyDetailRow> findAreaCentroidForNewAnalysis(@Param("request") NewApartmentAnalysisRequest request);
 
     Optional<PropertyType> findPropertyTypeById(@Param("propertyId") Long propertyId);
 }

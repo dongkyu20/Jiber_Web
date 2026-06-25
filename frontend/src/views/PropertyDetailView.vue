@@ -37,6 +37,7 @@ const favoriteUpdating = ref(false)
 const aiLoading = ref(false)
 const valuation = ref<ValuationResponse | null>(null)
 const shapValues = ref<ShapValue[]>([])
+const selectedAiTransaction = ref<PropertyTransaction | null>(null)
 const transactionTypeOptions: TransactionType[] = ['SALE', 'JEONSE', 'MONTHLY_RENT']
 const selectedTransactionTypes = ref<TransactionType[]>([...transactionTypeOptions])
 const transactionPage = ref(1)
@@ -94,8 +95,8 @@ const aiInputTransaction = computed(() => {
     return null
   }
 
-  if (isUsableAiTransaction(latestTransaction.value)) {
-    return latestTransaction.value
+  if (isUsableAiTransaction(selectedAiTransaction.value)) {
+    return selectedAiTransaction.value
   }
 
   return transactions.find(isUsableAiTransaction) ?? null
@@ -106,8 +107,12 @@ const aiInputSummary = computed(() => {
     return ''
   }
 
-  return `${formatArea(transaction.exclusiveAreaM2)} · ${formatFloor(transaction.floor)} 기준`
+  return `${formatDate(transaction.dealDate)} 매매 · ${formatArea(transaction.exclusiveAreaM2)} · ${formatFloor(transaction.floor)} 기준`
 })
+
+function transactionKey(transaction: PropertyTransaction) {
+  return transaction.transactionId ?? `${transaction.dealDate}-${transaction.transactionType}-${transaction.floor}`
+}
 
 function setTransactionSort(key: TransactionSortKey) {
   transactionSort.value =
@@ -204,12 +209,18 @@ function representativeTransactionAmount(transaction: PropertyTransaction) {
 function isUsableAiTransaction(transaction?: PropertyTransaction | null): transaction is PropertyTransaction {
   return Boolean(
     transaction &&
+      transaction.transactionType === 'SALE' &&
       transaction.exclusiveAreaM2 !== undefined &&
       transaction.exclusiveAreaM2 !== null &&
       transaction.exclusiveAreaM2 > 0 &&
       transaction.floor !== undefined &&
       transaction.floor !== null
   )
+}
+
+function isSelectedAiTransaction(transaction: PropertyTransaction) {
+  const selected = aiInputTransaction.value
+  return Boolean(selected && transactionKey(selected) === transactionKey(transaction))
 }
 
 function buildAiRequestPayload(): ValuationRequest | null {
@@ -345,6 +356,9 @@ async function fetchProperty() {
 
   try {
     property.value = await propertyApi.getProperty(propertyId.value)
+    selectedAiTransaction.value = null
+    valuation.value = null
+    shapValues.value = []
   } catch {
     errorMessage.value = '부동산 상세 정보를 아직 불러오지 못했습니다. 백엔드 API 연결을 확인해 주세요.'
   } finally {
@@ -352,10 +366,16 @@ async function fetchProperty() {
   }
 }
 
-async function requestAiExplanation() {
+async function requestAiExplanation(transaction?: PropertyTransaction) {
+  if (transaction) {
+    if (!isUsableAiTransaction(transaction)) {
+      aiMessage.value = '추정가와 요인 분석은 매매 거래내역에서만 확인할 수 있습니다.'
+      return
+    }
+    selectedAiTransaction.value = transaction
+  }
+
   aiMessage.value = ''
-  valuation.value = null
-  shapValues.value = []
 
   if (!authStore.isAuthenticated) {
     aiMessage.value = '로그인이 필요한 기능입니다.'
@@ -375,7 +395,7 @@ async function requestAiExplanation() {
 
   const payload = buildAiRequestPayload()
   if (!payload) {
-    aiMessage.value = '추론에 사용할 거래의 전용면적과 층수 정보가 필요합니다.'
+    aiMessage.value = '추정가와 요인 분석에 사용할 매매 거래내역이 필요합니다.'
     return
   }
 
@@ -383,11 +403,13 @@ async function requestAiExplanation() {
   try {
     const messages: string[] = []
     let firstError: unknown = null
+    let nextValuation: ValuationResponse | null = null
+    let nextShapValues: ShapValue[] | null = null
 
     if (currentProperty.ai.valuationAvailable) {
       try {
-        valuation.value = await propertyApi.requestValuation(propertyId.value, payload)
-        messages.push(valuation.value.message)
+        nextValuation = await propertyApi.requestValuation(propertyId.value, payload)
+        messages.push(nextValuation.message)
       } catch (error) {
         firstError = error
       }
@@ -396,11 +418,18 @@ async function requestAiExplanation() {
     if (currentProperty.ai.shapAvailable) {
       try {
         const shap = await propertyApi.requestShap(propertyId.value, payload)
-        shapValues.value = shap.values
+        nextShapValues = shap.values
         messages.push(shap.message)
       } catch (error) {
         firstError ??= error
       }
+    }
+
+    if (nextValuation) {
+      valuation.value = nextValuation
+    }
+    if (nextShapValues) {
+      shapValues.value = nextShapValues
     }
 
     if (valuation.value && shapValues.value.length) {
@@ -541,18 +570,10 @@ onMounted(fetchProperty)
       <p v-if="!authStore.isAuthenticated" class="muted">추정가와 SHAP 요인은 로그인 후 확인할 수 있습니다.</p>
       <p v-else-if="!canRequestAi" class="muted">{{ aiUnavailableMessage }}</p>
       <p v-else class="muted">
-        아파트 실거래 데이터를 바탕으로 계산한 추정과 주요 요인 설명을 요청합니다.
+        매매 실거래 데이터를 바탕으로 계산한 추정과 주요 요인 설명을 요청합니다.
         <span v-if="aiInputSummary">{{ aiInputSummary }}</span>
+        <span v-else>매매 거래내역을 선택해 주세요.</span>
       </p>
-      <button
-        class="primary-button"
-        data-test="property-ai-button"
-        type="button"
-        :disabled="aiLoading"
-        @click="requestAiExplanation"
-      >
-        {{ aiLoading ? '분석 중입니다' : '추정가와 요인 보기' }}
-      </button>
       <p v-if="aiMessage" class="helper-text">{{ aiMessage }}</p>
       <p v-if="valuation?.estimatedPrice" class="estimate-text">
         추정가 {{ formatKrw(valuation.estimatedPrice) }}
@@ -644,8 +665,17 @@ onMounted(fetchProperty)
           <tbody>
             <tr
               v-for="transaction in pagedTransactions"
-              :key="transaction.transactionId ?? `${transaction.dealDate}-${transaction.transactionType}-${transaction.floor}`"
+              :key="transactionKey(transaction)"
+              :class="{
+                'is-ai-selectable': isUsableAiTransaction(transaction),
+                'is-ai-selected': isSelectedAiTransaction(transaction)
+              }"
+              :tabindex="isUsableAiTransaction(transaction) ? 0 : undefined"
+              :title="isUsableAiTransaction(transaction) ? '이 매매 거래 기준으로 추정가와 요인 분석 보기' : undefined"
               data-test="transaction-row"
+              @click="isUsableAiTransaction(transaction) ? requestAiExplanation(transaction) : undefined"
+              @keydown.enter.prevent="isUsableAiTransaction(transaction) ? requestAiExplanation(transaction) : undefined"
+              @keydown.space.prevent="isUsableAiTransaction(transaction) ? requestAiExplanation(transaction) : undefined"
             >
               <td>{{ formatDate(transaction.dealDate) }}</td>
               <td>

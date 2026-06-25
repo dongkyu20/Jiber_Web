@@ -159,14 +159,64 @@ public class PropertyService {
     }
 
     public NewApartmentAnalysisResponse analyzeNewApartment(NewApartmentAnalysisRequest request) {
-        var valuation = valuationClient.valuateNewApartment(request);
-        var shap = valuationClient.explainNewApartment(request);
+        var enrichedRequest = enrichNewApartmentAnalysisRequest(request);
+        var valuation = valuationClient.valuateNewApartment(enrichedRequest);
+        var shap = valuationClient.explainNewApartment(enrichedRequest);
         return new NewApartmentAnalysisResponse(
                 request.propertyName().trim(),
                 valuation,
                 shap,
                 "입력한 신규 아파트 조건으로 적정가와 주요 요인을 계산했습니다."
         );
+    }
+
+    private NewApartmentAnalysisRequest enrichNewApartmentAnalysisRequest(NewApartmentAnalysisRequest request) {
+        if (request.latitude() != null && request.longitude() != null && request.householdCount() != null) {
+            return request;
+        }
+
+        var matchedProperty = propertyMapper.findBestApartmentForNewAnalysis(request).orElse(null);
+        var areaCentroid = needsAreaFallback(request, matchedProperty)
+                ? propertyMapper.findAreaCentroidForNewAnalysis(request).orElse(null)
+                : null;
+        if (matchedProperty == null && areaCentroid == null) {
+            return request;
+        }
+
+        return new NewApartmentAnalysisRequest(
+                request.propertyName(),
+                request.sido(),
+                request.sigungu(),
+                request.legalDong(),
+                firstNonNull(request.latitude(), valueOrNull(matchedProperty, PropertyDetailRow::getLatitude), valueOrNull(areaCentroid, PropertyDetailRow::getLatitude)),
+                firstNonNull(request.longitude(), valueOrNull(matchedProperty, PropertyDetailRow::getLongitude), valueOrNull(areaCentroid, PropertyDetailRow::getLongitude)),
+                firstNonNull(request.householdCount(), valueOrNull(matchedProperty, PropertyDetailRow::getHouseholdCount), valueOrNull(areaCentroid, PropertyDetailRow::getHouseholdCount)),
+                request.exclusiveAreaM2(),
+                request.floor(),
+                request.builtYear(),
+                request.asOfDate(),
+                request.distanceToStationM()
+        );
+    }
+
+    private boolean needsAreaFallback(NewApartmentAnalysisRequest request, PropertyDetailRow matchedProperty) {
+        return (request.latitude() == null && valueOrNull(matchedProperty, PropertyDetailRow::getLatitude) == null)
+                || (request.longitude() == null && valueOrNull(matchedProperty, PropertyDetailRow::getLongitude) == null)
+                || (request.householdCount() == null && valueOrNull(matchedProperty, PropertyDetailRow::getHouseholdCount) == null);
+    }
+
+    private <T> T valueOrNull(PropertyDetailRow row, java.util.function.Function<PropertyDetailRow, T> getter) {
+        return row == null ? null : getter.apply(row);
+    }
+
+    private <T> T firstNonNull(T first, T second, T third) {
+        if (first != null) {
+            return first;
+        }
+        if (second != null) {
+            return second;
+        }
+        return third;
     }
 
     private PropertyDetailRow resolvePropertyForAi(Long propertyId) {

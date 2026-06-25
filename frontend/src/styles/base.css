@@ -1051,6 +1051,15 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   transform: translateY(-1px);
 }
 
+.transaction-table tbody tr.is-ai-selectable {
+  cursor: pointer;
+}
+
+.transaction-table tbody tr.is-ai-selectable:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
 .transaction-table tbody td {
   padding: 10px 8px;
   border-top: 1px solid var(--border);
@@ -1082,6 +1091,12 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--bg-card-hover) 92%, var(--cream) 8%), var(--bg-card-hover));
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+}
+
+.transaction-table tbody tr.is-ai-selected td {
+  border-color: var(--gold);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-card-hover) 86%, var(--gold) 14%), var(--bg-card-hover));
 }
 
 .transaction-table tbody td:first-child {

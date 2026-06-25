@@ -13,6 +13,7 @@ import com.jiber.backend.favorite.mapper.FavoriteMapper;
 import com.jiber.backend.property.client.PropertyValuationClient;
 import com.jiber.backend.property.dto.AdministrativeClusterLevel;
 import com.jiber.backend.property.dto.MapSearchRequest;
+import com.jiber.backend.property.dto.NewApartmentAnalysisRequest;
 import com.jiber.backend.property.dto.PropertySearchRequest;
 import com.jiber.backend.property.dto.PropertyType;
 import com.jiber.backend.property.dto.ShapRequest;
@@ -121,6 +122,71 @@ class PropertyServiceTest {
 
         assertThat(valuationClient.valuationProperty).isSameAs(mapper.detailRow);
         assertThat(valuationClient.shapProperty).isSameAs(mapper.detailRow);
+    }
+
+    @Test
+    void analyzeNewApartmentFillsMissingLocationAndHouseholdFromMatchedApartment() {
+        var mapper = new FakePropertyMapper();
+        mapper.newAnalysisMatch = sampleDetailRow(PropertyType.APARTMENT);
+        mapper.newAnalysisMatch.setLatitude(new BigDecimal("37.5123456"));
+        mapper.newAnalysisMatch.setLongitude(new BigDecimal("127.0567890"));
+        mapper.newAnalysisMatch.setHouseholdCount(1200);
+        var valuationClient = new RecordingValuationClient();
+        var service = service(mapper, valuationClient);
+        var request = new NewApartmentAnalysisRequest(
+                "Raemian Samsung",
+                "Seoul",
+                "Gangnam",
+                "Samseong",
+                null,
+                null,
+                null,
+                new BigDecimal("84.95"),
+                15,
+                2010,
+                LocalDate.of(2026, 6, 12),
+                null
+        );
+
+        service.analyzeNewApartment(request);
+
+        assertThat(mapper.newAnalysisRequest).isSameAs(request);
+        assertThat(valuationClient.newValuationRequest.latitude()).isEqualByComparingTo("37.5123456");
+        assertThat(valuationClient.newValuationRequest.longitude()).isEqualByComparingTo("127.0567890");
+        assertThat(valuationClient.newValuationRequest.householdCount()).isEqualTo(1200);
+        assertThat(valuationClient.newShapRequest).isEqualTo(valuationClient.newValuationRequest);
+    }
+
+    @Test
+    void analyzeNewApartmentUsesAreaCentroidWhenApartmentNameDoesNotMatch() {
+        var mapper = new FakePropertyMapper();
+        mapper.newAnalysisAreaCentroid = sampleDetailRow(PropertyType.APARTMENT);
+        mapper.newAnalysisAreaCentroid.setLatitude(new BigDecimal("37.5010000"));
+        mapper.newAnalysisAreaCentroid.setLongitude(new BigDecimal("127.0410000"));
+        mapper.newAnalysisAreaCentroid.setHouseholdCount(650);
+        var valuationClient = new RecordingValuationClient();
+        var service = service(mapper, valuationClient);
+        var request = new NewApartmentAnalysisRequest(
+                "Future Apartment",
+                "Seoul",
+                "Gangnam",
+                "Samseong",
+                null,
+                null,
+                null,
+                new BigDecimal("84.95"),
+                15,
+                2010,
+                LocalDate.of(2026, 6, 12),
+                null
+        );
+
+        service.analyzeNewApartment(request);
+
+        assertThat(mapper.newAnalysisAreaRequest).isSameAs(request);
+        assertThat(valuationClient.newValuationRequest.latitude()).isEqualByComparingTo("37.5010000");
+        assertThat(valuationClient.newValuationRequest.longitude()).isEqualByComparingTo("127.0410000");
+        assertThat(valuationClient.newValuationRequest.householdCount()).isEqualTo(650);
     }
 
     @Test
@@ -467,6 +533,10 @@ class PropertyServiceTest {
         private List<String> apartmentNameHints = List.of();
         private PropertyType propertyType;
         private PropertyDetailRow detailRow;
+        private PropertyDetailRow newAnalysisMatch;
+        private PropertyDetailRow newAnalysisAreaCentroid;
+        private NewApartmentAnalysisRequest newAnalysisRequest;
+        private NewApartmentAnalysisRequest newAnalysisAreaRequest;
         private int searchLimit;
         private int searchOffset;
         private long totalElements;
@@ -525,6 +595,18 @@ class PropertyServiceTest {
         @Override
         public List<String> findApartmentNameHintsByPropertyId(Long propertyId) {
             return apartmentNameHints;
+        }
+
+        @Override
+        public Optional<PropertyDetailRow> findBestApartmentForNewAnalysis(NewApartmentAnalysisRequest request) {
+            this.newAnalysisRequest = request;
+            return Optional.ofNullable(newAnalysisMatch);
+        }
+
+        @Override
+        public Optional<PropertyDetailRow> findAreaCentroidForNewAnalysis(NewApartmentAnalysisRequest request) {
+            this.newAnalysisAreaRequest = request;
+            return Optional.ofNullable(newAnalysisAreaCentroid);
         }
 
         @Override
@@ -607,6 +689,8 @@ class PropertyServiceTest {
         private boolean shapCalled;
         private PropertyDetailRow valuationProperty;
         private PropertyDetailRow shapProperty;
+        private NewApartmentAnalysisRequest newValuationRequest;
+        private NewApartmentAnalysisRequest newShapRequest;
 
         @Override
         public ValuationResponse valuateApartment(PropertyDetailRow property, ValuationRequest request) {
@@ -619,6 +703,18 @@ class PropertyServiceTest {
         public ShapResponse explainApartment(PropertyDetailRow property, ShapRequest request) {
             shapCalled = true;
             shapProperty = property;
+            return null;
+        }
+
+        @Override
+        public ValuationResponse valuateNewApartment(NewApartmentAnalysisRequest request) {
+            this.newValuationRequest = request;
+            return null;
+        }
+
+        @Override
+        public ShapResponse explainNewApartment(NewApartmentAnalysisRequest request) {
+            this.newShapRequest = request;
             return null;
         }
     }

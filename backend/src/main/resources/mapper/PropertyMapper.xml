@@ -413,6 +413,71 @@
         ORDER BY apartment_name ASC
     </select>
 
+    <select id="findBestApartmentForNewAnalysis" resultType="com.jiber.backend.property.mapper.PropertyDetailRow">
+        SELECT
+            p.property_id,
+            p.property_type,
+            p.name,
+            p.sido,
+            p.sigungu,
+            p.legal_dong,
+            p.road_address,
+            p.jibun_address,
+            p.latitude,
+            p.longitude,
+            p.built_year,
+            p.household_count,
+            NULL AS latest_deal_amount,
+            NULL AS latest_deal_date
+        FROM properties p
+        WHERE p.property_type = 'APARTMENT'
+          AND p.sido = #{request.sido}
+          AND p.sigungu = #{request.sigungu}
+          AND p.legal_dong = #{request.legalDong}
+          AND (
+              p.name = #{request.propertyName}
+              OR p.name LIKE CONCAT('%', #{request.propertyName}, '%')
+              OR #{request.propertyName} LIKE CONCAT('%', p.name, '%')
+          )
+        ORDER BY
+            CASE
+                WHEN p.name = #{request.propertyName} THEN 3
+                WHEN p.name LIKE CONCAT(#{request.propertyName}, '%')
+                    OR #{request.propertyName} LIKE CONCAT(p.name, '%') THEN 2
+                ELSE 1
+            END DESC,
+            CASE WHEN p.latitude IS NOT NULL AND p.longitude IS NOT NULL THEN 0 ELSE 1 END ASC,
+            CASE WHEN p.household_count IS NOT NULL THEN 0 ELSE 1 END ASC,
+            p.property_id ASC
+        LIMIT 1
+    </select>
+
+    <select id="findAreaCentroidForNewAnalysis" resultType="com.jiber.backend.property.mapper.PropertyDetailRow">
+        SELECT
+            NULL AS property_id,
+            'APARTMENT' AS property_type,
+            #{request.propertyName} AS name,
+            #{request.sido} AS sido,
+            #{request.sigungu} AS sigungu,
+            #{request.legalDong} AS legal_dong,
+            NULL AS road_address,
+            NULL AS jibun_address,
+            CAST(AVG(p.latitude) AS DECIMAL(10, 7)) AS latitude,
+            CAST(AVG(p.longitude) AS DECIMAL(10, 7)) AS longitude,
+            NULL AS built_year,
+            CAST(ROUND(AVG(p.household_count)) AS SIGNED) AS household_count,
+            NULL AS latest_deal_amount,
+            NULL AS latest_deal_date
+        FROM properties p
+        WHERE p.property_type = 'APARTMENT'
+          AND p.sido = #{request.sido}
+          AND p.sigungu = #{request.sigungu}
+          AND p.legal_dong = #{request.legalDong}
+          AND p.latitude IS NOT NULL
+          AND p.longitude IS NOT NULL
+        HAVING COUNT(*) &gt; 0
+    </select>
+
     <select id="findPropertyTypeById" resultType="com.jiber.backend.property.dto.PropertyType">
         SELECT property_type
         FROM properties

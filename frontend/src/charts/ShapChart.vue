@@ -23,8 +23,19 @@ const hasData = computed(() => props.values.length > 0)
 async function renderChart() {
   await nextTick()
 
-  if (!chartEl.value || !hasData.value) {
+  if (!hasData.value) {
+    chart?.dispose()
+    chart = null
     return
+  }
+
+  if (!chartEl.value) {
+    return
+  }
+
+  if (chart && chart.getDom() !== chartEl.value) {
+    chart.dispose()
+    chart = null
   }
 
   chart ??= echarts.init(chartEl.value)

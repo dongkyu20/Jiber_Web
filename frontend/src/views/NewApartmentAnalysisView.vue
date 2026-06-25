@@ -178,10 +178,6 @@ async function submitAnalysis() {
         </div>
         <dl class="summary-list compact">
           <div>
-            <dt>모델</dt>
-            <dd>{{ result.valuation.modelVersion ?? '정보 없음' }}</dd>
-          </div>
-          <div>
             <dt>기준일</dt>
             <dd>{{ result.valuation.baselineDate ?? '정보 없음' }}</dd>
           </div>

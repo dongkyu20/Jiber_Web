@@ -898,22 +898,220 @@ describe('PropertyDetailView transaction summary', () => {
       featureSetVersion: 'features-v1',
       message: '요인을 계산했습니다.'
     })
-    const wrapper = await mountPropertyDetailView({ authenticated: true })
+    const wrapper = await mountPropertyDetailView({ authenticated: true, detail: detailWithTransactionMix() })
+    const saleRow = wrapper.findAll('[data-test="transaction-row"]').find((row) => row.text().includes('12.5억원'))
+    expect(saleRow).toBeTruthy()
 
-    await wrapper.get('[data-test="property-ai-button"]').trigger('click')
+    await saleRow!.trigger('click')
     await flushPromises()
 
     expect(propertyApiMock.requestValuation).toHaveBeenCalledWith('1001', {
-      exclusiveAreaM2: 84.8792,
-      floor: 10,
+      exclusiveAreaM2: 84.95,
+      floor: 15,
       asOfDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
     })
     expect(propertyApiMock.requestShap).toHaveBeenCalledWith('1001', {
-      exclusiveAreaM2: 84.8792,
-      floor: 10,
+      exclusiveAreaM2: 84.95,
+      floor: 15,
       asOfDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
     })
-    expect(wrapper.text()).toContain('추정가 12억 원')
+    expect(wrapper.text()).toContain('추정가 12억원')
     expect(wrapper.text()).toContain('요인을 계산했습니다.')
+  })
+
+  it('does not request valuation and SHAP when there are no sale transactions', async () => {
+    const wrapper = await mountPropertyDetailView({ authenticated: true })
+
+    expect(wrapper.find('[data-test="property-ai-button"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('매매 거래내역을 선택해 주세요.')
+    expect(propertyApiMock.requestValuation).not.toHaveBeenCalled()
+    expect(propertyApiMock.requestShap).not.toHaveBeenCalled()
+  })
+
+  it('requests valuation and SHAP when a sale transaction row is selected', async () => {
+    propertyApiMock.requestValuation.mockResolvedValueOnce({
+      propertyId: 1001,
+      supported: true,
+      estimatedPrice: 990000000,
+      currency: 'KRW',
+      modelVersion: 'model-v1',
+      baselineDate: '2026-06-24',
+      featureSetVersion: 'features-v1',
+      message: '추정가를 계산했습니다.'
+    })
+    propertyApiMock.requestShap.mockResolvedValueOnce({
+      propertyId: 1001,
+      supported: true,
+      baseValue: 1000000000,
+      prediction: 990000000,
+      currency: 'KRW',
+      values: [
+        {
+          feature: 'area',
+          labelKo: '면적',
+          value: 59.97,
+          shapValue: -10000000,
+          direction: 'DOWN'
+        }
+      ],
+      modelVersion: 'model-v1',
+      baselineDate: '2026-06-24',
+      featureSetVersion: 'features-v1',
+      message: '요인을 계산했습니다.'
+    })
+    const wrapper = await mountPropertyDetailView({ authenticated: true, detail: detailWithManyTransactions() })
+
+    await wrapper.get('[data-test="transaction-next-page"]').trigger('click')
+    await flushPromises()
+    const saleRow = wrapper.findAll('[data-test="transaction-row"]').find((row) => row.text().includes('9.9억원'))
+    expect(saleRow).toBeTruthy()
+    await saleRow!.trigger('click')
+    await flushPromises()
+
+    expect(propertyApiMock.requestValuation).toHaveBeenCalledWith('1001', {
+      exclusiveAreaM2: 59.97,
+      floor: 3,
+      asOfDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+    })
+    expect(propertyApiMock.requestShap).toHaveBeenCalledWith('1001', {
+      exclusiveAreaM2: 59.97,
+      floor: 3,
+      asOfDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+    })
+  })
+
+  it('keeps the current SHAP chart when a non-sale transaction row is clicked', async () => {
+    propertyApiMock.requestValuation.mockResolvedValueOnce({
+      propertyId: 1001,
+      supported: true,
+      estimatedPrice: 1200000000,
+      currency: 'KRW',
+      modelVersion: 'model-v1',
+      baselineDate: '2026-06-24',
+      featureSetVersion: 'features-v1',
+      message: '추정가를 계산했습니다.'
+    })
+    propertyApiMock.requestShap.mockResolvedValueOnce({
+      propertyId: 1001,
+      supported: true,
+      baseValue: 1000000000,
+      prediction: 1200000000,
+      currency: 'KRW',
+      values: [
+        {
+          feature: 'area',
+          labelKo: '면적',
+          value: 84.95,
+          shapValue: 120000000,
+          direction: 'UP'
+        }
+      ],
+      modelVersion: 'model-v1',
+      baselineDate: '2026-06-24',
+      featureSetVersion: 'features-v1',
+      message: '요인을 계산했습니다.'
+    })
+    const wrapper = await mountPropertyDetailView({ authenticated: true, detail: detailWithTransactionMix() })
+    const saleRow = wrapper.findAll('[data-test="transaction-row"]').find((row) => row.text().includes('12.5억원'))
+    const jeonseRow = wrapper.findAll('[data-test="transaction-row"]').find((row) => row.text().includes('전세'))
+    expect(saleRow).toBeTruthy()
+    expect(jeonseRow).toBeTruthy()
+
+    await saleRow!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('추정가 12억원')
+
+    await jeonseRow!.trigger('click')
+    await flushPromises()
+
+    expect(propertyApiMock.requestValuation).toHaveBeenCalledTimes(1)
+    expect(propertyApiMock.requestShap).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('추정가 12억원')
+    expect(wrapper.text()).toContain('요인을 계산했습니다.')
+  })
+
+  it('updates valuation and SHAP when another sale transaction row is clicked', async () => {
+    propertyApiMock.requestValuation
+      .mockResolvedValueOnce({
+        propertyId: 1001,
+        supported: true,
+        estimatedPrice: 1200000000,
+        currency: 'KRW',
+        modelVersion: 'model-v1',
+        baselineDate: '2026-06-24',
+        featureSetVersion: 'features-v1',
+        message: '첫 번째 추정가를 계산했습니다.'
+      })
+      .mockResolvedValueOnce({
+        propertyId: 1001,
+        supported: true,
+        estimatedPrice: 990000000,
+        currency: 'KRW',
+        modelVersion: 'model-v1',
+        baselineDate: '2026-06-24',
+        featureSetVersion: 'features-v1',
+        message: '두 번째 추정가를 계산했습니다.'
+      })
+    propertyApiMock.requestShap
+      .mockResolvedValueOnce({
+        propertyId: 1001,
+        supported: true,
+        baseValue: 1000000000,
+        prediction: 1200000000,
+        currency: 'KRW',
+        values: [
+          {
+            feature: 'area',
+            labelKo: '면적',
+            value: 84.95,
+            shapValue: 120000000,
+            direction: 'UP'
+          }
+        ],
+        modelVersion: 'model-v1',
+        baselineDate: '2026-06-24',
+        featureSetVersion: 'features-v1',
+        message: '첫 번째 요인을 계산했습니다.'
+      })
+      .mockResolvedValueOnce({
+        propertyId: 1001,
+        supported: true,
+        baseValue: 1000000000,
+        prediction: 990000000,
+        currency: 'KRW',
+        values: [
+          {
+            feature: 'floor',
+            labelKo: '층수',
+            value: 3,
+            shapValue: -10000000,
+            direction: 'DOWN'
+          }
+        ],
+        modelVersion: 'model-v1',
+        baselineDate: '2026-06-24',
+        featureSetVersion: 'features-v1',
+        message: '두 번째 요인을 계산했습니다.'
+      })
+    const wrapper = await mountPropertyDetailView({ authenticated: true, detail: detailWithManyTransactions() })
+    const firstSaleRow = wrapper.findAll('[data-test="transaction-row"]').find((row) => row.text().includes('12.5억원'))
+    expect(firstSaleRow).toBeTruthy()
+
+    await firstSaleRow!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('추정가 12억원')
+
+    await wrapper.get('[data-test="transaction-next-page"]').trigger('click')
+    await flushPromises()
+    const secondSaleRow = wrapper.findAll('[data-test="transaction-row"]').find((row) => row.text().includes('9.9억원'))
+    expect(secondSaleRow).toBeTruthy()
+
+    await secondSaleRow!.trigger('click')
+    await flushPromises()
+
+    expect(propertyApiMock.requestValuation).toHaveBeenCalledTimes(2)
+    expect(propertyApiMock.requestShap).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('추정가 9.9억원')
+    expect(wrapper.text()).toContain('두 번째 요인을 계산했습니다.')
   })
 })

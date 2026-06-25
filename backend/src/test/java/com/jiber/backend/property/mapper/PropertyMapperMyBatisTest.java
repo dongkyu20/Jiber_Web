@@ -3,6 +3,7 @@ package com.jiber.backend.property.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jiber.backend.property.dto.MapSearchRequest;
+import com.jiber.backend.property.dto.NewApartmentAnalysisRequest;
 import com.jiber.backend.property.dto.PropertyType;
 import com.jiber.backend.property.dto.TransactionType;
 import java.math.BigDecimal;
@@ -197,6 +198,64 @@ class PropertyMapperMyBatisTest {
         assertThat(rows).hasSize(25);
         assertThat(rows.get(0).getDealDate()).isEqualTo(LocalDate.of(2026, 1, 26));
         assertThat(rows.get(24).getTransactionType()).isEqualTo(TransactionType.SALE);
+    }
+
+    @Test
+    void findBestApartmentForNewAnalysisMatchesApartmentByRegionAndName() {
+        insertProperty(1L, PropertyType.APARTMENT, "Raemian Samsung", "Seoul", "Gangnam", "Samseong", "37.5123456", "127.0567890");
+        insertProperty(2L, PropertyType.VILLA, "Raemian Samsung", "Seoul", "Gangnam", "Samseong", "37.4000000", "127.0000000");
+        insertProperty(3L, PropertyType.APARTMENT, "Raemian Samsung", "Seoul", "Gangnam", "Yeoksam", "37.5000000", "127.0300000");
+        var request = new NewApartmentAnalysisRequest(
+                "Raemian Samsung",
+                "Seoul",
+                "Gangnam",
+                "Samseong",
+                null,
+                null,
+                null,
+                new BigDecimal("84.95"),
+                15,
+                2010,
+                LocalDate.of(2026, 6, 12),
+                null
+        );
+
+        var row = propertyMapper.findBestApartmentForNewAnalysis(request);
+
+        assertThat(row).isPresent();
+        assertThat(row.orElseThrow().getPropertyId()).isEqualTo(1L);
+        assertThat(row.orElseThrow().getLatitude()).isEqualByComparingTo("37.5123456");
+        assertThat(row.orElseThrow().getLongitude()).isEqualByComparingTo("127.0567890");
+        assertThat(row.orElseThrow().getHouseholdCount()).isEqualTo(100);
+    }
+
+    @Test
+    void findAreaCentroidForNewAnalysisAveragesApartmentCoordinatesInLegalDong() {
+        insertProperty(1L, PropertyType.APARTMENT, "A", "Seoul", "Gangnam", "Samseong", "37.5000000", "127.0300000");
+        insertProperty(2L, PropertyType.APARTMENT, "B", "Seoul", "Gangnam", "Samseong", "37.5200000", "127.0500000");
+        insertProperty(3L, PropertyType.VILLA, "Villa", "Seoul", "Gangnam", "Samseong", "37.9000000", "127.9000000");
+        insertProperty(4L, PropertyType.APARTMENT, "C", "Seoul", "Gangnam", "Yeoksam", "37.9000000", "127.9000000");
+        var request = new NewApartmentAnalysisRequest(
+                "Future Apartment",
+                "Seoul",
+                "Gangnam",
+                "Samseong",
+                null,
+                null,
+                null,
+                new BigDecimal("84.95"),
+                15,
+                2010,
+                LocalDate.of(2026, 6, 12),
+                null
+        );
+
+        var row = propertyMapper.findAreaCentroidForNewAnalysis(request);
+
+        assertThat(row).isPresent();
+        assertThat(row.orElseThrow().getLatitude()).isEqualByComparingTo("37.5100000");
+        assertThat(row.orElseThrow().getLongitude()).isEqualByComparingTo("127.0400000");
+        assertThat(row.orElseThrow().getHouseholdCount()).isEqualTo(100);
     }
 
     private MapSearchRequest mapRequest(int zoomLevel) {
