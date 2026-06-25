@@ -519,6 +519,41 @@ describe('MapView keyword search', () => {
     )
   })
 
+  it('restores map filters and previous results without refetching when the map view remounts', async () => {
+    propertyApiMock.getMapProperties.mockResolvedValueOnce(mapResponse([seedMapItem]))
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createTestRouter('/map')
+    await router.push('/map')
+    await router.isReady()
+
+    const firstWrapper = mount(MapView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+    await flushPromises()
+
+    await firstWrapper.get('input[value="APARTMENT"]').setValue(false)
+    await flushPromises()
+    expect(firstWrapper.text()).toContain('샘플 역삼아파트')
+    expect(propertyApiMock.getMapProperties).toHaveBeenCalledTimes(1)
+
+    firstWrapper.unmount()
+    propertyApiMock.getMapProperties.mockClear()
+
+    const secondWrapper = mount(MapView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+    await flushPromises()
+
+    expect(propertyApiMock.getMapProperties).not.toHaveBeenCalled()
+    expect(secondWrapper.text()).toContain('샘플 역삼아파트')
+    expect((secondWrapper.get('input[value="APARTMENT"]').element as HTMLInputElement).checked).toBe(false)
+  })
+
   it('searches imported canonical data and keeps the missing-key fallback usable', async () => {
     propertyApiMock.searchProperties.mockResolvedValueOnce(searchResponse([importedSearchItem]))
     const { wrapper } = await mountMapView()
