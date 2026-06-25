@@ -24,7 +24,6 @@ const passwordError = ref('')
 const withdrawError = ref('')
 
 const accountEmail = computed(() => authStore.user?.email ?? '')
-const accountRole = computed(() => authStore.user?.roles.join(', ') ?? 'USER')
 
 watch(
   () => authStore.user?.displayName,
@@ -128,7 +127,6 @@ async function submitWithdraw() {
       </div>
       <div class="summary-strip" aria-label="현재 계정">
         <span>{{ accountEmail }}</span>
-        <strong>{{ accountRole }}</strong>
       </div>
     </section>
 
@@ -146,10 +144,6 @@ async function submitWithdraw() {
           <div>
             <dt>닉네임</dt>
             <dd>{{ authStore.user?.displayName }}</dd>
-          </div>
-          <div>
-            <dt>권한</dt>
-            <dd>{{ accountRole }}</dd>
           </div>
         </dl>
       </section>
@@ -294,11 +288,6 @@ async function submitWithdraw() {
   background: rgba(255, 255, 255, 0.04);
   color: var(--cream-muted);
   font-size: 0.86rem;
-}
-
-.summary-strip strong {
-  color: var(--gold);
-  font-size: 0.78rem;
 }
 
 .mypage-grid {
