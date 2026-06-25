@@ -88,6 +88,7 @@ services:
       DB_DUMP_SKIP_IMPORT: ${DB_DUMP_SKIP_IMPORT:-false}
     volumes:
       - ./db/dumps:/dumps:ro
+      - ./db/007_community.sql:/community.sql:ro
       - ./scripts/import-db-dump.sh:/import-db-dump.sh:ro
     command:
       - sh

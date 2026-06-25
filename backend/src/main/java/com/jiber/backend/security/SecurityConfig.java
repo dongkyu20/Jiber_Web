@@ -68,6 +68,12 @@ public class SecurityConfig {
                                 "/api/v1/properties/new-analysis",
                                 "/api/v1/community/posts",
                                 "/api/v1/community/posts/*/comments").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.PUT,
+                                "/api/v1/community/posts/*",
+                                "/api/v1/community/posts/*/comments/*").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.DELETE,
+                                "/api/v1/community/posts/*",
+                                "/api/v1/community/posts/*/comments/*").hasAnyRole("USER", "ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(securityErrorResponseWriter::writeUnauthorized)

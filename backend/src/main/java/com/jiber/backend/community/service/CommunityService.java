@@ -10,12 +10,14 @@ import com.jiber.backend.community.CommunityPostCreateCommand;
 import com.jiber.backend.community.CommunityPostRow;
 import com.jiber.backend.community.dto.CommunityCommentCreateRequest;
 import com.jiber.backend.community.dto.CommunityCommentResponse;
+import com.jiber.backend.community.dto.CommunityCommentUpdateRequest;
 import com.jiber.backend.community.dto.CommunityMutationResponse;
 import com.jiber.backend.community.dto.CommunityPostCreateRequest;
 import com.jiber.backend.community.dto.CommunityPostDetailResponse;
 import com.jiber.backend.community.dto.CommunityPostListRequest;
 import com.jiber.backend.community.dto.CommunityPostListResponse;
 import com.jiber.backend.community.dto.CommunityPostSummaryResponse;
+import com.jiber.backend.community.dto.CommunityPostUpdateRequest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,16 +44,14 @@ public class CommunityService {
     }
 
     public CommunityPostDetailResponse getPost(Long postId) {
-        var row = communityMapper.findPostById(postId);
-        if (row == null) {
-            throw new ApiException(ErrorCode.COMMUNITY_POST_NOT_FOUND);
-        }
+        var row = findPostOrThrow(postId);
         communityMapper.incrementPostViewCount(postId);
         var refreshed = communityMapper.findPostById(postId);
         return toDetail(refreshed == null ? row : refreshed, communityMapper.findCommentsByPostId(postId));
     }
 
     public CommunityMutationResponse createPost(CommunityPostCreateRequest request, Long authorUserId) {
+        requireAuthenticated(authorUserId);
         var command = new CommunityPostCreateCommand(
                 request.category(),
                 request.title().trim(),
@@ -63,11 +63,31 @@ public class CommunityService {
         return new CommunityMutationResponse(command.getPostId(), "게시글이 등록되었습니다.");
     }
 
+    public CommunityMutationResponse updatePost(Long postId, CommunityPostUpdateRequest request, Long userId) {
+        requireAuthenticated(userId);
+        var post = findPostOrThrow(postId);
+        ensureOwner(post.authorUserId(), userId);
+        communityMapper.updatePost(
+                postId,
+                request.category(),
+                request.title().trim(),
+                request.content().trim(),
+                request.relatedPropertyId()
+        );
+        return new CommunityMutationResponse(postId, "게시글이 수정되었습니다.");
+    }
+
+    public CommunityMutationResponse deletePost(Long postId, Long userId) {
+        requireAuthenticated(userId);
+        var post = findPostOrThrow(postId);
+        ensureOwner(post.authorUserId(), userId);
+        communityMapper.deletePost(postId);
+        return new CommunityMutationResponse(postId, "게시글이 삭제되었습니다.");
+    }
+
     public CommunityMutationResponse createComment(Long postId, CommunityCommentCreateRequest request, Long authorUserId) {
-        var post = communityMapper.findPostById(postId);
-        if (post == null) {
-            throw new ApiException(ErrorCode.COMMUNITY_POST_NOT_FOUND);
-        }
+        requireAuthenticated(authorUserId);
+        findPostOrThrow(postId);
         validateParentComment(postId, request.parentCommentId());
         var command = new CommunityCommentCreateCommand(
                 postId,
@@ -79,6 +99,31 @@ public class CommunityService {
         return new CommunityMutationResponse(command.getCommentId(), "댓글이 등록되었습니다.");
     }
 
+    public CommunityMutationResponse updateComment(
+            Long postId,
+            Long commentId,
+            CommunityCommentUpdateRequest request,
+            Long userId
+    ) {
+        requireAuthenticated(userId);
+        findPostOrThrow(postId);
+        var comment = findCommentOrThrow(commentId);
+        ensureCommentBelongsToPost(postId, comment);
+        ensureOwner(comment.authorUserId(), userId);
+        communityMapper.updateComment(commentId, request.content().trim());
+        return new CommunityMutationResponse(commentId, "댓글이 수정되었습니다.");
+    }
+
+    public CommunityMutationResponse deleteComment(Long postId, Long commentId, Long userId) {
+        requireAuthenticated(userId);
+        findPostOrThrow(postId);
+        var comment = findCommentOrThrow(commentId);
+        ensureCommentBelongsToPost(postId, comment);
+        ensureOwner(comment.authorUserId(), userId);
+        communityMapper.deleteComment(commentId);
+        return new CommunityMutationResponse(commentId, "댓글이 삭제되었습니다.");
+    }
+
     private void validateParentComment(Long postId, Long parentCommentId) {
         if (parentCommentId == null) {
             return;
@@ -86,6 +131,40 @@ public class CommunityService {
         var parent = communityMapper.findCommentById(parentCommentId);
         if (parent == null || !postId.equals(parent.postId()) || parent.parentCommentId() != null) {
             throw new ApiException(ErrorCode.COMMUNITY_COMMENT_NOT_FOUND);
+        }
+    }
+
+    private CommunityPostRow findPostOrThrow(Long postId) {
+        var post = communityMapper.findPostById(postId);
+        if (post == null) {
+            throw new ApiException(ErrorCode.COMMUNITY_POST_NOT_FOUND);
+        }
+        return post;
+    }
+
+    private CommunityCommentRow findCommentOrThrow(Long commentId) {
+        var comment = communityMapper.findCommentById(commentId);
+        if (comment == null) {
+            throw new ApiException(ErrorCode.COMMUNITY_COMMENT_NOT_FOUND);
+        }
+        return comment;
+    }
+
+    private void ensureCommentBelongsToPost(Long postId, CommunityCommentRow comment) {
+        if (!postId.equals(comment.postId())) {
+            throw new ApiException(ErrorCode.COMMUNITY_COMMENT_NOT_FOUND);
+        }
+    }
+
+    private void requireAuthenticated(Long userId) {
+        if (userId == null) {
+            throw new ApiException(ErrorCode.AUTH_REQUIRED);
+        }
+    }
+
+    private void ensureOwner(Long authorUserId, Long userId) {
+        if (authorUserId == null || !authorUserId.equals(userId)) {
+            throw new ApiException(ErrorCode.ACCESS_DENIED);
         }
     }
 

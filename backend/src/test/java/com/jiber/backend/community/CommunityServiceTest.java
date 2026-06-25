@@ -7,7 +7,9 @@ import com.jiber.backend.common.error.ApiException;
 import com.jiber.backend.common.error.ErrorCode;
 import com.jiber.backend.community.dto.CommunityCategory;
 import com.jiber.backend.community.dto.CommunityCommentCreateRequest;
+import com.jiber.backend.community.dto.CommunityCommentUpdateRequest;
 import com.jiber.backend.community.dto.CommunityPostListRequest;
+import com.jiber.backend.community.dto.CommunityPostUpdateRequest;
 import com.jiber.backend.community.service.CommunityService;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -63,6 +65,56 @@ class CommunityServiceTest {
                         assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.COMMUNITY_POST_NOT_FOUND));
     }
 
+    @Test
+    void updatePostAllowsOnlyAuthor() {
+        var mapper = new FakeCommunityMapper();
+        mapper.post = postRow(1L, "Detail", 0L, 0L);
+        var service = new CommunityService(mapper);
+
+        service.updatePost(1L, new CommunityPostUpdateRequest(CommunityCategory.QNA, "Updated", "Updated body", null), 7L);
+
+        assertThat(mapper.updatedPostId).isEqualTo(1L);
+        assertThat(mapper.updatedPostTitle).isEqualTo("Updated");
+    }
+
+    @Test
+    void deletePostRejectsOtherUser() {
+        var mapper = new FakeCommunityMapper();
+        mapper.post = postRow(1L, "Detail", 0L, 0L);
+        var service = new CommunityService(mapper);
+
+        assertThatThrownBy(() -> service.deletePost(1L, 99L))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
+        assertThat(mapper.deletedPostId).isNull();
+    }
+
+    @Test
+    void updateCommentAllowsOnlyAuthorAndPostCommentMatch() {
+        var mapper = new FakeCommunityMapper();
+        mapper.post = postRow(1L, "Detail", 0L, 0L);
+        mapper.comment = commentRow(10L, null, "before");
+        var service = new CommunityService(mapper);
+
+        service.updateComment(1L, 10L, new CommunityCommentUpdateRequest("after"), 7L);
+
+        assertThat(mapper.updatedCommentId).isEqualTo(10L);
+        assertThat(mapper.updatedCommentContent).isEqualTo("after");
+    }
+
+    @Test
+    void deleteCommentRejectsOtherUser() {
+        var mapper = new FakeCommunityMapper();
+        mapper.post = postRow(1L, "Detail", 0L, 0L);
+        mapper.comment = commentRow(10L, null, "body");
+        var service = new CommunityService(mapper);
+
+        assertThatThrownBy(() -> service.deleteComment(1L, 10L, 99L))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
+        assertThat(mapper.deletedCommentId).isNull();
+    }
+
     private static CommunityPostRow postRow(Long postId, String title, Long viewCount, Long commentCount) {
         return new CommunityPostRow(
                 postId,
@@ -93,6 +145,12 @@ class CommunityServiceTest {
         private CommunityCommentRow comment;
         private long total;
         private Long incrementedPostId;
+        private Long updatedPostId;
+        private String updatedPostTitle;
+        private Long deletedPostId;
+        private Long updatedCommentId;
+        private String updatedCommentContent;
+        private Long deletedCommentId;
 
         @Override
         public List<CommunityPostRow> findPosts(CommunityPostListRequest request, int limit, int offset) {
@@ -122,6 +180,25 @@ class CommunityServiceTest {
         }
 
         @Override
+        public int updatePost(
+                Long postId,
+                CommunityCategory category,
+                String title,
+                String content,
+                Long relatedPropertyId
+        ) {
+            updatedPostId = postId;
+            updatedPostTitle = title;
+            return 1;
+        }
+
+        @Override
+        public int deletePost(Long postId) {
+            deletedPostId = postId;
+            return 1;
+        }
+
+        @Override
         public List<CommunityCommentRow> findCommentsByPostId(Long postId) {
             return comments;
         }
@@ -134,6 +211,19 @@ class CommunityServiceTest {
         @Override
         public int insertComment(CommunityCommentCreateCommand command) {
             command.setCommentId(200L);
+            return 1;
+        }
+
+        @Override
+        public int updateComment(Long commentId, String content) {
+            updatedCommentId = commentId;
+            updatedCommentContent = content;
+            return 1;
+        }
+
+        @Override
+        public int deleteComment(Long commentId) {
+            deletedCommentId = commentId;
             return 1;
         }
     }

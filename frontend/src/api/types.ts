@@ -512,8 +512,14 @@ export interface CommunityPostCreateRequest {
   relatedPropertyId?: number | null
 }
 
+export interface CommunityPostUpdateRequest extends CommunityPostCreateRequest {}
+
 export interface CommunityCommentCreateRequest {
   parentCommentId?: number | null
+  content: string
+}
+
+export interface CommunityCommentUpdateRequest {
   content: string
 }
 

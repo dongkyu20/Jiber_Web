@@ -141,6 +141,25 @@
         )
     </insert>
 
+    <update id="updatePost">
+        UPDATE community_posts
+        SET category = #{category},
+            title = #{title},
+            content = #{content},
+            related_property_id = #{relatedPropertyId},
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="deletePost">
+        UPDATE community_posts
+        SET deleted_at = CURRENT_TIMESTAMP(6),
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </update>
+
     <select id="findCommentsByPostId" resultMap="CommunityCommentRowMap">
         SELECT
             c.comment_id,
@@ -192,4 +211,20 @@
             #{content}
         )
     </insert>
+
+    <update id="updateComment">
+        UPDATE community_comments
+        SET content = #{content},
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE comment_id = #{commentId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="deleteComment">
+        UPDATE community_comments
+        SET deleted_at = CURRENT_TIMESTAMP(6),
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE comment_id = #{commentId}
+          AND deleted_at IS NULL
+    </update>
 </mapper>
