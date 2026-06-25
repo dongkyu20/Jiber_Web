@@ -36,6 +36,24 @@ docs/
 
 ## 로컬 실행 방식
 
+처음 프로젝트를 받는 경우에는 아래 순서로 실행합니다.
+
+```bash
+git clone https://github.com/dongkyu20/Jiber_Web.git
+cd Jiber_Web
+
+cp .env.example .env
+# .env에서 DB_PASSWORD, DB_ROOT_PASSWORD 등 필수 로컬 값을 채웁니다.
+
+docker compose up --build -d
+
+cd frontend
+npm install
+npm run dev
+```
+
+실행 후 브라우저에서 Vite가 출력하는 주소, 기본적으로 `http://localhost:5173`, 로 접속합니다. Docker Compose는 MySQL, DB dump/import, model-server, backend를 백그라운드로 실행합니다. 프론트엔드는 `npm run dev`로 별도 실행합니다.
+
 Phase 1 로컬 개발 흐름은 다음 순서입니다.
 
 1. `.env.example`을 `.env`로 복사하고 `DB_PASSWORD`, `DB_ROOT_PASSWORD`를 로컬 값으로 채웁니다.
