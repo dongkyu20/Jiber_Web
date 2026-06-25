@@ -167,6 +167,49 @@ public class AuthService {
         return new AccountRecoveryResponse(DIRECT_PASSWORD_RESET_MESSAGE);
     }
 
+    public AuthUserResponse updateProfile(Authentication authentication, UpdateProfileRequest request) {
+        var user = requireEnabledCurrentUser(authentication);
+        var displayName = request.displayName().trim();
+        var now = OffsetDateTime.now(clock);
+        var changed = authUserMapper.updateDisplayName(user.userId(), displayName, now);
+        if (changed == 0) {
+            throw authRequired();
+        }
+
+        var updated = authUserMapper.findById(user.userId());
+        if (updated == null || Boolean.FALSE.equals(updated.enabled())) {
+            throw authRequired();
+        }
+        return AuthUserResponse.from(updated.toPrincipal());
+    }
+
+    public AccountMutationResponse changePassword(Authentication authentication, ChangePasswordRequest request) {
+        var user = requireEnabledCurrentUser(authentication);
+        verifyPassword(user, request.currentPassword());
+        passwordPolicy.validate(request.newPassword());
+
+        var now = OffsetDateTime.now(clock);
+        var changed = authUserMapper.updatePasswordHash(user.userId(), passwordEncoder.encode(request.newPassword()), now);
+        if (changed == 0) {
+            throw authRequired();
+        }
+        refreshTokenService.revokeAllForUser(user.userId());
+        return new AccountMutationResponse("비밀번호가 변경되었습니다. 다시 로그인해 주세요.");
+    }
+
+    public AccountMutationResponse deactivateAccount(Authentication authentication, DeactivateAccountRequest request) {
+        var user = requireEnabledCurrentUser(authentication);
+        verifyPassword(user, request.password());
+
+        var now = OffsetDateTime.now(clock);
+        var changed = authUserMapper.updateEnabled(user.userId(), false, now);
+        if (changed == 0) {
+            throw authRequired();
+        }
+        refreshTokenService.revokeAllForUser(user.userId());
+        return new AccountMutationResponse("회원탈퇴가 완료되었습니다.");
+    }
+
     public AuthRefreshResult refresh(String rawRefreshToken, RefreshRequestContext context) {
         if (!StringUtils.hasText(rawRefreshToken)) {
             throw authRequired();
@@ -183,6 +226,23 @@ public class AuthService {
 
     public void logout(String rawRefreshToken) {
         refreshTokenService.revoke(rawRefreshToken);
+    }
+
+    private AuthUserRecord requireEnabledCurrentUser(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || !(authentication.getPrincipal() instanceof AuthUserPrincipal principal)) {
+            throw authRequired();
+        }
+        var user = authUserMapper.findById(principal.userId());
+        if (user == null || Boolean.FALSE.equals(user.enabled())) {
+            throw authRequired();
+        }
+        return user;
+    }
+
+    private void verifyPassword(AuthUserRecord user, String password) {
+        if (user == null || !StringUtils.hasText(user.passwordHash()) || !matches(password, user.passwordHash())) {
+            throw invalidCredentials();
+        }
     }
 
     private ApiException authRequired() {

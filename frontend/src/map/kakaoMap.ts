@@ -16,6 +16,13 @@ export interface MapMarkerRenderMode {
   showAdministrativeClusters: boolean
 }
 
+export type AdministrativePriceTone =
+  | 'price-low'
+  | 'price-medium-low'
+  | 'price-medium'
+  | 'price-medium-high'
+  | 'price-high'
+
 export interface KakaoLatLngLike {
   getLat(): number
   getLng(): number
@@ -134,6 +141,7 @@ const PROPERTY_MARKER_MINIMIZED_Z_INDEX = 10
 const PROPERTY_MARKER_DETAILED_Z_INDEX = 20
 const PROPERTY_MARKER_SELECTED_Z_INDEX = 30
 const PROPERTY_MARKER_ACTIVE_Z_INDEX = 40
+const ADMINISTRATIVE_CLUSTER_Z_INDEX = 12
 
 export function boundsFromKakao(bounds: KakaoBoundsLike, zoomLevel: number): MapViewport {
   const southWest = bounds.getSouthWest()
@@ -312,11 +320,65 @@ export function formatAdministrativeClusterLabel(cluster: AdministrativeCluster)
   return `${cluster.label}\n${averageLabel}\n거래 ${cluster.transactionCount.toLocaleString('ko-KR')}건`
 }
 
-function propertyClusterBadgeContent(count: number, onClick?: () => void): HTMLElement {
+function administrativeAverageValue(cluster: AdministrativeCluster): number | null {
+  const value = cluster.averageDealAmount
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function priceToneForValue(value: number | null, values: number[]): AdministrativePriceTone | null {
+  if (value === null || !values.length) {
+    return null
+  }
+
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+
+  if (min === max) {
+    return 'price-medium'
+  }
+
+  const ratio = (value - min) / (max - min)
+
+  if (ratio >= 0.8) {
+    return 'price-high'
+  }
+
+  if (ratio >= 0.6) {
+    return 'price-medium-high'
+  }
+
+  if (ratio >= 0.4) {
+    return 'price-medium'
+  }
+
+  if (ratio >= 0.2) {
+    return 'price-medium-low'
+  }
+
+  return 'price-low'
+}
+
+export function administrativePriceTone(
+  cluster: AdministrativeCluster,
+  clusters: AdministrativeCluster[]
+): AdministrativePriceTone | null {
+  const value = administrativeAverageValue(cluster)
+  const values = clusters.map(administrativeAverageValue).filter((amount): amount is number => amount !== null)
+  return priceToneForValue(value, values)
+}
+
+function propertyClusterBadgeContent(
+  count: number,
+  onClick?: () => void,
+  priceTone?: AdministrativePriceTone | null
+): HTMLElement {
   const formattedCount = count.toLocaleString('ko-KR')
   const markerButton = document.createElement('button')
   markerButton.type = 'button'
   markerButton.className = 'map-property-cluster'
+  if (priceTone) {
+    markerButton.classList.add('is-price-layered', priceTone)
+  }
   markerButton.setAttribute('aria-label', `부동산 클러스터 ${formattedCount}건`)
 
   const label = document.createElement('span')
@@ -339,12 +401,16 @@ function propertyClusterBadgeContent(count: number, onClick?: () => void): HTMLE
 
 function administrativeClusterContent(
   cluster: AdministrativeCluster,
-  onClick?: (cluster: AdministrativeCluster) => void
+  onClick?: (cluster: AdministrativeCluster) => void,
+  priceTone?: AdministrativePriceTone | null
 ): HTMLElement {
   const [areaLabel, averageLabel, countLabel] = formatAdministrativeClusterLabel(cluster).split('\n')
   const markerButton = document.createElement('button')
   markerButton.type = 'button'
   markerButton.className = 'map-admin-cluster'
+  if (priceTone) {
+    markerButton.classList.add('is-price-layered', priceTone)
+  }
   markerButton.dataset.clusterId = cluster.clusterId
   markerButton.setAttribute('aria-label', formatAdministrativeClusterLabel(cluster).replace(/\n/g, ', '))
 
@@ -670,6 +736,48 @@ function createTransparentMarkerImage(kakaoMaps: KakaoMapsApi): unknown {
   )
 }
 
+function finitePrice(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function propertyAveragePrice(item: PropertyMapItem): number | null {
+  const recentAverageValues = [
+    item.recentYearAverageDealAmount,
+    item.recentYearAverageJeonseDepositAmount
+  ].filter(finitePrice)
+
+  if (recentAverageValues.length) {
+    return average(recentAverageValues)
+  }
+
+  const latestValues = [
+    item.latestTransaction?.dealAmount,
+    item.latestTransaction?.depositAmount
+  ].filter(finitePrice)
+
+  return average(latestValues)
+}
+
+function propertyClusterAveragePrice(
+  cluster: KakaoClusterLike,
+  markerPriceValues: WeakMap<KakaoMarkerLike, number>
+): number | null {
+  return average(cluster.getMarkers().map((marker) => markerPriceValues.get(marker)).filter(finitePrice))
+}
+
+function propertyClusterPriceTone(
+  cluster: KakaoClusterLike,
+  clusters: KakaoClusterLike[],
+  markerPriceValues: WeakMap<KakaoMarkerLike, number>
+): AdministrativePriceTone | null {
+  const value = propertyClusterAveragePrice(cluster, markerPriceValues)
+  const values = clusters
+    .map((candidate) => propertyClusterAveragePrice(candidate, markerPriceValues))
+    .filter(finitePrice)
+
+  return priceToneForValue(value, values)
+}
+
 export function syncKakaoMarkers(options: {
   kakaoMaps: KakaoMapsApi
   map: KakaoMapLike
@@ -747,6 +855,7 @@ export function syncKakaoPropertyClusters(options: {
   map: KakaoMapLike
   previousClusterer: KakaoMarkerClustererLike | null
   items: PropertyMapItem[]
+  showPriceTone?: boolean
   onClustered?: (clusters: KakaoClusterLike[]) => void
   onClusterClick?: (cluster: KakaoClusterLike) => void
 }): KakaoMarkerClustererLike | null {
@@ -756,14 +865,22 @@ export function syncKakaoPropertyClusters(options: {
     return null
   }
 
+  const markerPriceValues = new WeakMap<KakaoMarkerLike, number>()
   const markers = options.items.map((item) => {
-    return new options.kakaoMaps.Marker({
+    const marker = new options.kakaoMaps.Marker({
       position: new options.kakaoMaps.LatLng(item.lat, item.lng),
       title: `property-cluster-${item.propertyId}`,
       image: createTransparentMarkerImage(options.kakaoMaps),
       clickable: false,
       opacity: 0
     })
+
+    const priceValue = propertyAveragePrice(item)
+    if (priceValue !== null) {
+      markerPriceValues.set(marker, priceValue)
+    }
+
+    return marker
   })
 
   const clusterer = new options.kakaoMaps.MarkerClusterer({
@@ -782,10 +899,17 @@ export function syncKakaoPropertyClusters(options: {
     const kakaoClusters = clusters as KakaoClusterLike[]
 
     kakaoClusters.forEach((kakaoCluster) => {
+      const priceTone = options.showPriceTone
+        ? propertyClusterPriceTone(kakaoCluster, kakaoClusters, markerPriceValues)
+        : null
       kakaoCluster
         .getClusterMarker()
         .setContent(
-          propertyClusterBadgeContent(kakaoCluster.getMarkers().length, () => options.onClusterClick?.(kakaoCluster))
+          propertyClusterBadgeContent(
+            kakaoCluster.getMarkers().length,
+            () => options.onClusterClick?.(kakaoCluster),
+            priceTone
+          )
         )
     })
     options.onClustered?.(kakaoClusters)
@@ -806,6 +930,7 @@ export function syncAdministrativeClusterOverlays(options: {
   previousOverlays: KakaoOverlayLike[]
   clusters: AdministrativeCluster[]
   reservedPoints?: MapScreenPoint[]
+  showPriceTone?: boolean
   onClick?: (cluster: AdministrativeCluster) => void
 }): KakaoOverlayLike[] {
   clearOverlayMarkers(options.previousOverlays)
@@ -828,8 +953,13 @@ export function syncAdministrativeClusterOverlays(options: {
       new CustomOverlay({
         map: options.map,
         position: new options.kakaoMaps.LatLng(cluster.centerLat, cluster.centerLng),
-        content: administrativeClusterContent(cluster, options.onClick),
-        yAnchor: 0.5
+        content: administrativeClusterContent(
+          cluster,
+          options.onClick,
+          options.showPriceTone ? administrativePriceTone(cluster, options.clusters) : null
+        ),
+        yAnchor: 0.5,
+        zIndex: ADMINISTRATIVE_CLUSTER_Z_INDEX
       })
   )
 }

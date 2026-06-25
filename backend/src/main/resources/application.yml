@@ -97,3 +97,10 @@ jiber:
     kakao:
       rest-api-key: ${KAKAO_REST_API_KEY:}
       base-url: ${KAKAO_LOCAL_BASE_URL:https://dapi.kakao.com}
+  news:
+    naver:
+      client-id: ${NAVER_SEARCH_CLIENT_ID:}
+      client-secret: ${NAVER_SEARCH_CLIENT_SECRET:}
+      oauth-client-id: ${OAUTH_NAVER_CLIENT_ID:}
+      oauth-client-secret: ${OAUTH_NAVER_CLIENT_SECRET:}
+      base-url: ${NAVER_SEARCH_BASE_URL:https://openapi.naver.com}

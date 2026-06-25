@@ -31,6 +31,12 @@ export const router = createRouter({
       meta: { requiresAuth: true, roles: ['USER', 'ADMIN'] }
     },
     {
+      path: '/mypage',
+      name: 'mypage',
+      component: () => import('@/views/MyPageView.vue'),
+      meta: { requiresAuth: true, roles: ['USER', 'ADMIN'] }
+    },
+    {
       path: '/chat',
       name: 'chat',
       component: () => import('@/views/ChatView.vue'),
@@ -47,6 +53,12 @@ export const router = createRouter({
       name: 'community-write',
       component: () => import('@/views/CommunityWriteView.vue'),
       meta: { requiresAuth: true, roles: ['USER', 'ADMIN'] }
+    },
+    {
+      path: '/news',
+      name: 'news',
+      component: () => import('@/views/NewsView.vue'),
+      meta: { requiresAuth: false }
     },
     {
       path: '/community/:id',

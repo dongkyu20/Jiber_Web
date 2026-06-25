@@ -8,6 +8,7 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
     SOCIAL_PENDING_NOT_FOUND(HttpStatus.UNAUTHORIZED, "소셜 가입 세션이 만료되었거나 존재하지 않습니다."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
+    RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 API를 찾을 수 없습니다."),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 회원을 찾을 수 없습니다."),
     ADMIN_SELF_UPDATE_NOT_ALLOWED(HttpStatus.CONFLICT, "자기 자신의 관리자 권한 또는 활성 상태는 변경할 수 없습니다."),
     PROPERTY_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 부동산 정보를 찾을 수 없습니다."),
@@ -24,6 +25,7 @@ public enum ErrorCode {
     VALUATION_INSUFFICIENT_DATA(HttpStatus.UNPROCESSABLE_ENTITY, "가격 추정에 필요한 데이터가 부족합니다."),
     MODEL_SERVER_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "가격 추정 서버와 연결할 수 없습니다."),
     CHATBOT_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "부동산 챗봇 서버와 연결할 수 없습니다."),
+    NEWS_SEARCH_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "최신 뉴스 검색 서버와 연결할 수 없습니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
     private final HttpStatus status;

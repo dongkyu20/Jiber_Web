@@ -15,7 +15,9 @@ function createTestRouter() {
       { path: '/map', component: { template: '<main />' } },
       { path: '/new-analysis', component: { template: '<main />' } },
       { path: '/community', component: { template: '<main />' } },
+      { path: '/news', component: { template: '<main />' } },
       { path: '/favorites', component: { template: '<main />' } },
+      { path: '/mypage', component: { template: '<main />' } },
       { path: '/admin', component: { template: '<main />' } }
     ]
   })
@@ -72,6 +74,7 @@ describe('AppHeader', () => {
     const buttons = wrapper.findAll('.auth-actions button')
 
     expect(wrapper.text()).toContain('Test User')
+    expect(wrapper.find('a[href="/mypage"]').exists()).toBe(true)
     expect(buttons).toHaveLength(1)
     expect(wrapper.find('.user-avatar').exists()).toBe(true)
   })

@@ -65,6 +65,39 @@ class CanonicalApartmentUpsertMySqlSmokeTest {
         assertThat(mapContains(apartmentName)).isTrue();
     }
 
+    @Test
+    void officetelRawRowUsesExistingApartmentPropertyWhenSameIdentityExists() {
+        var suffix = UUID.randomUUID().toString();
+        var sourceKey = "MYSQL-SMOKE-OFFI-" + suffix;
+        var addressKey = "SEOUL GANGNAM YEOKSAM 77-" + suffix;
+        var fullAddress = "SEOUL GANGNAM YEOKSAM 77-" + suffix;
+        var apartmentName = "Mixed Use Tower " + suffix.substring(0, 8);
+        var importRunId = insertImportRun();
+        insertGeocoding(addressKey, fullAddress);
+        var apartmentPropertyId = insertApartmentProperty(apartmentName, fullAddress);
+        insertRawTransaction(
+                importRunId,
+                sourceKey,
+                addressKey,
+                fullAddress,
+                apartmentName,
+                PropertyType.OFFICETEL,
+                "SEOUL",
+                "GANGNAM",
+                "YEOKSAM",
+                "77-1"
+        );
+
+        var summary = upsertService.upsertEligibleRawRows(importRunId);
+
+        assertThat(summary.processedCount()).isEqualTo(1);
+        assertThat(summary.propertyCreatedCount()).isZero();
+        assertThat(summary.transactionCreatedCount()).isEqualTo(1);
+        assertThat(transactionPropertyId(sourceKey)).isEqualTo(apartmentPropertyId);
+        assertThat(countProperty(PropertyType.OFFICETEL, apartmentName, fullAddress)).isZero();
+        assertThat(rawCanonicalStatus(sourceKey)).isEqualTo("APPLIED");
+    }
+
     private Long insertImportRun() {
         jdbcTemplate.update("""
                 INSERT INTO public_data_import_runs (
@@ -126,6 +159,83 @@ class CanonicalApartmentUpsertMySqlSmokeTest {
                 """, importRunId, sourceKey, addressKey, fullAddress, apartmentName);
     }
 
+    private void insertRawTransaction(
+            Long importRunId,
+            String sourceKey,
+            String addressKey,
+            String fullAddress,
+            String apartmentName,
+            PropertyType propertyType,
+            String sido,
+            String sigungu,
+            String legalDong,
+            String jibun
+    ) {
+        jdbcTemplate.update("""
+                INSERT INTO public_data_raw_apartment_transactions (
+                    import_run_id,
+                    source_key,
+                    property_type,
+                    transaction_type,
+                    lawd_cd,
+                    sido,
+                    sigungu,
+                    legal_dong,
+                    jibun,
+                    address_key,
+                    full_address,
+                    apartment_name,
+                    exclusive_area_m2,
+                    floor,
+                    built_year,
+                    deal_date,
+                    deal_amount_krw,
+                    deposit_amount_krw,
+                    monthly_rent_krw,
+                    geocoding_status,
+                    canonical_status
+                ) VALUES (
+                    ?, ?, ?, 'SALE', '11680', ?, ?, ?, ?,
+                    ?, ?, ?, 84.9500, 15, 2010, '2026-05-20',
+                    1250000000, NULL, 0, 'SUCCESS', 'ELIGIBLE'
+                )
+                """,
+                importRunId,
+                sourceKey,
+                propertyType.name(),
+                sido,
+                sigungu,
+                legalDong,
+                jibun,
+                addressKey,
+                fullAddress,
+                apartmentName
+        );
+    }
+
+    private Long insertApartmentProperty(String apartmentName, String fullAddress) {
+        jdbcTemplate.update("""
+                INSERT INTO properties (
+                    property_type,
+                    name,
+                    sido,
+                    sigungu,
+                    legal_dong,
+                    road_address,
+                    jibun_address,
+                    latitude,
+                    longitude,
+                    built_year,
+                    household_count,
+                    source_system
+                ) VALUES (
+                    'APARTMENT', ?, 'SEOUL', 'GANGNAM', 'YEOKSAM', NULL, ?,
+                    37.5010000, 127.0370000, 2010, NULL, 'PUBLIC_DATA_PORTAL'
+                )
+                """, apartmentName, fullAddress);
+        return jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+    }
+
     private Integer countProperty(String apartmentName, String fullAddress) {
         return jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
@@ -136,6 +246,16 @@ class CanonicalApartmentUpsertMySqlSmokeTest {
                 """, Integer.class, apartmentName, fullAddress);
     }
 
+    private Integer countProperty(PropertyType propertyType, String apartmentName, String fullAddress) {
+        return jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM properties
+                WHERE property_type = ?
+                  AND name = ?
+                  AND jibun_address = ?
+                """, Integer.class, propertyType.name(), apartmentName, fullAddress);
+    }
+
     private Integer countTransaction(String sourceKey) {
         return jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
@@ -143,6 +263,15 @@ class CanonicalApartmentUpsertMySqlSmokeTest {
                 WHERE source_system = 'PUBLIC_DATA_PORTAL'
                   AND source_transaction_id = ?
                 """, Integer.class, sourceKey);
+    }
+
+    private Long transactionPropertyId(String sourceKey) {
+        return jdbcTemplate.queryForObject("""
+                SELECT property_id
+                FROM property_transactions
+                WHERE source_system = 'PUBLIC_DATA_PORTAL'
+                  AND source_transaction_id = ?
+                """, Long.class, sourceKey);
     }
 
     private String rawCanonicalStatus(String sourceKey) {

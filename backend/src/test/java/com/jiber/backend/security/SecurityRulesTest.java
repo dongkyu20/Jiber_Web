@@ -259,6 +259,78 @@ class SecurityRulesTest {
     }
 
     @Test
+    void accountManagementRequiresAuthenticationAndAllowsCurrentUser() throws Exception {
+        var signupBody = """
+                {
+                  "email": "account-owner@example.com",
+                  "password": "valid-credential-1",
+                  "displayName": "Account Owner"
+                }
+                """;
+        var profileBody = """
+                {
+                  "displayName": "Updated Owner"
+                }
+                """;
+        var passwordBody = """
+                {
+                  "currentPassword": "valid-credential-1",
+                  "newPassword": "new-valid-credential-1"
+                }
+                """;
+        var deactivateBody = """
+                {
+                  "password": "new-valid-credential-1"
+                }
+                """;
+
+        mockMvc.perform(patch("/api/v1/auth/account/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(profileBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+
+        mockMvc.perform(patch("/api/v1/auth/account/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(passwordBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+
+        mockMvc.perform(delete("/api/v1/auth/account/deactivate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(deactivateBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signupBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.userId").value(1));
+
+        mockMvc.perform(patch("/api/v1/auth/account/profile")
+                        .with(authentication(authPrincipal(1L, "USER")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(profileBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("Updated Owner"));
+
+        mockMvc.perform(patch("/api/v1/auth/account/password")
+                        .with(authentication(authPrincipal(1L, "USER")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(passwordBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(Matchers.containsString("비밀번호")));
+
+        mockMvc.perform(delete("/api/v1/auth/account/deactivate")
+                        .with(authentication(authPrincipal(1L, "USER")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(deactivateBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(Matchers.containsString("회원탈퇴")));
+    }
+
+    @Test
     void favoritesRequireAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/favorites/apartments"))
                 .andExpect(status().isUnauthorized())
@@ -733,6 +805,48 @@ class SecurityRulesTest {
                         current.displayName(),
                         current.role(),
                         current.enabled(),
+                        current.lastLoginAt(),
+                        current.createdAt(),
+                        updatedAt
+                );
+                usersById.put(userId, updated);
+                usersByEmail.put(updated.email(), updated);
+                return 1;
+            }
+
+            public int updateDisplayName(Long userId, String displayName, OffsetDateTime updatedAt) {
+                var current = usersById.get(userId);
+                if (current == null) {
+                    return 0;
+                }
+                var updated = new AuthUserRecord(
+                        current.userId(),
+                        current.email(),
+                        current.passwordHash(),
+                        displayName,
+                        current.role(),
+                        current.enabled(),
+                        current.lastLoginAt(),
+                        current.createdAt(),
+                        updatedAt
+                );
+                usersById.put(userId, updated);
+                usersByEmail.put(updated.email(), updated);
+                return 1;
+            }
+
+            public int updateEnabled(Long userId, Boolean enabled, OffsetDateTime updatedAt) {
+                var current = usersById.get(userId);
+                if (current == null) {
+                    return 0;
+                }
+                var updated = new AuthUserRecord(
+                        current.userId(),
+                        current.email(),
+                        current.passwordHash(),
+                        current.displayName(),
+                        current.role(),
+                        enabled,
                         current.lastLoginAt(),
                         current.createdAt(),
                         updatedAt

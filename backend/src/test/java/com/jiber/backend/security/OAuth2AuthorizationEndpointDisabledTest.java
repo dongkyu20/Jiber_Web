@@ -157,6 +157,16 @@ class OAuth2AuthorizationEndpointDisabledTest {
             public int updatePasswordHash(Long userId, String passwordHash, OffsetDateTime updatedAt) {
                 return 0;
             }
+
+            @Override
+            public int updateDisplayName(Long userId, String displayName, OffsetDateTime updatedAt) {
+                return 0;
+            }
+
+            @Override
+            public int updateEnabled(Long userId, Boolean enabled, OffsetDateTime updatedAt) {
+                return 0;
+            }
         }
 
         private static class NoopSocialAccountMapper implements SocialAccountMapper {

@@ -111,6 +111,49 @@ describe('authApi email and social endpoints', () => {
     )
   })
 
+  it('patches the current user profile through the account endpoint', async () => {
+    const updatedUser = {
+      ...sessionResponse.user,
+      displayName: 'New Nickname'
+    }
+    const patchSpy = vi.spyOn(apiClient, 'patch').mockResolvedValueOnce({ data: updatedUser })
+
+    const result = await authApi.updateProfile({ displayName: 'New Nickname' })
+
+    expect(result).toEqual(updatedUser)
+    expect(patchSpy).toHaveBeenCalledWith('/auth/account/profile', { displayName: 'New Nickname' })
+  })
+
+  it('changes password with credentials included', async () => {
+    const patchSpy = vi
+      .spyOn(apiClient, 'patch')
+      .mockResolvedValueOnce({ data: { message: '비밀번호가 변경되었습니다.' } })
+
+    await authApi.changePassword({
+      currentPassword: 'password-8',
+      newPassword: 'new-password-8'
+    })
+
+    expect(patchSpy).toHaveBeenCalledWith(
+      '/auth/account/password',
+      { currentPassword: 'password-8', newPassword: 'new-password-8' },
+      { withCredentials: true }
+    )
+  })
+
+  it('deactivates the current account with credentials included', async () => {
+    const deleteSpy = vi
+      .spyOn(apiClient, 'delete')
+      .mockResolvedValueOnce({ data: { message: '회원탈퇴가 완료되었습니다.' } })
+
+    await authApi.deactivateAccount({ password: 'password-8' })
+
+    expect(deleteSpy).toHaveBeenCalledWith('/auth/account/deactivate', {
+      data: { password: 'password-8' },
+      withCredentials: true
+    })
+  })
+
   it('posts account recovery requests without credentials', async () => {
     const postSpy = vi
       .spyOn(apiClient, 'post')

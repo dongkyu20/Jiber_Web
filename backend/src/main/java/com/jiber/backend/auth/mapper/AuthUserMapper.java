@@ -35,4 +35,16 @@ public interface AuthUserMapper {
             @Param("passwordHash") String passwordHash,
             @Param("updatedAt") OffsetDateTime updatedAt
     );
+
+    int updateDisplayName(
+            @Param("userId") Long userId,
+            @Param("displayName") String displayName,
+            @Param("updatedAt") OffsetDateTime updatedAt
+    );
+
+    int updateEnabled(
+            @Param("userId") Long userId,
+            @Param("enabled") Boolean enabled,
+            @Param("updatedAt") OffsetDateTime updatedAt
+    );
 }

@@ -28,12 +28,14 @@ const props = withDefaults(
   defineProps<{
     items: PropertyMapItem[]
     administrativeClusters?: AdministrativeCluster[]
+    showAdministrativePriceLayer?: boolean
     selectedPropertyId?: number | null
     focusTarget?: LatLngPoint | null
     focusZoomLevel?: number | null
   }>(),
   {
     administrativeClusters: () => [],
+    showAdministrativePriceLayer: false,
     selectedPropertyId: null,
     focusTarget: null,
     focusZoomLevel: null
@@ -104,6 +106,22 @@ function mapRenderModeKey(mode: ReturnType<typeof mapMarkerRenderMode>) {
   ].join('|')
 }
 
+function syncAdministrativeLayers() {
+  if (!kakaoMaps || !map) {
+    return
+  }
+
+  administrativeOverlays = syncAdministrativeClusterOverlays({
+    kakaoMaps,
+    map,
+    previousOverlays: administrativeOverlays,
+    clusters: props.administrativeClusters,
+    reservedPoints: propertyClusterReservedPoints,
+    showPriceTone: props.showAdministrativePriceLayer,
+    onClick: zoomToAdministrativeCluster
+  })
+}
+
 function renderMapLayers(options: { force?: boolean } = {}) {
   if (disposed || !kakaoMaps || !map) {
     return
@@ -139,6 +157,7 @@ function renderMapLayers(options: { force?: boolean } = {}) {
       map,
       previousClusterer: propertyClusterer,
       items: props.items,
+      showPriceTone: props.showAdministrativePriceLayer,
       onClustered: (clusters) => {
         if (disposed || !kakaoMaps || !map) {
           return
@@ -147,14 +166,7 @@ function renderMapLayers(options: { force?: boolean } = {}) {
         propertyClusterReservedPoints = screenPointsFromKakaoClusters(map, clusters)
         const currentMode = mapMarkerRenderMode(map.getLevel())
         if (currentMode.showAdministrativeClusters) {
-          administrativeOverlays = syncAdministrativeClusterOverlays({
-            kakaoMaps,
-            map,
-            previousOverlays: administrativeOverlays,
-            clusters: props.administrativeClusters,
-            reservedPoints: propertyClusterReservedPoints,
-            onClick: zoomToAdministrativeCluster
-          })
+          syncAdministrativeLayers()
         }
       },
       onClusterClick: zoomToPropertyCluster
@@ -166,14 +178,7 @@ function renderMapLayers(options: { force?: boolean } = {}) {
   }
 
   if (mode.showAdministrativeClusters) {
-    administrativeOverlays = syncAdministrativeClusterOverlays({
-      kakaoMaps,
-      map,
-      previousOverlays: administrativeOverlays,
-      clusters: props.administrativeClusters,
-      reservedPoints: propertyClusterReservedPoints,
-      onClick: zoomToAdministrativeCluster
-    })
+    syncAdministrativeLayers()
   } else {
     clearOverlayMarkers(administrativeOverlays)
     administrativeOverlays = []
@@ -312,9 +317,11 @@ onMounted(async () => {
   }
 })
 
-watch([() => props.items, () => props.selectedPropertyId, () => props.administrativeClusters], queueRenderMapLayers, {
-  deep: true
-})
+watch(
+  [() => props.items, () => props.selectedPropertyId, () => props.administrativeClusters, () => props.showAdministrativePriceLayer],
+  queueRenderMapLayers,
+  { deep: true }
+)
 watch(() => [props.focusTarget, props.focusZoomLevel], () => focusMap(props.focusTarget), { deep: true })
 
 onBeforeUnmount(() => {
@@ -352,6 +359,16 @@ onBeforeUnmount(() => {
     <div v-if="ready" class="map-zoom-controls" aria-label="지도 확대/축소">
       <button class="map-zoom-button" type="button" aria-label="지도 확대" @click.stop="changeZoom('in')">+</button>
       <button class="map-zoom-button" type="button" aria-label="지도 축소" @click.stop="changeZoom('out')">-</button>
+    </div>
+    <div
+      v-if="ready && props.showAdministrativePriceLayer && props.administrativeClusters.length"
+      class="map-price-legend"
+      data-test="administrative-price-legend"
+      aria-label="평균 거래금액 색상 범례"
+    >
+      <span>낮음</span>
+      <span class="map-price-legend-gradient" aria-hidden="true"></span>
+      <span>높음</span>
     </div>
     <p v-if="ready" class="map-status">{{ message }}</p>
   </section>

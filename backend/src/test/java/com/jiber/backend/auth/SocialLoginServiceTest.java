@@ -388,6 +388,16 @@ class SocialLoginServiceTest {
             return 0;
         }
 
+        @Override
+        public int updateDisplayName(Long userId, String displayName, OffsetDateTime updatedAt) {
+            return 0;
+        }
+
+        @Override
+        public int updateEnabled(Long userId, Boolean enabled, OffsetDateTime updatedAt) {
+            return 0;
+        }
+
         void insertExistingUser(Long userId, String email, String passwordHash, String displayName, Boolean enabled) {
             var now = OffsetDateTime.now(FIXED_CLOCK);
             var user = new AuthUserRecord(userId, email, passwordHash, displayName, "USER", enabled, now, now, now);

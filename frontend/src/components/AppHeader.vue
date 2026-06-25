@@ -30,6 +30,7 @@ async function logout() {
       <RouterLink to="/map">지도 검색</RouterLink>
       <RouterLink to="/new-analysis">신규매물 분석</RouterLink>
       <RouterLink to="/community">커뮤니티</RouterLink>
+      <RouterLink to="/news">뉴스</RouterLink>
       <RouterLink to="/favorites">관심목록</RouterLink>
       <RouterLink v-if="authStore.isAdmin" to="/admin">관리자</RouterLink>
     </nav>
@@ -39,6 +40,7 @@ async function logout() {
       <template v-if="authStore.isAuthenticated">
         <div class="user-avatar" :title="displayName">{{ displayInitial }}</div>
         <span class="user-label">{{ displayName }}님</span>
+        <RouterLink class="hdr-btn hdr-btn--ghost" to="/mypage">마이페이지</RouterLink>
         <button class="hdr-btn hdr-btn--ghost" type="button" @click="logout">로그아웃</button>
       </template>
       <template v-else>

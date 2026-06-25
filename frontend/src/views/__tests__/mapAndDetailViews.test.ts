@@ -450,6 +450,21 @@ describe('MapView keyword search', () => {
     expect(wrapper.findComponent(KakaoMapPanel).props('administrativeClusters')).toEqual([])
   })
 
+  it('passes the administrative average price layer option only after the checkbox is enabled', async () => {
+    propertyApiMock.getMapProperties.mockResolvedValueOnce(mapResponse([seedMapItem], [seedAdministrativeCluster]))
+    const { wrapper } = await mountMapView()
+
+    expect(wrapper.findComponent(KakaoMapPanel).props('showAdministrativePriceLayer')).toBe(false)
+
+    await wrapper.get('[data-test="administrative-price-layer-toggle"]').setValue(true)
+
+    expect(wrapper.findComponent(KakaoMapPanel).props('showAdministrativePriceLayer')).toBe(true)
+
+    await wrapper.get('[data-test="administrative-price-layer-toggle"]').setValue(false)
+
+    expect(wrapper.findComponent(KakaoMapPanel).props('showAdministrativePriceLayer')).toBe(false)
+  })
+
   it('clears administrative clusters when map bounds search fails', async () => {
     propertyApiMock.getMapProperties
       .mockResolvedValueOnce(mapResponse([seedMapItem], [seedAdministrativeCluster]))
@@ -535,7 +550,7 @@ describe('MapView keyword search', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('월세')
-    expect(wrapper.text()).toContain('보증금 5.5억 원 / 월세 120만 원')
+    expect(wrapper.text()).toContain('보증금 5.5억원 / 월세 120만원')
   })
 
   it('does not show monthly rent fallback amounts as if they are monthly rent', async () => {
@@ -546,8 +561,8 @@ describe('MapView keyword search', () => {
     await wrapper.get('[data-test="map-search-form"]').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('보증금 5.5억 원 / 월세 정보 없음')
-    expect(wrapper.text()).not.toContain('월세 · 5.5억 원')
+    expect(wrapper.text()).toContain('보증금 5.5억원 / 월세 정보 없음')
+    expect(wrapper.text()).not.toContain('월세 · 5.5억원')
   })
 
   it('loads additional keyword result pages instead of stopping at the first page', async () => {
@@ -764,8 +779,8 @@ describe('PropertyDetailView transaction summary', () => {
     expect(wrapper.text()).toContain('거래금액')
     expect(wrapper.text()).toContain('전용면적')
     expect(wrapper.text()).toContain('층수')
-    expect(wrapper.text()).toContain('10.8억 원')
-    expect(wrapper.text()).toContain('보증금 5억 원 / 월세 120만 원')
+    expect(wrapper.text()).toContain('10.8억원')
+    expect(wrapper.text()).toContain('보증금 5억원 / 월세 120만 원')
   })
 
   it('paginates long transaction history lists', async () => {

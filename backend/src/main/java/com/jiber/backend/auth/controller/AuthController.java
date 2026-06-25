@@ -10,8 +10,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -78,6 +80,35 @@ public class AuthController {
     @PostMapping("/recovery/password/direct")
     public AccountRecoveryResponse directPasswordReset(@Valid @RequestBody DirectPasswordResetRequest resetRequest) {
         return authService.directPasswordReset(resetRequest);
+    }
+
+    @PatchMapping("/account/profile")
+    public AuthUserResponse updateProfile(
+            Authentication authentication,
+            @Valid @RequestBody UpdateProfileRequest updateProfileRequest
+    ) {
+        return authService.updateProfile(authentication, updateProfileRequest);
+    }
+
+    @PatchMapping("/account/password")
+    public AccountMutationResponse changePassword(
+            Authentication authentication,
+            @Valid @RequestBody ChangePasswordRequest changePasswordRequest
+    ) {
+        return authService.changePassword(authentication, changePasswordRequest);
+    }
+
+    @DeleteMapping("/account/deactivate")
+    public AccountMutationResponse deactivateAccount(
+            @CookieValue(name = "${jiber.auth.refresh-token.cookie.name:JIBER_REFRESH_TOKEN}", required = false) String refreshToken,
+            Authentication authentication,
+            @Valid @RequestBody DeactivateAccountRequest deactivateAccountRequest,
+            HttpServletResponse response
+    ) {
+        var result = authService.deactivateAccount(authentication, deactivateAccountRequest);
+        authService.logout(refreshToken);
+        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookieService.clearRefreshCookie().toString());
+        return result;
     }
 
     @GetMapping("/social/pending")

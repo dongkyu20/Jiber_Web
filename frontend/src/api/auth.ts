@@ -1,18 +1,23 @@
 import { apiClient, getBackendPublicBaseUrl } from './client'
 import type {
   AccountIdentifierRecoveryRequest,
+  AccountMutationResponse,
   AccountRecoveryResponse,
+  AuthUser,
   AuthLoginRequest,
   AuthLogoutResponse,
   AuthMeResponse,
   AuthRefreshResponse,
   AuthSessionResponse,
   AuthSignupRequest,
+  ChangePasswordRequest,
+  DeactivateAccountRequest,
   DirectPasswordResetRequest,
   PasswordRecoveryRequest,
   PendingSocialSignupResponse,
   SocialLinkRequest,
-  SocialSignupRequest
+  SocialSignupRequest,
+  UpdateProfileRequest
 } from './types'
 
 export type OAuthProvider = 'google' | 'kakao' | 'naver'
@@ -84,6 +89,26 @@ export const authApi = {
 
   async linkPendingSocialAccount(payload: SocialLinkRequest): Promise<AuthSessionResponse> {
     const { data } = await apiClient.post<AuthSessionResponse>('/auth/social/link', payload, {
+      withCredentials: true
+    })
+    return data
+  },
+
+  async updateProfile(payload: UpdateProfileRequest): Promise<AuthUser> {
+    const { data } = await apiClient.patch<AuthUser>('/auth/account/profile', payload)
+    return data
+  },
+
+  async changePassword(payload: ChangePasswordRequest): Promise<AccountMutationResponse> {
+    const { data } = await apiClient.patch<AccountMutationResponse>('/auth/account/password', payload, {
+      withCredentials: true
+    })
+    return data
+  },
+
+  async deactivateAccount(payload: DeactivateAccountRequest): Promise<AccountMutationResponse> {
+    const { data } = await apiClient.delete<AccountMutationResponse>('/auth/account/deactivate', {
+      data: payload,
       withCredentials: true
     })
     return data

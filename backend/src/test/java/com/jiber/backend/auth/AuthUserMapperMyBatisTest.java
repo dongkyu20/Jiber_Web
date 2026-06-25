@@ -116,4 +116,34 @@ class AuthUserMapperMyBatisTest {
         assertThat(authUserMapper.findByEmail("user@example.com").passwordHash()).isEqualTo(nextHash);
         assertThat(authUserMapper.findByEmail("other@example.com").passwordHash()).isEqualTo(PASSWORD_HASH);
     }
+
+    @Test
+    void updateDisplayNameChangesOnlyTheTargetUser() {
+        var lastLoginAt = OffsetDateTime.parse("2026-06-15T07:00:00Z");
+        authUserMapper.insertEmailUser("user@example.com", PASSWORD_HASH, "Old Name", "USER", true, lastLoginAt);
+        authUserMapper.insertEmailUser("other@example.com", PASSWORD_HASH, "Other Name", "USER", true, lastLoginAt);
+        var user = authUserMapper.findByEmail("user@example.com");
+        var updatedAt = OffsetDateTime.parse("2026-06-15T07:05:00Z");
+
+        var changed = authUserMapper.updateDisplayName(user.userId(), "New Name", updatedAt);
+
+        assertThat(changed).isEqualTo(1);
+        assertThat(authUserMapper.findByEmail("user@example.com").displayName()).isEqualTo("New Name");
+        assertThat(authUserMapper.findByEmail("other@example.com").displayName()).isEqualTo("Other Name");
+    }
+
+    @Test
+    void updateEnabledChangesOnlyTheTargetUser() {
+        var lastLoginAt = OffsetDateTime.parse("2026-06-15T07:00:00Z");
+        authUserMapper.insertEmailUser("user@example.com", PASSWORD_HASH, "User", "USER", true, lastLoginAt);
+        authUserMapper.insertEmailUser("other@example.com", PASSWORD_HASH, "Other", "USER", true, lastLoginAt);
+        var user = authUserMapper.findByEmail("user@example.com");
+        var updatedAt = OffsetDateTime.parse("2026-06-15T07:05:00Z");
+
+        var changed = authUserMapper.updateEnabled(user.userId(), false, updatedAt);
+
+        assertThat(changed).isEqualTo(1);
+        assertThat(authUserMapper.findByEmail("user@example.com").enabled()).isFalse();
+        assertThat(authUserMapper.findByEmail("other@example.com").enabled()).isTrue();
+    }
 }

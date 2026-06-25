@@ -218,13 +218,21 @@
     <select id="findCanonicalApartmentPropertyId" resultType="long">
         SELECT p.property_id
         FROM properties p
-        WHERE p.property_type = #{propertyType}
+        WHERE (
+              p.property_type = #{propertyType}
+              OR (#{propertyType} = 'OFFICETEL' AND p.property_type = 'APARTMENT')
+          )
           AND p.sido = #{sido}
           AND p.sigungu = #{sigungu}
           AND p.legal_dong = #{legalDong}
           AND p.jibun_address = #{fullAddress}
           AND p.name = #{apartmentName}
-        ORDER BY p.property_id ASC
+        ORDER BY CASE
+            WHEN #{propertyType} = 'OFFICETEL' AND p.property_type = 'APARTMENT' THEN 0
+            WHEN p.property_type = #{propertyType} THEN 1
+            ELSE 2
+        END,
+        p.property_id ASC
         LIMIT 1
     </select>
 

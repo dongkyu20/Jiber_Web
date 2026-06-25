@@ -26,13 +26,17 @@ const sessionResponse = {
   }
 }
 
-function createApiError(code: string) {
+function createApiError(
+  code: string,
+  options: { message?: string; details?: { field?: string; reason: string }[] } = {}
+) {
   return {
     isAxiosError: true,
     response: {
       data: {
         code,
-        message: 'Request failed.',
+        message: options.message ?? 'Request failed.',
+        details: options.details,
         path: '/api/v1/auth',
         timestamp: '2026-06-18T00:00:00+09:00'
       }
@@ -229,8 +233,10 @@ describe('SignupModal', () => {
     expect(router.currentRoute.value.fullPath).toBe('/map')
   })
 
-  it('shows duplicate email errors', async () => {
-    vi.spyOn(authApi, 'signup').mockRejectedValueOnce(createApiError('EMAIL_ALREADY_EXISTS'))
+  it('shows duplicate email errors from the signup API', async () => {
+    vi.spyOn(authApi, 'signup').mockRejectedValueOnce(
+      createApiError('EMAIL_ALREADY_EXISTS', { message: '이미 가입된 이메일입니다.' })
+    )
     const { wrapper } = await mountWithRouter(SignupModal)
 
     await wrapper.get('#su-email').setValue('user@example.com')
@@ -245,7 +251,31 @@ describe('SignupModal', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.find('.modal-error').exists()).toBe(true)
+    expect(wrapper.find('.modal-error').text()).toBe('이미 가입된 이메일입니다.')
+  })
+
+  it('shows validation details from the signup API', async () => {
+    vi.spyOn(authApi, 'signup').mockRejectedValueOnce(
+      createApiError('VALIDATION_FAILED', {
+        message: '요청 값이 올바르지 않습니다.',
+        details: [{ field: 'displayName', reason: '표시 이름을 입력해 주세요.' }]
+      })
+    )
+    const { wrapper } = await mountWithRouter(SignupModal)
+
+    await wrapper.get('#su-email').setValue('new-user@example.com')
+    await wrapper.get('#su-name').setValue('Test User')
+    await wrapper.get('#su-birth-date').setValue('1990-01-23')
+    await wrapper.get('#su-phone-number').setValue('010-1111-2222')
+    await wrapper.get('#su-pw').setValue('password-8')
+    await wrapper.get('#su-pw2').setValue('password-8')
+    const agreements = wrapper.findAll('.agree-item input')
+    await agreements[0].setValue(true)
+    await agreements[1].setValue(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('.modal-error').text()).toBe('이름을 입력해 주세요.')
   })
 
   it('requires birth date and phone number before signup', async () => {
