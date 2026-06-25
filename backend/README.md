@@ -35,6 +35,15 @@ mvn spring-boot:run
 
 기본 포트는 `8080`이며 `BACKEND_PORT`로 변경할 수 있습니다.
 
+## Swagger UI
+
+백엔드 실행 후 Swagger UI는 다음 주소에서 확인합니다.
+
+- `http://localhost:8080/swagger-ui.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+
+JWT가 필요한 API는 Swagger UI 우측 상단 `Authorize`에서 `Bearer <access-token>` 형식으로 인증값을 입력한 뒤 호출합니다.
+
 ## Test
 
 ```bash
