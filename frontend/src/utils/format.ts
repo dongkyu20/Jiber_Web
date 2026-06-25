@@ -5,7 +5,12 @@ export function formatKrw(value?: number | null): string {
 
   if (value >= 100000000) {
     const eok = value / 100000000
-    return `${eok.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}억 원`
+    return `${eok.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}억원`
+  }
+
+  if (value >= 10000) {
+    const man = value / 10000
+    return `${man.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}만원`
   }
 
   return `${value.toLocaleString('ko-KR')}원`
@@ -19,20 +24,7 @@ export interface LatestTransactionAmount {
 }
 
 export function formatMonthlyRent(value?: number | null): string {
-  if (value === undefined || value === null) {
-    return '정보 없음'
-  }
-
-  if (value >= 100000000) {
-    return formatKrw(value)
-  }
-
-  if (value >= 10000) {
-    const man = value / 10000
-    return `${man.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}만 원`
-  }
-
-  return `${value.toLocaleString('ko-KR')}원`
+  return formatKrw(value)
 }
 
 export function formatLatestTransactionAmount(transaction: LatestTransactionAmount): string {
@@ -54,10 +46,6 @@ export function formatLatestTransactionAmount(transaction: LatestTransactionAmou
 
   if (!hasMonthlyRent) {
     return `보증금 ${formatKrw(depositAmount)} / 월세 정보 없음`
-  }
-
-  if (transaction.monthlyRent === 0) {
-    return `보증금 ${formatKrw(depositAmount)} / 월세 0원`
   }
 
   return `보증금 ${formatKrw(depositAmount)} / 월세 ${formatMonthlyRent(transaction.monthlyRent)}`

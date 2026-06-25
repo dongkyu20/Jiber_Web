@@ -43,10 +43,22 @@ export const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
+      path: '/community/write',
+      name: 'community-write',
+      component: () => import('@/views/CommunityWriteView.vue'),
+      meta: { requiresAuth: true, roles: ['USER', 'ADMIN'] }
+    },
+    {
       path: '/community/:id',
       name: 'community-post',
       component: () => import('@/views/CommunityPostView.vue'),
       meta: { requiresAuth: false }
+    },
+    {
+      path: '/new-analysis',
+      name: 'new-analysis',
+      component: () => import('@/views/NewApartmentAnalysisView.vue'),
+      meta: { requiresAuth: true, roles: ['USER', 'ADMIN'] }
     },
     {
       path: '/notices',

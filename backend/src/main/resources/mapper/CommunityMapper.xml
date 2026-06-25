@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jiber.backend.community.CommunityMapper">
+    <resultMap id="CommunityPostRowMap" type="com.jiber.backend.community.CommunityPostRow">
+        <constructor>
+            <idArg column="post_id" javaType="java.lang.Long"/>
+            <arg column="category" javaType="com.jiber.backend.community.dto.CommunityCategory"/>
+            <arg column="title" javaType="java.lang.String"/>
+            <arg column="content" javaType="java.lang.String"/>
+            <arg column="author_user_id" javaType="java.lang.Long"/>
+            <arg column="author_display_name" javaType="java.lang.String"/>
+            <arg column="related_property_id" javaType="java.lang.Long"/>
+            <arg column="related_property_name" javaType="java.lang.String"/>
+            <arg column="related_property_address" javaType="java.lang.String"/>
+            <arg column="view_count" javaType="java.lang.Long"/>
+            <arg column="comment_count" javaType="java.lang.Long"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="CommunityCommentRowMap" type="com.jiber.backend.community.CommunityCommentRow">
+        <constructor>
+            <idArg column="comment_id" javaType="java.lang.Long"/>
+            <arg column="post_id" javaType="java.lang.Long"/>
+            <arg column="parent_comment_id" javaType="java.lang.Long"/>
+            <arg column="author_user_id" javaType="java.lang.Long"/>
+            <arg column="author_display_name" javaType="java.lang.String"/>
+            <arg column="content" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="PostColumns">
+        p.post_id,
+        p.category,
+        p.title,
+        p.content,
+        p.author_user_id,
+        COALESCE(u.display_name, '탈퇴한 사용자') AS author_display_name,
+        p.related_property_id,
+        rp.name AS related_property_name,
+        COALESCE(NULLIF(rp.road_address, ''), NULLIF(rp.jibun_address, ''), CONCAT_WS(' ', rp.sido, rp.sigungu, rp.legal_dong)) AS related_property_address,
+        p.view_count,
+        COALESCE(cc.comment_count, 0) AS comment_count,
+        p.created_at,
+        p.updated_at
+    </sql>
+
+    <sql id="PostJoins">
+        LEFT JOIN users u ON u.user_id = p.author_user_id
+        LEFT JOIN properties rp ON rp.property_id = p.related_property_id
+        LEFT JOIN (
+            SELECT post_id, COUNT(*) AS comment_count
+            FROM community_comments
+            WHERE deleted_at IS NULL
+            GROUP BY post_id
+        ) cc ON cc.post_id = p.post_id
+    </sql>
+
+    <sql id="PostFilters">
+        p.deleted_at IS NULL
+        <if test="request.category != null">
+            AND p.category = #{request.category}
+        </if>
+        <if test="request.keyword != null and request.keyword.trim() != ''">
+            AND (
+                LOWER(p.title) LIKE CONCAT('%', LOWER(#{request.keyword}), '%')
+                OR LOWER(p.content) LIKE CONCAT('%', LOWER(#{request.keyword}), '%')
+            )
+        </if>
+    </sql>
+
+    <sql id="PostOrder">
+        <choose>
+            <when test="request.sort == 'viewCount,desc'">
+                ORDER BY p.view_count DESC, p.created_at DESC, p.post_id DESC
+            </when>
+            <when test="request.sort == 'commentCount,desc'">
+                ORDER BY COALESCE(cc.comment_count, 0) DESC, p.created_at DESC, p.post_id DESC
+            </when>
+            <otherwise>
+                ORDER BY p.created_at DESC, p.post_id DESC
+            </otherwise>
+        </choose>
+    </sql>
+
+    <select id="findPosts" resultMap="CommunityPostRowMap">
+        SELECT
+        <include refid="PostColumns"/>
+        FROM community_posts p
+        <include refid="PostJoins"/>
+        WHERE
+        <include refid="PostFilters"/>
+        <include refid="PostOrder"/>
+        LIMIT #{limit}
+        OFFSET #{offset}
+    </select>
+
+    <select id="countPosts" resultType="long">
+        SELECT COUNT(*)
+        FROM community_posts p
+        WHERE
+        <include refid="PostFilters"/>
+    </select>
+
+    <select id="findPostById" resultMap="CommunityPostRowMap">
+        SELECT
+        <include refid="PostColumns"/>
+        FROM community_posts p
+        <include refid="PostJoins"/>
+        WHERE p.post_id = #{postId}
+          AND p.deleted_at IS NULL
+    </select>
+
+    <update id="incrementPostViewCount">
+        UPDATE community_posts
+        SET view_count = view_count + 1,
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </update>
+
+    <insert id="insertPost" useGeneratedKeys="true" keyProperty="postId">
+        INSERT INTO community_posts (
+            category,
+            title,
+            content,
+            author_user_id,
+            related_property_id
+        )
+        VALUES (
+            #{category},
+            #{title},
+            #{content},
+            #{authorUserId},
+            #{relatedPropertyId}
+        )
+    </insert>
+
+    <select id="findCommentsByPostId" resultMap="CommunityCommentRowMap">
+        SELECT
+            c.comment_id,
+            c.post_id,
+            c.parent_comment_id,
+            c.author_user_id,
+            COALESCE(u.display_name, '탈퇴한 사용자') AS author_display_name,
+            c.content,
+            c.created_at,
+            c.updated_at
+        FROM community_comments c
+        LEFT JOIN users u ON u.user_id = c.author_user_id
+        WHERE c.post_id = #{postId}
+          AND c.deleted_at IS NULL
+        ORDER BY
+            CASE WHEN c.parent_comment_id IS NULL THEN c.comment_id ELSE c.parent_comment_id END ASC,
+            CASE WHEN c.parent_comment_id IS NULL THEN 0 ELSE 1 END ASC,
+            c.created_at ASC,
+            c.comment_id ASC
+    </select>
+
+    <select id="findCommentById" resultMap="CommunityCommentRowMap">
+        SELECT
+            c.comment_id,
+            c.post_id,
+            c.parent_comment_id,
+            c.author_user_id,
+            COALESCE(u.display_name, '탈퇴한 사용자') AS author_display_name,
+            c.content,
+            c.created_at,
+            c.updated_at
+        FROM community_comments c
+        LEFT JOIN users u ON u.user_id = c.author_user_id
+        WHERE c.comment_id = #{commentId}
+          AND c.deleted_at IS NULL
+    </select>
+
+    <insert id="insertComment" useGeneratedKeys="true" keyProperty="commentId">
+        INSERT INTO community_comments (
+            post_id,
+            parent_comment_id,
+            author_user_id,
+            content
+        )
+        VALUES (
+            #{postId},
+            #{parentCommentId},
+            #{authorUserId},
+            #{content}
+        )
+    </insert>
+</mapper>

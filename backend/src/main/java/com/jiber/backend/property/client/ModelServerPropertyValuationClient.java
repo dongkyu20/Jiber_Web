@@ -3,6 +3,7 @@ package com.jiber.backend.property.client;
 import com.jiber.backend.common.error.ApiException;
 import com.jiber.backend.common.error.ErrorCode;
 import com.jiber.backend.common.error.ErrorDetail;
+import com.jiber.backend.property.dto.NewApartmentAnalysisRequest;
 import com.jiber.backend.property.dto.PredictionIntervalResponse;
 import com.jiber.backend.property.dto.ShapDirection;
 import com.jiber.backend.property.dto.ShapRequest;
@@ -74,11 +75,40 @@ public class ModelServerPropertyValuationClient implements PropertyValuationClie
 
     @Override
     public ValuationResponse valuateApartment(PropertyDetailRow property, ValuationRequest request) {
-        var internalRequest = featureMapper.toInternalRequest(property, request);
-        var response = post(VALUATION_PATH, internalRequest, ModelServerValuationResponse.class);
+        return toValuationResponse(
+                property.getPropertyId(),
+                post(VALUATION_PATH, featureMapper.toInternalRequest(property, request), ModelServerValuationResponse.class)
+        );
+    }
+
+    @Override
+    public ShapResponse explainApartment(PropertyDetailRow property, ShapRequest request) {
+        return toShapResponse(
+                property.getPropertyId(),
+                post(SHAP_PATH, featureMapper.toInternalRequest(property, request), ModelServerShapResponse.class)
+        );
+    }
+
+    @Override
+    public ValuationResponse valuateNewApartment(NewApartmentAnalysisRequest request) {
+        return toValuationResponse(
+                0L,
+                post(VALUATION_PATH, featureMapper.toInternalRequest(request), ModelServerValuationResponse.class)
+        );
+    }
+
+    @Override
+    public ShapResponse explainNewApartment(NewApartmentAnalysisRequest request) {
+        return toShapResponse(
+                0L,
+                post(SHAP_PATH, featureMapper.toInternalRequest(request), ModelServerShapResponse.class)
+        );
+    }
+
+    private ValuationResponse toValuationResponse(Long propertyId, ModelServerValuationResponse response) {
         ensureSupported(response.supported(), response.reason(), response.missingFeatures());
         return new ValuationResponse(
-                property.getPropertyId(),
+                propertyId,
                 true,
                 response.estimatedPrice(),
                 response.currency(),
@@ -90,13 +120,10 @@ public class ModelServerPropertyValuationClient implements PropertyValuationClie
         );
     }
 
-    @Override
-    public ShapResponse explainApartment(PropertyDetailRow property, ShapRequest request) {
-        var internalRequest = featureMapper.toInternalRequest(property, request);
-        var response = post(SHAP_PATH, internalRequest, ModelServerShapResponse.class);
+    private ShapResponse toShapResponse(Long propertyId, ModelServerShapResponse response) {
         ensureSupported(response.supported(), response.reason(), response.missingFeatures());
         return new ShapResponse(
-                property.getPropertyId(),
+                propertyId,
                 true,
                 response.baseValue(),
                 response.prediction(),
@@ -144,7 +171,7 @@ public class ModelServerPropertyValuationClient implements PropertyValuationClie
         }
         if (INSUFFICIENT_DATA.equals(reason)) {
             var details = missingFeatures == null ? List.<ErrorDetail>of() : missingFeatures.stream()
-                    .map(feature -> new ErrorDetail(feature, "모델 서버 추론에 필요한 feature입니다."))
+                    .map(feature -> new ErrorDetail(feature, "모델 추론에 필요한 feature입니다."))
                     .toList();
             throw new ApiException(ErrorCode.VALUATION_INSUFFICIENT_DATA, ErrorCode.VALUATION_INSUFFICIENT_DATA.defaultMessage(), details);
         }

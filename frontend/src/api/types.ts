@@ -325,6 +325,28 @@ export interface ShapResponse {
   message: string
 }
 
+export interface NewApartmentAnalysisRequest {
+  propertyName: string
+  sido: string
+  sigungu: string
+  legalDong: string
+  latitude?: number | null
+  longitude?: number | null
+  householdCount?: number | null
+  exclusiveAreaM2: number
+  floor: number
+  builtYear: number
+  asOfDate: string
+  distanceToStationM?: number | null
+}
+
+export interface NewApartmentAnalysisResponse {
+  propertyName: string
+  valuation: ValuationResponse
+  shap: ShapResponse
+  message: string
+}
+
 export interface ChatRequest {
   question: string
   runtimeContext?: Record<string, unknown>
@@ -438,5 +460,64 @@ export interface NoticeUpsertRequest {
 
 export interface NoticeMutationResponse {
   noticeId: number
+  message: string
+}
+
+export type CommunityCategory = 'FREE' | 'DEAL_REVIEW' | 'QNA'
+
+export interface CommunityPostSummary {
+  postId: number
+  category: CommunityCategory
+  title: string
+  authorUserId?: number | null
+  authorDisplayName?: string | null
+  viewCount: number
+  commentCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CommunityComment {
+  commentId: number
+  postId: number
+  parentCommentId?: number | null
+  authorUserId?: number | null
+  authorDisplayName?: string | null
+  content: string
+  createdAt: string
+  updatedAt: string
+  replies: CommunityComment[]
+}
+
+export interface CommunityPostDetail extends CommunityPostSummary {
+  content: string
+  relatedPropertyId?: number | null
+  relatedPropertyName?: string | null
+  relatedPropertyAddress?: string | null
+  comments: CommunityComment[]
+}
+
+export interface CommunityPostListParams {
+  page?: number
+  size?: number
+  sort?: 'createdAt,desc' | 'viewCount,desc' | 'commentCount,desc'
+  keyword?: string
+  category?: CommunityCategory
+}
+
+export interface CommunityPostCreateRequest {
+  category: CommunityCategory
+  title: string
+  content: string
+  relatedPropertyId?: number | null
+}
+
+export interface CommunityCommentCreateRequest {
+  parentCommentId?: number | null
+  content: string
+}
+
+export interface CommunityMutationResponse {
+  id: number
   message: string
 }

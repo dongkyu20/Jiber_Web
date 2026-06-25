@@ -23,11 +23,12 @@ async function logout() {
 <template>
   <header class="site-header">
     <RouterLink to="/" class="brand">
-      <img class="brand-logo-img brand-logo-img--header" :src="brandLogoUrl" alt="집er estate real" />
+      <img class="brand-logo-img brand-logo-img--header" :src="brandLogoUrl" alt="Jiber Estate Real" />
     </RouterLink>
 
     <nav class="main-nav" aria-label="주요 메뉴">
       <RouterLink to="/map">지도 검색</RouterLink>
+      <RouterLink to="/new-analysis">신규매물 분석</RouterLink>
       <RouterLink to="/community">커뮤니티</RouterLink>
       <RouterLink to="/favorites">관심목록</RouterLink>
       <RouterLink v-if="authStore.isAdmin" to="/admin">관리자</RouterLink>

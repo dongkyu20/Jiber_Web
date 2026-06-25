@@ -1,6 +1,8 @@
 import { apiClient, compactParams, toListQueryValue } from './client'
 import type {
   MapSearchParams,
+  NewApartmentAnalysisRequest,
+  NewApartmentAnalysisResponse,
   PagedResponse,
   PropertyDetail,
   PropertyMapResponse,
@@ -55,6 +57,11 @@ export const propertyApi = {
 
   async requestShap(propertyId: string | number, payload: ShapRequest): Promise<ShapResponse> {
     const { data } = await apiClient.post<ShapResponse>(`/properties/${propertyId}/shap`, payload)
+    return data
+  },
+
+  async analyzeNewApartment(payload: NewApartmentAnalysisRequest): Promise<NewApartmentAnalysisResponse> {
+    const { data } = await apiClient.post<NewApartmentAnalysisResponse>('/properties/new-analysis', payload)
     return data
   }
 }

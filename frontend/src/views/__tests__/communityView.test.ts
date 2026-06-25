@@ -2,32 +2,35 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NoticeSummary } from '@/api/types'
+import type { CommunityPostSummary } from '@/api/types'
 import CommunityView from '@/views/CommunityView.vue'
 
-const noticesApiMock = vi.hoisted(() => ({
-  list: vi.fn()
+const communityApiMock = vi.hoisted(() => ({
+  listPosts: vi.fn()
 }))
 
-vi.mock('@/api/notices', () => ({
-  noticesApi: noticesApiMock
+vi.mock('@/api/community', () => ({
+  communityApi: communityApiMock
 }))
 
-const publishedNotice: NoticeSummary = {
-  noticeId: 501,
-  title: '커뮤니티 공지 노출 확인',
-  summary: '공지 본문 요약입니다.',
-  pinned: true,
-  publishedAt: '2026-06-24T10:30:00+09:00',
-  createdAt: '2026-06-24T10:00:00+09:00'
+const post: CommunityPostSummary = {
+  postId: 101,
+  category: 'DEAL_REVIEW',
+  title: 'Banpo review',
+  authorUserId: 7,
+  authorDisplayName: 'Reviewer',
+  viewCount: 42,
+  commentCount: 3,
+  createdAt: '2026-06-24T10:30:00+09:00',
+  updatedAt: '2026-06-24T10:30:00+09:00'
 }
 
-function noticePage(items: NoticeSummary[] = [publishedNotice]) {
+function postPage(items: CommunityPostSummary[] = [post]) {
   return {
     items,
     page: {
       number: 0,
-      size: 10,
+      size: 15,
       totalElements: items.length,
       totalPages: items.length ? 1 : 0
     }
@@ -54,25 +57,30 @@ async function mountCommunityView() {
 }
 
 beforeEach(() => {
-  noticesApiMock.list.mockReset().mockResolvedValue(noticePage())
+  communityApiMock.listPosts.mockReset().mockResolvedValue(postPage())
 })
 
 describe('CommunityView', () => {
-  it('renders published notices from the public notice API at the top of the board', async () => {
+  it('renders community posts from the community API', async () => {
     const wrapper = await mountCommunityView()
 
-    expect(noticesApiMock.list).toHaveBeenCalledWith({ sort: 'publishedAt,desc', page: 0, size: 10 })
-    expect(wrapper.text()).toContain('공지')
-    expect(wrapper.text()).toContain('고정')
-    expect(wrapper.text()).toContain('커뮤니티 공지 노출 확인')
-    expect(wrapper.html()).toContain('/community/n-501')
+    expect(communityApiMock.listPosts).toHaveBeenCalledWith({
+      page: 0,
+      size: 15,
+      sort: 'createdAt,desc',
+      keyword: '',
+      category: undefined
+    })
+    expect(wrapper.text()).toContain('Banpo review')
+    expect(wrapper.text()).toContain('Reviewer')
+    expect(wrapper.html()).toContain('/community/101')
   })
 
-  it('shows a notice loading error instead of silently hiding notices', async () => {
-    noticesApiMock.list.mockRejectedValueOnce(new Error('notice api unavailable'))
+  it('shows a community loading error', async () => {
+    communityApiMock.listPosts.mockRejectedValueOnce(new Error('community api unavailable'))
 
     const wrapper = await mountCommunityView()
 
-    expect(wrapper.text()).toContain('공지사항을 불러오지 못했습니다.')
+    expect(wrapper.text()).toContain('커뮤니티 게시글을 불러오지 못했습니다.')
   })
 })

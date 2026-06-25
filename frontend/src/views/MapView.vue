@@ -10,8 +10,7 @@ import type {
   FavoriteAreaCreateRequest,
   PropertyMapItem,
   PropertySearchItem,
-  PropertyType,
-  TransactionType
+  PropertyType
 } from '@/api/types'
 import KakaoMapPanel from '@/components/KakaoMapPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -19,18 +18,17 @@ import FloatingChat from '@/components/FloatingChat.vue'
 import { SEOUL_SEED_VIEWPORT, normalizePropertyMapItems, type LatLngPoint, type MapViewport } from '@/map/kakaoMap'
 import { hasKakaoMapKey } from '@/map/kakaoLoader'
 import { useAuthStore } from '@/stores/auth'
-import { formatLatestTransactionAmount, transactionTypeLabel } from '@/utils/format'
+import { formatLatestTransactionAmount, propertyTypeLabel, transactionTypeLabel } from '@/utils/format'
 import { SearchTrie } from '@/utils/searchTrie'
 
-const apartmentOnlyPropertyTypes: PropertyType[] = ['APARTMENT']
-const transactionTypeOptions: TransactionType[] = ['SALE', 'JEONSE', 'MONTHLY_RENT']
+const propertyTypeOptions: PropertyType[] = ['APARTMENT', 'OFFICETEL', 'VILLA']
 const keywordSearchPageSize = 100
 const autocompleteFetchSize = 20
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const selectedTransactionTypes = ref<TransactionType[]>([...transactionTypeOptions])
+const selectedPropertyTypes = ref<PropertyType[]>([...propertyTypeOptions])
 const zoomLevel = ref(SEOUL_SEED_VIEWPORT.zoomLevel)
 const loading = ref(false)
 const errorMessage = ref('')
@@ -291,8 +289,7 @@ async function fetchAutocompleteCandidates(keyword: string) {
   try {
     const response = await propertyApi.searchProperties({
       keyword,
-      propertyTypes: apartmentOnlyPropertyTypes,
-      transactionTypes: selectedTransactionTypes.value,
+      propertyTypes: selectedPropertyTypes.value,
       page: 0,
       size: autocompleteFetchSize,
       sort: 'relevance,desc'
@@ -371,8 +368,7 @@ async function searchVisibleArea(viewport: MapViewport = currentViewport.value) 
       neLat: viewport.neLat,
       neLng: viewport.neLng,
       zoomLevel: viewport.zoomLevel,
-      propertyTypes: apartmentOnlyPropertyTypes,
-      transactionTypes: selectedTransactionTypes.value
+      propertyTypes: selectedPropertyTypes.value
     })
     const nextItems = normalizePropertyMapItems(response.items)
     items.value = nextItems
@@ -404,8 +400,7 @@ async function searchByKeyword(keyword: string, page = 0, append = false) {
   try {
     const response = await propertyApi.searchProperties({
       keyword,
-      propertyTypes: apartmentOnlyPropertyTypes,
-      transactionTypes: selectedTransactionTypes.value,
+      propertyTypes: selectedPropertyTypes.value,
       page,
       size: keywordSearchPageSize,
       sort: 'relevance,desc'
@@ -585,17 +580,14 @@ onBeforeUnmount(() => {
       <!-- Filters -->
       <div class="filter-section">
         <fieldset>
-          <legend>거래 유형</legend>
+          <legend>매물유형</legend>
           <div class="check-group">
-            <label v-for="type in transactionTypeOptions" :key="type" class="check-row">
-              <input v-model="selectedTransactionTypes" :value="type" type="checkbox" />
-              <span>{{ transactionTypeLabel(type) }}</span>
+            <label v-for="type in propertyTypeOptions" :key="type" class="check-row">
+              <input v-model="selectedPropertyTypes" :value="type" type="checkbox" />
+              <span>{{ propertyTypeLabel(type) }}</span>
             </label>
           </div>
         </fieldset>
-
-        <label class="field-label" for="zoom-level">지도 확대 단계 ({{ zoomLevel }})</label>
-        <input id="zoom-level" v-model.number="zoomLevel" min="1" max="14" type="range" />
       </div>
 
       <button class="search-area-btn" type="button" :disabled="loading" @click="resetToVisibleArea">

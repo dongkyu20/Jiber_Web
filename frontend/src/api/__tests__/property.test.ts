@@ -44,7 +44,7 @@ describe('propertyApi', () => {
     })
 
     await propertyApi.searchProperties({
-      keyword: '무악동',
+      keyword: '무악',
       propertyTypes: ['APARTMENT'],
       transactionTypes: ['JEONSE'],
       size: 20,
@@ -53,7 +53,7 @@ describe('propertyApi', () => {
 
     expect(getSpy).toHaveBeenCalledWith('/properties/search', {
       params: {
-        keyword: '무악동',
+        keyword: '무악',
         propertyTypes: 'APARTMENT',
         transactionTypes: 'JEONSE',
         size: 20,
@@ -62,5 +62,25 @@ describe('propertyApi', () => {
     })
     expect(getSpy.mock.calls[0][1]?.params).not.toHaveProperty('zoom')
     expect(getSpy.mock.calls[0][1]?.params).not.toHaveProperty('propertyType')
+  })
+
+  it('uses the new apartment analysis endpoint', async () => {
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+      data: { propertyName: '래미안 삼성', valuation: null, shap: null, message: 'ok' }
+    })
+    const payload = {
+      propertyName: '래미안 삼성',
+      sido: '서울특별시',
+      sigungu: '강남구',
+      legalDong: '삼성동',
+      exclusiveAreaM2: 84.95,
+      floor: 12,
+      builtYear: 2010,
+      asOfDate: '2026-06-25'
+    }
+
+    await propertyApi.analyzeNewApartment(payload)
+
+    expect(postSpy).toHaveBeenCalledWith('/properties/new-analysis', payload)
   })
 })

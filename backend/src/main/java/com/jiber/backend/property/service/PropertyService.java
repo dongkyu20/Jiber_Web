@@ -12,6 +12,8 @@ import com.jiber.backend.property.dto.BoundsResponse;
 import com.jiber.backend.property.dto.LatestTransactionResponse;
 import com.jiber.backend.property.dto.MapFilterResponse;
 import com.jiber.backend.property.dto.MapSearchRequest;
+import com.jiber.backend.property.dto.NewApartmentAnalysisRequest;
+import com.jiber.backend.property.dto.NewApartmentAnalysisResponse;
 import com.jiber.backend.property.dto.PropertyDetailResponse;
 import com.jiber.backend.property.dto.PropertyMapItemResponse;
 import com.jiber.backend.property.dto.PropertyMapResponse;
@@ -154,6 +156,17 @@ public class PropertyService {
         var row = resolvePropertyForAi(propertyId);
         eligibilityService.ensureApartmentSupported(row.getPropertyType());
         return valuationClient.explainApartment(row, request);
+    }
+
+    public NewApartmentAnalysisResponse analyzeNewApartment(NewApartmentAnalysisRequest request) {
+        var valuation = valuationClient.valuateNewApartment(request);
+        var shap = valuationClient.explainNewApartment(request);
+        return new NewApartmentAnalysisResponse(
+                request.propertyName().trim(),
+                valuation,
+                shap,
+                "입력한 신규 아파트 조건으로 적정가와 주요 요인을 계산했습니다."
+        );
     }
 
     private PropertyDetailRow resolvePropertyForAi(Long propertyId) {

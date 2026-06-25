@@ -256,6 +256,21 @@ function zoomToAdministrativeCluster(cluster: AdministrativeCluster) {
   zoomToLatLng(latLng, targetLevelForAdministrativeCluster(cluster))
 }
 
+function changeZoom(direction: 'in' | 'out') {
+  if (disposed || !map) {
+    return
+  }
+
+  const currentLevel = map.getLevel()
+  const nextLevel = direction === 'in' ? Math.max(1, currentLevel - 1) : Math.min(14, currentLevel + 1)
+  if (nextLevel === currentLevel) {
+    return
+  }
+
+  map.setLevel?.(nextLevel)
+  scheduleBoundsChanged()
+}
+
 onMounted(async () => {
   if (!hasKakaoMapKey()) {
     return
@@ -334,6 +349,10 @@ onBeforeUnmount(() => {
       <strong>{{ ready ? '카카오 지도 준비 완료' : '지도 준비 중' }}</strong>
       <p>{{ loading ? '지도 리소스를 확인하고 있습니다.' : message }}</p>
     </div>
-    <p v-else class="map-status">{{ message }}</p>
+    <div v-if="ready" class="map-zoom-controls" aria-label="지도 확대/축소">
+      <button class="map-zoom-button" type="button" aria-label="지도 확대" @click.stop="changeZoom('in')">+</button>
+      <button class="map-zoom-button" type="button" aria-label="지도 축소" @click.stop="changeZoom('out')">-</button>
+    </div>
+    <p v-if="ready" class="map-status">{{ message }}</p>
   </section>
 </template>

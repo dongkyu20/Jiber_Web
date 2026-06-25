@@ -55,14 +55,19 @@ public class SecurityConfig {
                                 "/api/v1/properties/search",
                                 "/api/v1/properties/*",
                                 "/api/v1/notices",
-                                "/api/v1/notices/*").permitAll()
+                                "/api/v1/notices/*",
+                                "/api/v1/community/posts",
+                                "/api/v1/community/posts/*").permitAll()
                         .requestMatchers("/api/v1/admin/notices/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/users/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/favorites/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/chat/real-estate",
                                 "/api/v1/properties/*/valuation",
-                                "/api/v1/properties/*/shap").hasAnyRole("USER", "ADMIN")
+                                "/api/v1/properties/*/shap",
+                                "/api/v1/properties/new-analysis",
+                                "/api/v1/community/posts",
+                                "/api/v1/community/posts/*/comments").hasAnyRole("USER", "ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(securityErrorResponseWriter::writeUnauthorized)

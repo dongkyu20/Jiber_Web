@@ -313,10 +313,71 @@ Draft response:
 
 Unsupported non-apartment properties return `VALUATION_UNSUPPORTED_PROPERTY_TYPE`.
 
+## New Apartment Analysis API
+
+`POST /api/v1/properties/new-analysis`
+
+This externally exposed Spring backend API requires `USER` or `ADMIN`. It is for user-entered apartment candidates that do not yet exist as a persisted property row. The backend maps the submitted features to the existing internal model-server apartment valuation and SHAP contracts, and returns both outputs in one response. It does not persist the submitted candidate.
+
+Draft request:
+
+```json
+{
+  "propertyName": "래미안 삼성",
+  "sido": "서울특별시",
+  "sigungu": "강남구",
+  "legalDong": "삼성동",
+  "latitude": 37.5123,
+  "longitude": 127.0567,
+  "householdCount": 1200,
+  "exclusiveAreaM2": 84.95,
+  "floor": 15,
+  "builtYear": 2010,
+  "asOfDate": "2026-06-25",
+  "distanceToStationM": 420
+}
+```
+
+Draft response:
+
+```json
+{
+  "propertyName": "래미안 삼성",
+  "valuation": {
+    "propertyId": 0,
+    "supported": true,
+    "estimatedPrice": 1230000000,
+    "currency": "KRW",
+    "predictionInterval": {
+      "lower": 1150000000,
+      "upper": 1310000000
+    },
+    "modelVersion": "hedonic-v1",
+    "baselineDate": "2026-06-12",
+    "featureSetVersion": "apartment-basic-v1",
+    "message": "아파트 실거래 데이터를 바탕으로 계산한 추정가입니다."
+  },
+  "shap": {
+    "propertyId": 0,
+    "supported": true,
+    "baseValue": 980000000,
+    "prediction": 1230000000,
+    "currency": "KRW",
+    "values": [],
+    "modelVersion": "hedonic-v1",
+    "baselineDate": "2026-06-12",
+    "featureSetVersion": "apartment-basic-v1",
+    "message": "추정가에 영향을 준 주요 요인입니다."
+  },
+  "message": "입력한 신규 아파트 조건으로 적정가와 주요 요인을 계산했습니다."
+}
+```
+
 ## Related Contracts
 
 - Favorites are documented in `docs/contracts/favorites-api.md`.
 - Notices and admin notice mutations are documented in `docs/contracts/notices-api.md`.
+- Community posts and comments are documented in `docs/contracts/community-api.md`.
 - Internal valuation and SHAP model-server contracts are documented in `docs/contracts/model-server.md`.
 - Shared error response shape is documented in `docs/contracts/error-response.md`.
 

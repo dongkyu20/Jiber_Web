@@ -2,6 +2,8 @@ package com.jiber.backend.property.controller;
 
 import com.jiber.backend.auth.dto.AuthUserPrincipal;
 import com.jiber.backend.property.dto.MapSearchRequest;
+import com.jiber.backend.property.dto.NewApartmentAnalysisRequest;
+import com.jiber.backend.property.dto.NewApartmentAnalysisResponse;
 import com.jiber.backend.property.dto.PropertyDetailResponse;
 import com.jiber.backend.property.dto.PropertyMapResponse;
 import com.jiber.backend.property.dto.PropertySearchRequest;
@@ -68,5 +70,12 @@ public class PropertyController {
             @Valid @RequestBody ShapRequest request
     ) {
         return propertyService.explainApartment(propertyId, request);
+    }
+
+    @PostMapping("/new-analysis")
+    public NewApartmentAnalysisResponse analyzeNewApartment(
+            @Valid @RequestBody NewApartmentAnalysisRequest request
+    ) {
+        return propertyService.analyzeNewApartment(request);
     }
 }

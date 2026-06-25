@@ -1,0 +1,61 @@
+package com.jiber.backend.community.controller;
+
+import com.jiber.backend.auth.dto.AuthUserPrincipal;
+import com.jiber.backend.community.dto.CommunityCommentCreateRequest;
+import com.jiber.backend.community.dto.CommunityMutationResponse;
+import com.jiber.backend.community.dto.CommunityPostCreateRequest;
+import com.jiber.backend.community.dto.CommunityPostDetailResponse;
+import com.jiber.backend.community.dto.CommunityPostListRequest;
+import com.jiber.backend.community.dto.CommunityPostListResponse;
+import com.jiber.backend.community.service.CommunityService;
+import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/community/posts")
+public class CommunityController {
+
+    private final CommunityService communityService;
+
+    public CommunityController(CommunityService communityService) {
+        this.communityService = communityService;
+    }
+
+    @GetMapping
+    public CommunityPostListResponse listPosts(@Valid @ModelAttribute CommunityPostListRequest request) {
+        return communityService.listPosts(request);
+    }
+
+    @GetMapping("/{postId}")
+    public CommunityPostDetailResponse getPost(@PathVariable Long postId) {
+        return communityService.getPost(postId);
+    }
+
+    @PostMapping
+    public CommunityMutationResponse createPost(
+            @AuthenticationPrincipal AuthUserPrincipal principal,
+            @Valid @RequestBody CommunityPostCreateRequest request
+    ) {
+        return communityService.createPost(request, userId(principal));
+    }
+
+    @PostMapping("/{postId}/comments")
+    public CommunityMutationResponse createComment(
+            @AuthenticationPrincipal AuthUserPrincipal principal,
+            @PathVariable Long postId,
+            @Valid @RequestBody CommunityCommentCreateRequest request
+    ) {
+        return communityService.createComment(postId, request, userId(principal));
+    }
+
+    private Long userId(AuthUserPrincipal principal) {
+        return principal == null ? null : principal.userId();
+    }
+}

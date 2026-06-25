@@ -295,6 +295,27 @@ describe('KakaoMapPanel', () => {
     }
   })
 
+  it('zooms the map with the top-right plus and minus controls', async () => {
+    kakaoMock.state.hasKey = true
+    kakaoMock.state.mapInstance.getLevel.mockReturnValue(5)
+
+    const wrapper = mount(KakaoMapPanel, {
+      props: {
+        items: [],
+        selectedPropertyId: null
+      }
+    })
+
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="지도 확대"]').trigger('click')
+    expect(kakaoMock.state.mapInstance.setLevel).toHaveBeenCalledWith(4)
+
+    kakaoMock.state.mapInstance.setLevel.mockClear()
+    await wrapper.get('button[aria-label="지도 축소"]').trigger('click')
+    expect(kakaoMock.state.mapInstance.setLevel).toHaveBeenCalledWith(6)
+  })
+
   it('renders property clusterer plus legal-dong administrative overlays at level 5', async () => {
     kakaoMock.state.hasKey = true
     kakaoMock.state.mapInstance.getLevel.mockReturnValue(5)

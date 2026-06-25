@@ -77,7 +77,7 @@ function mapResponse(items: PropertyMapItem[], administrativeClusters: Administr
       neLng: 127.06
     },
     filters: {
-      propertyTypes: ['APARTMENT'],
+      propertyTypes: ['APARTMENT', 'OFFICETEL', 'VILLA'],
       transactionTypes: ['SALE'],
       zoomLevel: 5
     }
@@ -487,16 +487,18 @@ describe('MapView keyword search', () => {
     expect(wrapper.get('[data-test="map-search-keyword"]').attributes('placeholder')).toContain('경희궁롯데캐슬')
   })
 
-  it('keeps map search apartment-only without showing property type filters', async () => {
+  it('shows property type filters for apartment, officetel, and villa', async () => {
     const { wrapper } = await mountMapView()
 
     expect(wrapper.text()).not.toContain('부동산 유형')
-    expect(wrapper.find('input[value="OFFICETEL"]').exists()).toBe(false)
-    expect(wrapper.find('input[value="VILLA"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('매물유형')
+    expect(wrapper.find('input[value="APARTMENT"]').exists()).toBe(true)
+    expect(wrapper.find('input[value="OFFICETEL"]').exists()).toBe(true)
+    expect(wrapper.find('input[value="VILLA"]').exists()).toBe(true)
     expect(wrapper.find('input[value="HOUSE"]').exists()).toBe(false)
     expect(propertyApiMock.getMapProperties).toHaveBeenCalledWith(
       expect.objectContaining({
-        propertyTypes: ['APARTMENT']
+        propertyTypes: ['APARTMENT', 'OFFICETEL', 'VILLA']
       })
     )
   })
@@ -512,12 +514,12 @@ describe('MapView keyword search', () => {
     expect(propertyApiMock.searchProperties).toHaveBeenCalledWith(
       expect.objectContaining({
         keyword: '경희궁롯데캐슬',
-        propertyTypes: ['APARTMENT'],
-        transactionTypes: ['SALE', 'JEONSE', 'MONTHLY_RENT'],
+        propertyTypes: ['APARTMENT', 'OFFICETEL', 'VILLA'],
         size: 100,
         sort: 'relevance,desc'
       })
     )
+    expect(propertyApiMock.searchProperties.mock.calls[0][0]).not.toHaveProperty('transactionTypes')
     expect(wrapper.text()).toContain('카카오 지도 API 키가 아직 설정되지 않았습니다.')
     expect(wrapper.text()).toContain('경희궁롯데캐슬')
     expect(wrapper.text()).toContain('전세')
@@ -600,13 +602,13 @@ describe('MapView keyword search', () => {
     expect(wrapper.get('[data-test="map-search-suggestions"]').text()).toContain('샘플 역삼아파트')
   })
 
-  it('applies transaction filters to keyword searches and routes from a result item', async () => {
+  it('applies property type filters to keyword searches and routes from a result item', async () => {
     propertyApiMock.searchProperties.mockResolvedValueOnce(searchResponse([importedSearchItem]))
     const { wrapper, router } = await mountMapView()
 
-    await wrapper.get('input[value="SALE"]').setValue(false)
-    await wrapper.get('input[value="MONTHLY_RENT"]').setValue(false)
-    await wrapper.get('input[value="JEONSE"]').setValue(true)
+    await wrapper.get('input[value="APARTMENT"]').setValue(false)
+    await wrapper.get('input[value="OFFICETEL"]').setValue(false)
+    await wrapper.get('input[value="VILLA"]').setValue(true)
     await wrapper.get('[data-test="map-search-keyword"]').setValue('무악동')
     await wrapper.get('[data-test="map-search-form"]').trigger('submit')
     await flushPromises()
@@ -614,12 +616,12 @@ describe('MapView keyword search', () => {
     expect(propertyApiMock.searchProperties).toHaveBeenCalledWith(
       expect.objectContaining({
         keyword: '무악동',
-        propertyTypes: ['APARTMENT'],
-        transactionTypes: ['JEONSE']
+        propertyTypes: ['VILLA']
       })
     )
     expect(propertyApiMock.searchProperties.mock.calls[0][0]).not.toHaveProperty('zoom')
     expect(propertyApiMock.searchProperties.mock.calls[0][0]).not.toHaveProperty('propertyType')
+    expect(propertyApiMock.searchProperties.mock.calls[0][0]).not.toHaveProperty('transactionTypes')
 
     await wrapper.get('a[href="/properties/1001"]').trigger('click')
     await flushPromises()

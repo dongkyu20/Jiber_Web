@@ -30,7 +30,7 @@ async function renderChart() {
   chart ??= echarts.init(chartEl.value)
   chart.setOption({
     color: ['#0f766e'],
-    grid: { top: 24, right: 24, bottom: 36, left: 96 },
+    grid: { top: 24, right: 24, bottom: 36, left: 112 },
     tooltip: {
       trigger: 'axis',
       valueFormatter: (value: unknown) => formatKrw(Number(value))
@@ -68,6 +68,6 @@ onBeforeUnmount(() => {
   <EmptyState
     v-else
     title="아직 표시할 SHAP 요인이 없습니다."
-    description="아파트 단지 추정가를 요청하면 주요 영향 요인을 차트로 보여드립니다."
+    description="아파트 조건 분석을 실행하면 주요 영향 요인을 차트로 보여드립니다."
   />
 </template>

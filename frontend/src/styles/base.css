@@ -510,6 +510,38 @@ input[type="range"] { width: 100%; accent-color: var(--gold); }
   height: 100%;
 }
 
+.map-zoom-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: grid;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.map-zoom-button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(200, 160, 100, 0.34);
+  border-radius: 8px;
+  background: rgba(22, 13, 4, 0.88);
+  color: var(--cream);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.map-zoom-button:hover {
+  border-color: var(--border-strong);
+  background: rgba(45, 30, 14, 0.92);
+}
+
 .map-grid {
   position: absolute;
   inset: 0;
