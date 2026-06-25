@@ -3,8 +3,13 @@ package com.jiber.backend.notice.controller;
 import com.jiber.backend.notice.dto.*;
 import com.jiber.backend.notice.service.*;
 
+import com.jiber.backend.auth.dto.AuthUserPrincipal;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -22,21 +27,39 @@ public class AdminNoticeController {
         this.noticeService = noticeService;
     }
 
+    @GetMapping
+    public NoticeListResponse listAdminNotices(@Valid @ParameterObject @ModelAttribute NoticeListRequest request) {
+        return noticeService.listAdminNotices(request);
+    }
+
+    @GetMapping("/{noticeId}")
+    public NoticeDetailResponse getAdminNotice(@PathVariable Long noticeId) {
+        return noticeService.getAdminNotice(noticeId);
+    }
+
     @PostMapping
-    public NoticeMutationResponse createNotice(@Valid @RequestBody NoticeUpsertRequest request) {
-        return noticeService.createNotice(request);
+    public NoticeMutationResponse createNotice(
+            @AuthenticationPrincipal AuthUserPrincipal principal,
+            @Valid @RequestBody NoticeUpsertRequest request
+    ) {
+        return noticeService.createNotice(request, userId(principal));
     }
 
     @PutMapping("/{noticeId}")
     public NoticeMutationResponse updateNotice(
+            @AuthenticationPrincipal AuthUserPrincipal principal,
             @PathVariable Long noticeId,
             @Valid @RequestBody NoticeUpsertRequest request
     ) {
-        return noticeService.updateNotice(noticeId, request);
+        return noticeService.updateNotice(noticeId, request, userId(principal));
     }
 
     @DeleteMapping("/{noticeId}")
     public NoticeMutationResponse deleteNotice(@PathVariable Long noticeId) {
         return noticeService.deleteNotice(noticeId);
+    }
+
+    private Long userId(AuthUserPrincipal principal) {
+        return principal == null ? null : principal.userId();
     }
 }

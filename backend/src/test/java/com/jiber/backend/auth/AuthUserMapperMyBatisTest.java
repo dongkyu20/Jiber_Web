@@ -100,4 +100,20 @@ class AuthUserMapperMyBatisTest {
                 authUserMapper.insertEmailUser("user@example.com", PASSWORD_HASH, "다른 사용자", "USER", true, lastLoginAt)
         ).isInstanceOf(DuplicateKeyException.class);
     }
+
+    @Test
+    void updatePasswordHashChangesOnlyTheTargetUserCredential() {
+        var lastLoginAt = OffsetDateTime.parse("2026-06-15T07:00:00Z");
+        authUserMapper.insertEmailUser("user@example.com", PASSWORD_HASH, "사용자", "USER", true, lastLoginAt);
+        authUserMapper.insertEmailUser("other@example.com", PASSWORD_HASH, "다른 사용자", "USER", true, lastLoginAt);
+        var user = authUserMapper.findByEmail("user@example.com");
+        var updatedAt = OffsetDateTime.parse("2026-06-15T07:05:00Z");
+        var nextHash = "$2a$10$updatedhashvaluefor mapper storage";
+
+        var changed = authUserMapper.updatePasswordHash(user.userId(), nextHash, updatedAt);
+
+        assertThat(changed).isEqualTo(1);
+        assertThat(authUserMapper.findByEmail("user@example.com").passwordHash()).isEqualTo(nextHash);
+        assertThat(authUserMapper.findByEmail("other@example.com").passwordHash()).isEqualTo(PASSWORD_HASH);
+    }
 }

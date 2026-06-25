@@ -87,6 +87,7 @@ class RefreshTokenServiceTest {
         private RefreshSessionInsertCommand inserted;
         private Long revokedSessionId;
         private Long revokedFamilyRootSessionId;
+        private Long revokedUserId;
 
         @Override
         public int insert(RefreshSessionInsertCommand command) {
@@ -118,6 +119,12 @@ class RefreshTokenServiceTest {
         @Override
         public int revokeSessionFamily(Long refreshSessionId, OffsetDateTime revokedAt) {
             this.revokedFamilyRootSessionId = refreshSessionId;
+            return 1;
+        }
+
+        @Override
+        public int revokeByUserId(Long userId, OffsetDateTime revokedAt) {
+            this.revokedUserId = userId;
             return 1;
         }
     }

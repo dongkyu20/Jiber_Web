@@ -446,10 +446,6 @@ function propertyMarkersOverlap(first: MapScreenPoint, second: MapScreenPoint): 
   )
 }
 
-function propertyMarkerPriority(item: PropertyMapItem): number {
-  return (item.recentTransactionCount ?? 0) * 100000 + (item.dealCount ?? 0)
-}
-
 function minimizedPropertyMarkerIds(
   kakaoMaps: KakaoMapsApi,
   map: KakaoMapLike,
@@ -468,18 +464,23 @@ function minimizedPropertyMarkerIds(
 
   const detailed: typeof positionedItems = []
   const minimizedIds = new Set<number>()
-  const byPriority = [...positionedItems].sort((first, second) => {
+  const byMapPosition = [...positionedItems].sort((first, second) => {
     const selectedGap =
       Number(second.item.propertyId === selectedPropertyId) - Number(first.item.propertyId === selectedPropertyId)
     if (selectedGap) {
       return selectedGap
     }
 
-    const priorityGap = propertyMarkerPriority(second.item) - propertyMarkerPriority(first.item)
-    return priorityGap || first.index - second.index
+    const yGap = (first.point?.y ?? Number.POSITIVE_INFINITY) - (second.point?.y ?? Number.POSITIVE_INFINITY)
+    if (yGap) {
+      return yGap
+    }
+
+    const xGap = (first.point?.x ?? Number.POSITIVE_INFINITY) - (second.point?.x ?? Number.POSITIVE_INFINITY)
+    return xGap || first.index - second.index
   })
 
-  byPriority.forEach((candidate) => {
+  byMapPosition.forEach((candidate) => {
     const candidatePoint = candidate.point
     if (!candidatePoint) {
       return

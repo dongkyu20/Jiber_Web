@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { favoritesApi } from '@/api/favorites'
 import { getApiError } from '@/api/client'
@@ -25,6 +25,7 @@ const propertyTypeOptions: PropertyType[] = ['APARTMENT', 'OFFICETEL', 'VILLA', 
 const transactionTypeOptions: TransactionType[] = ['SALE', 'JEONSE', 'MONTHLY_RENT']
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const selectedPropertyTypes = ref<PropertyType[]>(['APARTMENT'])
 const selectedTransactionTypes = ref<TransactionType[]>([...transactionTypeOptions])
@@ -347,12 +348,7 @@ function handleMapLoadError() {
 
 function selectProperty(propertyId: number) {
   selectedPropertyId.value = propertyId
-  window.requestAnimationFrame(() => {
-    document.getElementById(`property-result-${propertyId}`)?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest'
-    })
-  })
+  void router.push(`/properties/${propertyId}`)
 }
 
 onMounted(() => {
