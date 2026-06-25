@@ -108,6 +108,22 @@
             LIMIT 1
         ) AS latest_deal_amount,
         (
+            SELECT t.deposit_amount_krw
+            FROM property_transactions t
+            WHERE t.property_id = p.property_id
+            <include refid="TransactionFilters"/>
+            ORDER BY t.deal_date DESC, t.transaction_id DESC
+            LIMIT 1
+        ) AS latest_deposit_amount,
+        (
+            SELECT t.monthly_rent_krw
+            FROM property_transactions t
+            WHERE t.property_id = p.property_id
+            <include refid="TransactionFilters"/>
+            ORDER BY t.deal_date DESC, t.transaction_id DESC
+            LIMIT 1
+        ) AS latest_monthly_rent,
+        (
             SELECT t.deal_date
             FROM property_transactions t
             WHERE t.property_id = p.property_id

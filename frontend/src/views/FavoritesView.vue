@@ -6,7 +6,7 @@ import { favoritesApi } from '@/api/favorites'
 import { getApiError } from '@/api/client'
 import type { FavoriteApartmentItem, FavoriteAreaItem } from '@/api/types'
 import EmptyState from '@/components/EmptyState.vue'
-import { formatDate, formatKrw, transactionTypeLabel } from '@/utils/format'
+import { formatDate, formatLatestTransactionAmount, transactionTypeLabel } from '@/utils/format'
 
 type TabId = 'apartments' | 'areas' | 'alerts'
 const tabs: { id: TabId; label: string }[] = [
@@ -142,7 +142,7 @@ onMounted(fetchFavorites)
             <h3 class="card-name">{{ item.name }}</h3>
             <p class="card-addr">{{ item.address }}</p>
             <div class="card-price-row" v-if="item.latestTransaction">
-              <span class="card-price">{{ formatKrw(item.latestTransaction.dealAmount) }}</span>
+              <span class="card-price">{{ formatLatestTransactionAmount(item.latestTransaction) }}</span>
               <span class="card-tx">{{ transactionTypeLabel(item.latestTransaction.transactionType) }}</span>
             </div>
           </RouterLink>

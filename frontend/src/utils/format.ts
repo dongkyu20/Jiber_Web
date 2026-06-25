@@ -11,6 +11,53 @@ export function formatKrw(value?: number | null): string {
   return `${value.toLocaleString('ko-KR')}원`
 }
 
+export interface LatestTransactionAmount {
+  transactionType: string
+  dealAmount?: number | null
+  depositAmount?: number | null
+  monthlyRent?: number | null
+}
+
+export function formatMonthlyRent(value?: number | null): string {
+  if (value === undefined || value === null) {
+    return formatKrw(value)
+  }
+
+  if (value >= 100000000) {
+    return formatKrw(value)
+  }
+
+  if (value >= 10000) {
+    const man = value / 10000
+    return `${man.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}만 원`
+  }
+
+  return `${value.toLocaleString('ko-KR')}원`
+}
+
+export function formatLatestTransactionAmount(transaction: LatestTransactionAmount): string {
+  if (transaction.transactionType !== 'MONTHLY_RENT') {
+    return formatKrw(transaction.dealAmount)
+  }
+
+  const hasDeposit = transaction.depositAmount !== undefined && transaction.depositAmount !== null
+  const hasMonthlyRent = transaction.monthlyRent !== undefined && transaction.monthlyRent !== null
+
+  if (!hasDeposit && !hasMonthlyRent) {
+    return formatKrw(transaction.dealAmount)
+  }
+
+  if (!hasDeposit) {
+    return `월세 ${formatMonthlyRent(transaction.monthlyRent)}`
+  }
+
+  if (!hasMonthlyRent || transaction.monthlyRent === 0) {
+    return `보증금 ${formatKrw(transaction.depositAmount)}`
+  }
+
+  return `보증금 ${formatKrw(transaction.depositAmount)} / 월세 ${formatMonthlyRent(transaction.monthlyRent)}`
+}
+
 export function formatDate(value?: string | null): string {
   if (!value) {
     return '날짜 없음'

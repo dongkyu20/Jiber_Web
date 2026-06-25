@@ -237,7 +237,13 @@ public class PropertyService {
         if (row.getLatestTransactionType() == null) {
             return null;
         }
-        return new LatestTransactionResponse(row.getLatestTransactionType(), row.getLatestDealAmount(), row.getLatestDealDate());
+        return new LatestTransactionResponse(
+                row.getLatestTransactionType(),
+                row.getLatestDealAmount(),
+                row.getLatestDepositAmount(),
+                row.getLatestMonthlyRent(),
+                row.getLatestDealDate()
+        );
     }
 
     private PropertyTransactionResponse toTransaction(PropertyTransactionRow row) {

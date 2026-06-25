@@ -128,6 +128,8 @@ public class FavoriteService {
         return new LatestTransactionResponse(
                 row.getLatestTransactionType(),
                 row.getLatestDealAmount(),
+                row.getLatestDepositAmount(),
+                row.getLatestMonthlyRent(),
                 row.getLatestDealDate()
         );
     }

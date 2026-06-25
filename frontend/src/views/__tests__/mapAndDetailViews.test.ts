@@ -89,7 +89,7 @@ function searchResponse(items: PropertySearchItem[]): PagedResponse<PropertySear
     items,
     page: {
       number: 0,
-      size: 20,
+      size: 100,
       totalElements: items.length,
       totalPages: items.length ? 1 : 0
     }
@@ -141,6 +141,29 @@ const importedSearchItem: PropertySearchItem = {
     dealDate: '2026-06-08'
   },
   aiAvailable: true
+}
+
+const monthlyRentSearchItem: PropertySearchItem = {
+  ...importedSearchItem,
+  propertyId: 1002,
+  name: '월세 샘플아파트',
+  latestTransaction: {
+    transactionType: 'MONTHLY_RENT',
+    dealAmount: 550000000,
+    depositAmount: 550000000,
+    monthlyRent: 1200000,
+    dealDate: '2026-06-10'
+  }
+}
+
+function searchResponsePage(
+  items: PropertySearchItem[],
+  page: { number: number; size: number; totalElements: number; totalPages: number }
+): PagedResponse<PropertySearchItem> {
+  return {
+    items,
+    page
+  }
 }
 
 const importedDetail: PropertyDetail = {
@@ -418,6 +441,20 @@ describe('MapView keyword search', () => {
     expect(wrapper.get('[data-test="map-search-keyword"]').attributes('placeholder')).toContain('경희궁롯데캐슬')
   })
 
+  it('keeps map search apartment-only without showing property type filters', async () => {
+    const { wrapper } = await mountMapView()
+
+    expect(wrapper.text()).not.toContain('부동산 유형')
+    expect(wrapper.find('input[value="OFFICETEL"]').exists()).toBe(false)
+    expect(wrapper.find('input[value="VILLA"]').exists()).toBe(false)
+    expect(wrapper.find('input[value="HOUSE"]').exists()).toBe(false)
+    expect(propertyApiMock.getMapProperties).toHaveBeenCalledWith(
+      expect.objectContaining({
+        propertyTypes: ['APARTMENT']
+      })
+    )
+  })
+
   it('searches imported canonical data and keeps the missing-key fallback usable', async () => {
     propertyApiMock.searchProperties.mockResolvedValueOnce(searchResponse([importedSearchItem]))
     const { wrapper } = await mountMapView()
@@ -431,7 +468,7 @@ describe('MapView keyword search', () => {
         keyword: '경희궁롯데캐슬',
         propertyTypes: ['APARTMENT'],
         transactionTypes: ['SALE', 'JEONSE', 'MONTHLY_RENT'],
-        size: 20,
+        size: 100,
         sort: 'relevance,desc'
       })
     )
@@ -439,6 +476,70 @@ describe('MapView keyword search', () => {
     expect(wrapper.text()).toContain('경희궁롯데캐슬')
     expect(wrapper.text()).toContain('전세')
     expect(wrapper.find('#property-result-1001').classes()).toContain('is-selected')
+  })
+
+  it('shows monthly rent search results with separate deposit and monthly rent labels', async () => {
+    propertyApiMock.searchProperties.mockResolvedValueOnce(searchResponse([monthlyRentSearchItem]))
+    const { wrapper } = await mountMapView()
+
+    await wrapper.get('[data-test="map-search-keyword"]').setValue('월세')
+    await wrapper.get('[data-test="map-search-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('월세')
+    expect(wrapper.text()).toContain('보증금 5.5억 원 / 월세 120만 원')
+  })
+
+  it('loads additional keyword result pages instead of stopping at the first page', async () => {
+    const secondSearchItem: PropertySearchItem = {
+      ...importedSearchItem,
+      propertyId: 1003,
+      name: '두번째 검색아파트'
+    }
+    propertyApiMock.searchProperties
+      .mockResolvedValueOnce(
+        searchResponsePage([importedSearchItem], {
+          number: 0,
+          size: 100,
+          totalElements: 2,
+          totalPages: 2
+        })
+      )
+      .mockResolvedValueOnce(
+        searchResponsePage([secondSearchItem], {
+          number: 1,
+          size: 100,
+          totalElements: 2,
+          totalPages: 2
+        })
+      )
+    const { wrapper } = await mountMapView()
+
+    await wrapper.get('[data-test="map-search-keyword"]').setValue('아파트')
+    await wrapper.get('[data-test="map-search-form"]').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-test="keyword-load-more"]').trigger('click')
+    await flushPromises()
+
+    expect(propertyApiMock.searchProperties).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        keyword: '아파트',
+        page: 1,
+        size: 100
+      })
+    )
+    expect(wrapper.text()).toContain('경희궁롯데캐슬')
+    expect(wrapper.text()).toContain('두번째 검색아파트')
+  })
+
+  it('suggests cached apartment keywords through the search trie', async () => {
+    propertyApiMock.getMapProperties.mockResolvedValueOnce(mapResponse([seedMapItem]))
+    propertyApiMock.searchProperties.mockResolvedValueOnce(searchResponse([seedMapItem as unknown as PropertySearchItem]))
+    const { wrapper } = await mountMapView()
+
+    await wrapper.get('[data-test="map-search-keyword"]').setValue('샘플')
+
+    expect(wrapper.get('[data-test="map-search-suggestions"]').text()).toContain('샘플 역삼아파트')
   })
 
   it('applies transaction filters to keyword searches and routes from a result item', async () => {

@@ -21,6 +21,8 @@ public class FavoriteApartmentRow {
     private BigDecimal longitude;
     private TransactionType latestTransactionType;
     private Long latestDealAmount;
+    private Long latestDepositAmount;
+    private Long latestMonthlyRent;
     private LocalDate latestDealDate;
     private OffsetDateTime createdAt;
 
@@ -94,6 +96,22 @@ public class FavoriteApartmentRow {
 
     public void setLatestDealAmount(Long latestDealAmount) {
         this.latestDealAmount = latestDealAmount;
+    }
+
+    public Long getLatestDepositAmount() {
+        return latestDepositAmount;
+    }
+
+    public void setLatestDepositAmount(Long latestDepositAmount) {
+        this.latestDepositAmount = latestDepositAmount;
+    }
+
+    public Long getLatestMonthlyRent() {
+        return latestMonthlyRent;
+    }
+
+    public void setLatestMonthlyRent(Long latestMonthlyRent) {
+        this.latestMonthlyRent = latestMonthlyRent;
     }
 
     public LocalDate getLatestDealDate() {

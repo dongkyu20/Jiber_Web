@@ -83,6 +83,8 @@ export interface SocialLinkRequest extends AuthLoginRequest {}
 export interface LatestTransaction {
   transactionType: TransactionType
   dealAmount: number
+  depositAmount?: number | null
+  monthlyRent?: number | null
   dealDate: string
 }
 

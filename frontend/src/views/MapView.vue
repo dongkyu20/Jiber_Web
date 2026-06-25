@@ -19,14 +19,16 @@ import FloatingChat from '@/components/FloatingChat.vue'
 import { SEOUL_SEED_VIEWPORT, normalizePropertyMapItems, type LatLngPoint, type MapViewport } from '@/map/kakaoMap'
 import { hasKakaoMapKey } from '@/map/kakaoLoader'
 import { useAuthStore } from '@/stores/auth'
-import { formatKrw, propertyTypeLabel, transactionTypeLabel } from '@/utils/format'
+import { formatLatestTransactionAmount, transactionTypeLabel } from '@/utils/format'
+import { SearchTrie } from '@/utils/searchTrie'
 
-const propertyTypeOptions: PropertyType[] = ['APARTMENT', 'OFFICETEL', 'VILLA', 'HOUSE']
+const apartmentOnlyPropertyTypes: PropertyType[] = ['APARTMENT']
 const transactionTypeOptions: TransactionType[] = ['SALE', 'JEONSE', 'MONTHLY_RENT']
+const keywordSearchPageSize = 100
+const autocompleteFetchSize = 20
 
 const route = useRoute()
 const authStore = useAuthStore()
-const selectedPropertyTypes = ref<PropertyType[]>(['APARTMENT'])
 const selectedTransactionTypes = ref<TransactionType[]>([...transactionTypeOptions])
 const zoomLevel = ref(SEOUL_SEED_VIEWPORT.zoomLevel)
 const loading = ref(false)
@@ -37,14 +39,32 @@ const currentViewport = ref<MapViewport>({ ...SEOUL_SEED_VIEWPORT })
 const selectedPropertyId = ref<number | null>(null)
 const searchKeyword = ref('')
 const activeSearchKeyword = ref('')
+const keywordSearchPage = ref(0)
+const keywordSearchTotal = ref<number | null>(null)
+const keywordLoadingMore = ref(false)
+const autocompleteSuggestions = ref<string[]>([])
+const autocompleteOpen = ref(false)
+const highlightedSuggestionIndex = ref(-1)
 const mapFocusTarget = ref<LatLngPoint | null>(null)
 const hasMapKey = hasKakaoMapKey()
 const areaFavoriteLoading = ref(false)
 const areaFavoriteMessage = ref('')
 const areaFavoriteErrorMessage = ref('')
+const autocompleteTrie = new SearchTrie()
 let searchTimer: number | null = null
+let autocompleteTimer: number | null = null
 
 const isKeywordSearch = computed(() => activeSearchKeyword.value.length > 0)
+const hasMoreKeywordResults = computed(
+  () => isKeywordSearch.value && keywordSearchTotal.value !== null && items.value.length < keywordSearchTotal.value
+)
+const resultCountText = computed(() => {
+  if (isKeywordSearch.value && keywordSearchTotal.value !== null) {
+    return `${keywordSearchTotal.value.toLocaleString('ko-KR')}건`
+  }
+
+  return `${items.value.length.toLocaleString('ko-KR')}건`
+})
 const mapRuntimeMessage = computed(() =>
   hasMapKey
     ? '지도 SDK가 준비되면 현재 화면 범위로 다시 검색합니다.'
@@ -235,10 +255,110 @@ function focusFirstResult(nextItems: PropertyMapItem[]) {
   mapFocusTarget.value = firstItem ? { lat: firstItem.lat, lng: firstItem.lng } : null
 }
 
+function clearAutocompleteTimer() {
+  if (autocompleteTimer) {
+    window.clearTimeout(autocompleteTimer)
+    autocompleteTimer = null
+  }
+}
+
+function addAutocompleteCandidates(nextItems: Array<PropertyMapItem | PropertySearchItem>) {
+  for (const item of nextItems) {
+    autocompleteTrie.insert(item.name)
+    autocompleteTrie.insert(item.address)
+    if ('legalDong' in item && item.legalDong) {
+      autocompleteTrie.insert(item.legalDong)
+    }
+  }
+  refreshAutocompleteSuggestions()
+}
+
+function refreshAutocompleteSuggestions() {
+  const keyword = searchKeyword.value.trim()
+  autocompleteSuggestions.value = autocompleteTrie
+    .suggest(keyword)
+    .filter((suggestion) => suggestion !== keyword)
+  highlightedSuggestionIndex.value = autocompleteSuggestions.value.length ? 0 : -1
+  autocompleteOpen.value = keyword.length > 0 && autocompleteSuggestions.value.length > 0
+}
+
+async function fetchAutocompleteCandidates(keyword: string) {
+  if (!keyword.trim()) {
+    return
+  }
+
+  try {
+    const response = await propertyApi.searchProperties({
+      keyword,
+      propertyTypes: apartmentOnlyPropertyTypes,
+      transactionTypes: selectedTransactionTypes.value,
+      page: 0,
+      size: autocompleteFetchSize,
+      sort: 'relevance,desc'
+    })
+    addAutocompleteCandidates(response.items)
+  } catch {
+    refreshAutocompleteSuggestions()
+  }
+}
+
+function handleSearchInput() {
+  refreshAutocompleteSuggestions()
+  clearAutocompleteTimer()
+
+  const keyword = searchKeyword.value.trim()
+  if (!keyword) {
+    autocompleteOpen.value = false
+    return
+  }
+
+  autocompleteTimer = window.setTimeout(() => {
+    void fetchAutocompleteCandidates(keyword)
+  }, 180)
+}
+
+function handleSearchFocus() {
+  refreshAutocompleteSuggestions()
+}
+
+function closeAutocompleteSoon() {
+  window.setTimeout(() => {
+    autocompleteOpen.value = false
+  }, 120)
+}
+
+function moveAutocompleteHighlight(direction: 1 | -1) {
+  if (!autocompleteSuggestions.value.length) {
+    return
+  }
+  autocompleteOpen.value = true
+  highlightedSuggestionIndex.value =
+    (highlightedSuggestionIndex.value + direction + autocompleteSuggestions.value.length) %
+    autocompleteSuggestions.value.length
+}
+
+function applyAutocompleteSuggestion(suggestion: string) {
+  searchKeyword.value = suggestion
+  autocompleteOpen.value = false
+  clearAutocompleteTimer()
+  void searchByKeyword(suggestion)
+}
+
+function handleAutocompleteEnter(event: KeyboardEvent) {
+  if (!autocompleteOpen.value || highlightedSuggestionIndex.value < 0) {
+    return
+  }
+
+  event.preventDefault()
+  applyAutocompleteSuggestion(autocompleteSuggestions.value[highlightedSuggestionIndex.value])
+}
+
 async function searchVisibleArea(viewport: MapViewport = currentViewport.value) {
   loading.value = true
   errorMessage.value = ''
   activeSearchKeyword.value = ''
+  keywordSearchPage.value = 0
+  keywordSearchTotal.value = null
   mapFocusTarget.value = null
   currentViewport.value = viewport
   zoomLevel.value = viewport.zoomLevel
@@ -250,11 +370,12 @@ async function searchVisibleArea(viewport: MapViewport = currentViewport.value) 
       neLat: viewport.neLat,
       neLng: viewport.neLng,
       zoomLevel: viewport.zoomLevel,
-      propertyTypes: selectedPropertyTypes.value,
+      propertyTypes: apartmentOnlyPropertyTypes,
       transactionTypes: selectedTransactionTypes.value
     })
     const nextItems = normalizePropertyMapItems(response.items)
     items.value = nextItems
+    addAutocompleteCandidates(nextItems)
     administrativeClusters.value = response.administrativeClusters ?? []
     if (!nextItems.some((item) => item.propertyId === selectedPropertyId.value)) {
       selectedPropertyId.value = null
@@ -262,42 +383,69 @@ async function searchVisibleArea(viewport: MapViewport = currentViewport.value) 
   } catch {
     items.value = []
     administrativeClusters.value = []
-    errorMessage.value = '현재 지도 범위의 실거래 정보를 불러오지 못했습니다. 백엔드 서버 상태를 확인해 주세요.'
+    errorMessage.value = '실거래 데이터 API 연결에 실패했습니다. 백엔드 서버 실행 상태를 확인해 주세요.'
   } finally {
     loading.value = false
   }
 }
 
-async function searchByKeyword(keyword: string) {
-  loading.value = true
+async function searchByKeyword(keyword: string, page = 0, append = false) {
+  if (append) {
+    keywordLoadingMore.value = true
+  } else {
+    loading.value = true
+  }
   errorMessage.value = ''
   activeSearchKeyword.value = keyword
   administrativeClusters.value = []
+  autocompleteOpen.value = false
 
   try {
     const response = await propertyApi.searchProperties({
       keyword,
-      propertyTypes: selectedPropertyTypes.value,
+      propertyTypes: apartmentOnlyPropertyTypes,
       transactionTypes: selectedTransactionTypes.value,
-      size: 20,
+      page,
+      size: keywordSearchPageSize,
       sort: 'relevance,desc'
     })
-    const nextItems = normalizePropertyMapItems(response.items.map(toMapItem))
+    const fetchedItems = response.items.map(toMapItem)
+    addAutocompleteCandidates(response.items)
+    const nextItems = normalizePropertyMapItems(append ? [...items.value, ...fetchedItems] : fetchedItems)
     items.value = nextItems
-    focusFirstResult(nextItems)
+    keywordSearchPage.value = response.page.number
+    keywordSearchTotal.value = response.page.totalElements
+
+    if (!append) {
+      focusFirstResult(nextItems)
+    }
   } catch {
-    items.value = []
+    if (!append) {
+      items.value = []
+      keywordSearchTotal.value = null
+      selectedPropertyId.value = null
+      mapFocusTarget.value = null
+    }
     administrativeClusters.value = []
-    selectedPropertyId.value = null
-    mapFocusTarget.value = null
     errorMessage.value = '검색 결과를 불러오지 못했습니다. 검색어를 확인하거나 잠시 후 다시 시도해 주세요.'
   } finally {
     loading.value = false
+    keywordLoadingMore.value = false
   }
+}
+
+function loadMoreKeywordResults() {
+  if (!activeSearchKeyword.value || keywordLoadingMore.value || !hasMoreKeywordResults.value) {
+    return
+  }
+
+  void searchByKeyword(activeSearchKeyword.value, keywordSearchPage.value + 1, true)
 }
 
 function handleKeywordSubmit() {
   const keyword = searchKeyword.value.trim()
+  clearAutocompleteTimer()
+  autocompleteOpen.value = false
 
   if (!keyword) {
     searchKeyword.value = ''
@@ -367,6 +515,7 @@ onBeforeUnmount(() => {
   if (searchTimer) {
     window.clearTimeout(searchTimer)
   }
+  clearAutocompleteTimer()
 })
 </script>
 
@@ -384,8 +533,18 @@ onBeforeUnmount(() => {
             data-test="map-search-keyword"
             type="search"
             autocomplete="off"
-            placeholder="경희궁롯데캐슬 · 동 · 구 검색"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="map-search-suggestions"
+            :aria-expanded="autocompleteOpen"
+            placeholder="경희궁롯데캐슬 · 무악동 · 구 검색"
             class="map-input"
+            @input="handleSearchInput"
+            @focus="handleSearchFocus"
+            @blur="closeAutocompleteSoon"
+            @keydown.down.prevent="moveAutocompleteHighlight(1)"
+            @keydown.up.prevent="moveAutocompleteHighlight(-1)"
+            @keydown.enter="handleAutocompleteEnter"
           />
           <button class="map-search-btn" type="submit" aria-label="검색">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24">
@@ -394,6 +553,29 @@ onBeforeUnmount(() => {
             </svg>
           </button>
         </div>
+        <ul
+          v-if="autocompleteOpen && autocompleteSuggestions.length"
+          id="map-search-suggestions"
+          class="autocomplete-list"
+          data-test="map-search-suggestions"
+          role="listbox"
+        >
+          <li
+            v-for="(suggestion, index) in autocompleteSuggestions"
+            :key="suggestion"
+            role="option"
+            :aria-selected="highlightedSuggestionIndex === index"
+          >
+            <button
+              class="autocomplete-option"
+              :class="{ 'is-active': highlightedSuggestionIndex === index }"
+              type="button"
+              @mousedown.prevent="applyAutocompleteSuggestion(suggestion)"
+            >
+              {{ suggestion }}
+            </button>
+          </li>
+        </ul>
         <button
           v-if="isKeywordSearch"
           class="text-button full-width"
@@ -401,30 +583,11 @@ onBeforeUnmount(() => {
           style="font-size:0.8rem; margin-top:4px;"
           :disabled="loading"
           @click="resetToVisibleArea"
-        >× 검색어 초기화</button>
+        >검색어 초기화</button>
       </form>
-
-      <!-- Quick region chips -->
-      <div class="region-chips">
-        <button class="region-chip active">서울 전체</button>
-        <button class="region-chip">강남3구</button>
-        <button class="region-chip">마포·은평</button>
-        <button class="region-chip">성동·광진</button>
-        <button class="region-chip">용산</button>
-      </div>
 
       <!-- Filters -->
       <div class="filter-section">
-        <fieldset>
-          <legend>부동산 유형</legend>
-          <div class="check-group">
-            <label v-for="type in propertyTypeOptions" :key="type" class="check-row">
-              <input v-model="selectedPropertyTypes" :value="type" type="checkbox" />
-              <span>{{ propertyTypeLabel(type) }}</span>
-            </label>
-          </div>
-        </fieldset>
-
         <fieldset>
           <legend>거래 유형</legend>
           <div class="check-group">
@@ -452,7 +615,7 @@ onBeforeUnmount(() => {
           :disabled="areaFavoriteLoading"
           @click="saveCurrentAreaFavorite"
         >
-          ♥ {{ areaFavoriteLoading ? '저장 중...' : '이 지역 관심 등록' }}
+          {{ areaFavoriteLoading ? '저장 중...' : '이 지역 관심 등록' }}
         </button>
         <p v-if="areaFavoriteMessage" class="helper-text" style="font-size:0.78rem; margin-top:6px;">{{ areaFavoriteMessage }}</p>
         <p v-if="areaFavoriteErrorMessage" class="inline-error" style="font-size:0.78rem; margin-top:6px;">{{ areaFavoriteErrorMessage }}</p>
@@ -466,7 +629,7 @@ onBeforeUnmount(() => {
 
       <!-- Results list -->
       <div class="result-divider">
-        <span>검색 결과 {{ items.length }}건</span>
+        <span>검색 결과 {{ resultCountText }}</span>
       </div>
 
       <p class="helper-text" style="font-size:0.78rem; padding: 0 16px 8px;">{{ resultDescription }}</p>
@@ -481,15 +644,25 @@ onBeforeUnmount(() => {
           @focusin="selectedPropertyId = item.propertyId"
         >
           <RouterLink :to="`/properties/${item.propertyId}`" @click="selectedPropertyId = item.propertyId" class="map-result-link">
-            <span class="prop-type-badge">{{ propertyTypeLabel(item.propertyType) }}</span>
             <strong class="result-name">{{ item.name }}</strong>
             <span class="result-addr">{{ item.address }}</span>
             <span v-if="item.latestTransaction" class="result-price">
-              {{ transactionTypeLabel(item.latestTransaction.transactionType) }} · {{ formatKrw(item.latestTransaction.dealAmount) }}
+              {{ transactionTypeLabel(item.latestTransaction.transactionType) }} · {{ formatLatestTransactionAmount(item.latestTransaction) }}
             </span>
           </RouterLink>
         </li>
       </ul>
+
+      <button
+        v-if="hasMoreKeywordResults"
+        class="load-more-btn"
+        data-test="keyword-load-more"
+        type="button"
+        :disabled="keywordLoadingMore"
+        @click="loadMoreKeywordResults"
+      >
+        {{ keywordLoadingMore ? '더 불러오는 중...' : '검색 결과 더 보기' }}
+      </button>
 
       <EmptyState
         v-else-if="!loading"
@@ -575,31 +748,33 @@ onBeforeUnmount(() => {
 }
 .map-search-btn:hover { color: var(--cream); border-color: var(--border-strong); }
 
-/* Region chips */
-.region-chips {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+.autocomplete-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.2);
 }
 
-.region-chip {
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+.autocomplete-option {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--cream-muted);
-  font-size: 0.76rem;
-  font-weight: 500;
   cursor: pointer;
-  font-family: inherit;
-  transition: all 0.2s;
-  white-space: nowrap;
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
 }
-.region-chip:hover { color: var(--cream); border-color: var(--border-strong); }
-.region-chip.active { background: rgba(200,160,100,0.12); color: var(--gold); border-color: rgba(200,160,100,0.3); }
+.autocomplete-option:hover,
+.autocomplete-option.is-active {
+  background: rgba(200,160,100,0.1);
+  color: var(--cream);
+}
 
 /* Filter section */
 .filter-section {
@@ -708,20 +883,28 @@ onBeforeUnmount(() => {
 }
 .map-result-link:hover { color: var(--cream); }
 
-.prop-type-badge {
-  font-size: 0.68rem;
-  background: rgba(200,160,100,0.12);
-  color: var(--gold);
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-weight: 700;
-  display: inline-block;
-  margin-bottom: 2px;
-}
-
 .result-name { font-size: 0.9rem; font-weight: 700; color: var(--cream); }
 .result-addr { font-size: 0.78rem; color: var(--cream-muted); }
 .result-price { font-size: 0.82rem; color: var(--gold); font-weight: 600; }
+
+.load-more-btn {
+  margin: 0 14px 16px;
+  width: calc(100% - 28px);
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cream-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.load-more-btn:hover:not(:disabled) {
+  color: var(--gold);
+  border-color: rgba(200,160,100,0.3);
+}
+.load-more-btn:disabled { opacity: 0.55; }
 
 /* Map right */
 .map-right {
