@@ -1,6 +1,7 @@
 import csv
 import math
 import re
+import unicodedata
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ class GeoPoint:
     latitude: float
     longitude: float
     kind: str = ""
+    area_m2: float | None = None
 
 
 class LocalValuationDataRepository:
@@ -30,6 +32,7 @@ class LocalValuationDataRepository:
         self._kapt_records: list[dict[str, Any]] | None = None
         self._bus_points: list[GeoPoint] | None = None
         self._rail_points: list[GeoPoint] | None = None
+        self._park_points: list[GeoPoint] | None = None
         self._school_points: list[GeoPoint] | None = None
 
     def features_for(self, features: ApartmentFeatures, city_code: str) -> dict[str, Any]:
@@ -137,6 +140,13 @@ class LocalValuationDataRepository:
             row["subway_count_radius_bin"] = _count_bin(rail_summary["count"])
             row["log_nearest_subway_distance_m"] = math.log1p(rail_summary["nearest_m"])
 
+        park_summary = _nearest_summary(self._park_points_for_city(city_code), latitude, longitude)
+        if park_summary:
+            row["park_count_radius_bin"] = _count_bin(park_summary["count"])
+            row["log_nearest_park_distance_m"] = math.log1p(park_summary["nearest_m"])
+            row["log_park_area_total_m2_radius"] = math.log1p(park_summary["area_total_m2"])
+            row["park_exists"] = 1 if park_summary["count"] > 0 else 0
+
         school_points = self._school_location_points(city_code)
         school_summary = _nearest_summary(school_points, latitude, longitude)
         if school_summary:
@@ -194,19 +204,30 @@ class LocalValuationDataRepository:
         wanted_name = _normalize_name(features.propertyName)
         if not wanted_name:
             return None
+        wanted_variant = _normalize_name_variant(features.propertyName)
 
         best_record = None
         best_score = 0
         for record in records:
             if record.get("city_code") and record["city_code"] != city_code:
                 continue
+            norm_name = record.get("normalized_name", "")
             score = 0
-            if record.get("normalized_name") == wanted_name:
+            if norm_name == wanted_name:
                 score += 5
-            elif wanted_name in record.get("normalized_name", "") or record.get("normalized_name", "") in wanted_name:
+            elif wanted_name in norm_name or norm_name in wanted_name:
                 score += 3
             else:
-                continue
+                variant_name = record.get("normalized_name_variant", norm_name)
+                if variant_name and wanted_variant:
+                    if variant_name == wanted_variant:
+                        score += 4
+                    elif wanted_variant in variant_name or variant_name in wanted_variant:
+                        score += 2
+                    else:
+                        continue
+                else:
+                    continue
 
             if _same_text(record.get("district"), features.sigungu):
                 score += 2
@@ -228,7 +249,7 @@ class LocalValuationDataRepository:
         if self._complex_floor_records is not None:
             return self._complex_floor_records
 
-        path = self.data_dir / "seoul_busan_complex_floor_stats_201007_202606_merged.csv"
+        path = _resolve_data_path(self.data_dir, "seoul_busan_complex_floor_stats_201007_202606_merged.csv")
         rows = []
         for row in _read_csv_dicts(path):
             name = str(row.get("building_name") or "")
@@ -239,6 +260,7 @@ class LocalValuationDataRepository:
                     "legal_dong": _clean_text(row.get("legal_dong")),
                     "name": name,
                     "normalized_name": _normalize_name(name),
+                    "normalized_name_variant": _normalize_name_variant(name),
                     "estimated_max_floor": _integer(row.get("estimated_max_floor")),
                     "observation_count": _integer(row.get("observation_count")),
                 }
@@ -250,7 +272,7 @@ class LocalValuationDataRepository:
         if self._academy_records is not None:
             return self._academy_records
 
-        path = self.data_dir / "아파트단지인근학원교습소2604_csv.csv"
+        path = _resolve_data_path(self.data_dir, "아파트단지인근학원교습소2604_csv.csv")
         count_columns = (
             "SSIZE_INSTUT_CNT",
             "MSIZE_INSTUT_CNT",
@@ -277,6 +299,7 @@ class LocalValuationDataRepository:
                     "address": address,
                     "name": name,
                     "normalized_name": _normalize_name(name),
+                    "normalized_name_variant": _normalize_name_variant(name),
                     "building_count": _integer(row.get("DONG_CNT")),
                     "household_count": _integer(row.get("NMHSH")),
                     "academy_count": sum(_integer(row.get(column)) or 0 for column in count_columns),
@@ -289,7 +312,7 @@ class LocalValuationDataRepository:
         if self._kapt_records is not None:
             return self._kapt_records
 
-        path = self.data_dir / "20260605_단지_기본정보.xlsx"
+        path = _resolve_data_path(self.data_dir, "20260605_단지_기본정보.xlsx")
         records = []
         for row in _read_xlsx_dicts(path, required_headers=("시도", "시군구", "단지명")):
             name = str(row.get("단지명") or "")
@@ -302,6 +325,7 @@ class LocalValuationDataRepository:
                     "address": _clean_text(row.get("법정동주소")),
                     "name": name,
                     "normalized_name": _normalize_name(name),
+                    "normalized_name_variant": _normalize_name_variant(name),
                     "building_count": _integer(row.get("동수")),
                     "household_count": _integer(row.get("세대수")),
                     "total_parking_spaces": _integer(row.get("총주차대수")),
@@ -314,7 +338,7 @@ class LocalValuationDataRepository:
 
     def _bus_stop_points(self, city_code: str) -> list[GeoPoint]:
         if self._bus_points is None:
-            path = self.data_dir / "국토교통부_전국 버스정류장 위치정보_20251031.csv"
+            path = _resolve_data_path(self.data_dir, "국토교통부_전국 버스정류장 위치정보_20251031.csv")
             self._bus_points = [
                 point
                 for row in _read_csv_dicts(path)
@@ -324,7 +348,7 @@ class LocalValuationDataRepository:
 
     def _rail_station_points(self, city_code: str) -> list[GeoPoint]:
         if self._rail_points is None:
-            path = self.data_dir / "국가철도공단_철도역 정보_20250711.csv"
+            path = _resolve_data_path(self.data_dir, "국가철도공단_철도역 정보_20250711.csv")
             self._rail_points = [
                 point
                 for row in _read_csv_dicts(path)
@@ -332,9 +356,28 @@ class LocalValuationDataRepository:
             ]
         return _filter_city_points(self._rail_points, city_code)
 
+    def _park_points_for_city(self, city_code: str) -> list[GeoPoint]:
+        if self._park_points is None:
+            path = _resolve_data_path(self.data_dir, "전국도시공원정보표준데이터-20260609.xls")
+            self._park_points = [
+                point
+                for row in _read_xls_dicts(path, required_headers=("공원명", "위도", "경도"))
+                if (
+                    point := _point_from_row(
+                        row,
+                        "위도",
+                        "경도",
+                        kind=f"{row.get('소재지지번주소') or row.get('소재지도로명주소') or ''} {row.get('공원구분') or ''}",
+                        area_m2=_number(row.get("공원면적")),
+                    )
+                )
+                is not None
+            ]
+        return _filter_city_points(self._park_points, city_code)
+
     def _school_location_points(self, city_code: str) -> list[GeoPoint]:
         if self._school_points is None:
-            path = self.data_dir / "한국교육시설안전원_초중등학교위치_20260320.csv"
+            path = _resolve_data_path(self.data_dir, "한국교육시설안전원_초중등학교위치_20260320.csv")
             self._school_points = [
                 point
                 for row in _read_csv_dicts(path)
@@ -361,6 +404,58 @@ def _read_csv_dicts(path: Path, delimiter: str = ",") -> list[dict[str, Any]]:
         except UnicodeDecodeError:
             continue
     return []
+
+
+def _read_xls_dicts(path: Path, required_headers: tuple[str, ...]) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+
+    try:
+        import xlrd
+    except ImportError:
+        return _read_csv_dicts(path)
+
+    try:
+        workbook = xlrd.open_workbook(path)
+    except Exception:
+        return _read_csv_dicts(path)
+
+    for sheet in workbook.sheets():
+        rows = [
+            [_xls_cell_value(sheet.cell(row_index, column_index)) for column_index in range(sheet.ncols)]
+            for row_index in range(sheet.nrows)
+        ]
+        header_index = next(
+            (
+                index
+                for index, row in enumerate(rows)
+                if all(required_header in row for required_header in required_headers)
+            ),
+            None,
+        )
+        if header_index is None:
+            continue
+
+        headers = [str(header).strip() for header in rows[header_index]]
+        return [
+            {
+                headers[index]: value
+                for index, value in enumerate(row)
+                if index < len(headers) and headers[index]
+            }
+            for row in rows[header_index + 1 :]
+            if any(value not in ("", None) for value in row)
+        ]
+    return []
+
+
+def _xls_cell_value(cell: Any) -> str:
+    value = cell.value
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
 
 
 def _read_xlsx_dicts(path: Path, required_headers: tuple[str, ...]) -> list[dict[str, str]]:
@@ -449,6 +544,7 @@ def _nearest_summary(
 ) -> dict[str, float] | None:
     nearest = None
     count = 0
+    area_total_m2 = 0.0
     for point in points:
         if abs(point.latitude - latitude) > 0.02 or abs(point.longitude - longitude) > 0.02:
             continue
@@ -457,9 +553,11 @@ def _nearest_summary(
             nearest = distance
         if distance <= FACILITY_RADIUS_M:
             count += 1
+            if point.area_m2:
+                area_total_m2 += point.area_m2
     if nearest is None:
         return None
-    return {"nearest_m": nearest, "count": count}
+    return {"nearest_m": nearest, "count": count, "area_total_m2": area_total_m2}
 
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -476,12 +574,28 @@ def _point_from_row(
     latitude_key: str,
     longitude_key: str,
     kind: str = "",
+    area_m2: float | None = None,
 ) -> GeoPoint | None:
     latitude = _number(row.get(latitude_key))
     longitude = _number(row.get(longitude_key))
     if latitude is None or longitude is None:
         return None
-    return GeoPoint(latitude=latitude, longitude=longitude, kind=kind)
+    return GeoPoint(latitude=latitude, longitude=longitude, kind=kind, area_m2=area_m2)
+
+
+def _resolve_data_path(data_dir: Path, filename: str) -> Path:
+    path = data_dir / filename
+    if path.is_file():
+        return path
+
+    normalized_filename = unicodedata.normalize("NFC", filename)
+    if not data_dir.is_dir():
+        return path
+
+    for candidate in data_dir.iterdir():
+        if candidate.is_file() and unicodedata.normalize("NFC", candidate.name) == normalized_filename:
+            return candidate
+    return path
 
 
 def _filter_city_points(points: list[GeoPoint], city_code: str) -> list[GeoPoint]:
@@ -528,10 +642,30 @@ def _relative_floor_bin(relative_floor: float) -> str:
     return "relative_floor_100"
 
 
+_APT_SUFFIXES = ("아파트", "apt")
+_APT_BRAND_REPLACEMENTS = (
+    ("에스케이", "sk"),
+    ("지에스", "gs"),
+    ("엘에이치", "lh"),
+    ("이편한세상", "e편한세상"),
+)
+
+
 def _normalize_name(value: str | None) -> str:
     if not value:
         return ""
     return re.sub(r"[^0-9A-Za-z가-힣]", "", value).lower()
+
+
+def _normalize_name_variant(value: str | None) -> str:
+    """Normalized name with brand abbreviations unified and '아파트' suffix stripped."""
+    name = _normalize_name(value)
+    for old, new in _APT_BRAND_REPLACEMENTS:
+        name = name.replace(old, new)
+    for suffix in _APT_SUFFIXES:
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
 
 
 def _same_text(left: str | None, right: str | None) -> bool:

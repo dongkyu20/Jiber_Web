@@ -1,5 +1,6 @@
 import math
 import pickle
+import unicodedata
 from pathlib import Path
 
 import pytest
@@ -47,7 +48,7 @@ def test_repository_enriches_model_row_from_data_folder(tmp_path: Path) -> None:
 
     repository.predict(
         ApartmentFeatures(
-            sido="seoul",
+            sido=SEOUL,
             sigungu=JUNGRANG_GU,
             legalDong=SINNAE_DONG,
             propertyName=SINNAE_COMPLEX,
@@ -74,8 +75,12 @@ def test_repository_enriches_model_row_from_data_folder(tmp_path: Path) -> None:
     assert row["bus_stop_count_radius_bin"] == "count_1_2"
     assert row["school_count_radius_bin"] == "count_1_2"
     assert row["subway_count_radius_bin"] == "count_1_2"
+    assert row["park_count_radius_bin"] == "count_1_2"
     assert row["log_nearest_bus_stop_distance_m"] > 0
     assert row["log_nearest_elementary_school_distance_m"] > 0
+    assert row["log_nearest_park_distance_m"] > 0
+    assert row["log_park_area_total_m2_radius"] == pytest.approx(math.log1p(12_000))
+    assert row["park_exists"] == 1
     assert row["district_target_log_price_smooth"] == 20.4
     assert row["district_target_log_price_delta"] == pytest.approx(0.4)
     assert row["district_target_count_log1p"] == pytest.approx(math.log1p(400))
@@ -106,7 +111,7 @@ def _write_data_files(data_dir: Path) -> None:
         ),
         encoding="utf-8-sig",
     )
-    (data_dir / "\uc544\ud30c\ud2b8\ub2e8\uc9c0\uc778\uadfc\ud559\uc6d0\uad50\uc2b5\uc18c2604_csv.csv").write_text(
+    (data_dir / _nfd("\uc544\ud30c\ud2b8\ub2e8\uc9c0\uc778\uadfc\ud559\uc6d0\uad50\uc2b5\uc18c2604_csv.csv")).write_text(
         "\n".join(
             [
                 'HSMP_INNB|"PNU"|"RN_MNNMB"|"SIGNGU_CD"|"LNNO_ADRES"|"POTVALE_IFRA_HSMP_NM"|"HSMP_KIND_CD"|"DONG_CNT"|"NMHSH"|"USE_APRV_YMD"|"SSIZE_INSTUT_CNT"|"MSIZE_INSTUT_CNT"|"LGZ_INSTUT_CNT"|"GNRLZ_INSTUT_CNT"|"ETEX_INSTUT_CNT"|"FGGG_INSTUT_CNT"|"AAMAPE_INSTUT_CNT"|"READRM_CNT"|"INFO_INSTUT_CNT"|"SPCEDU_INSTUT_CNT"|"VCSK_INSTUT_CNT"|"ETC_INSTUT_CNT"',
@@ -115,7 +120,7 @@ def _write_data_files(data_dir: Path) -> None:
         ),
         encoding="utf-8-sig",
     )
-    (data_dir / "\uad6d\ud1a0\uad50\ud1b5\ubd80_\uc804\uad6d \ubc84\uc2a4\uc815\ub958\uc7a5 \uc704\uce58\uc815\ubcf4_20251031.csv").write_text(
+    (data_dir / _nfd("\uad6d\ud1a0\uad50\ud1b5\ubd80_\uc804\uad6d \ubc84\uc2a4\uc815\ub958\uc7a5 \uc704\uce58\uc815\ubcf4_20251031.csv")).write_text(
         "\n".join(
             [
                 "\uc815\ub958\uc7a5\uc544\uc774\ub514,\uc815\ub958\uc7a5\uba85,\uc704\ub3c4,\uacbd\ub3c4,\ub370\uc774\ud130\uae30\uc900\uc77c\uc790,\uc815\ub958\uc7a5\ubc88\ud638,\ub3c4\uc2dc\ucf54\ub4dc,\ub3c4\uc2dc\uba85,\uad00\ub9ac\ub3c4\uc2dc\uba85",
@@ -124,7 +129,7 @@ def _write_data_files(data_dir: Path) -> None:
         ),
         encoding="utf-8-sig",
     )
-    (data_dir / "\uad6d\uac00\ucca0\ub3c4\uacf5\ub2e8_\ucca0\ub3c4\uc5ed \uc815\ubcf4_20250711.csv").write_text(
+    (data_dir / _nfd("\uad6d\uac00\ucca0\ub3c4\uacf5\ub2e8_\ucca0\ub3c4\uc5ed \uc815\ubcf4_20250711.csv")).write_text(
         "\n".join(
             [
                 "\uc8fc\uc18c,\uc704\ub3c4\uc88c\ud45c,\uc5ed\ub4f1\uae09,\uad00\ub828\ub178\uc120,\uc5f4\ucc28\uc815\ucc28\ud69f\uc218,\uc5ed\uc774\ub984,\uc18c\uc18d\uc9c0\uc0ac,\uc5ed\uc5f0\ud601,\uacbd\ub3c4\uc88c\ud45c",
@@ -133,7 +138,16 @@ def _write_data_files(data_dir: Path) -> None:
         ),
         encoding="utf-8-sig",
     )
-    (data_dir / "\ud55c\uad6d\uad50\uc721\uc2dc\uc124\uc548\uc804\uc6d0_\ucd08\uc911\ub4f1\ud559\uad50\uc704\uce58_20260320.csv").write_text(
+    (data_dir / _nfd("\uc804\uad6d\ub3c4\uc2dc\uacf5\uc6d0\uc815\ubcf4\ud45c\uc900\ub370\uc774\ud130-20260609.xls")).write_text(
+        "\n".join(
+            [
+                "\uad00\ub9ac\ubc88\ud638,\uacf5\uc6d0\uba85,\uacf5\uc6d0\uad6c\ubd84,\uc18c\uc7ac\uc9c0\uc9c0\ubc88\uc8fc\uc18c,\uc18c\uc7ac\uc9c0\ub3c4\ub85c\uba85\uc8fc\uc18c,\uacf5\uc6d0\uba74\uc801,\uc704\ub3c4,\uacbd\ub3c4,\ub370\uc774\ud130\uae30\uc900\uc77c\uc790",
+                f"P1,\uc2e0\ub0b4\uadfc\ub9b0\uacf5\uc6d0,\uadfc\ub9b0\uacf5\uc6d0,{SEOUL} {JUNGRANG_GU} {SINNAE_DONG},,12000,37.6155,127.1105,2026-06-09",
+            ]
+        ),
+        encoding="utf-8-sig",
+    )
+    (data_dir / _nfd("\ud55c\uad6d\uad50\uc721\uc2dc\uc124\uc548\uc804\uc6d0_\ucd08\uc911\ub4f1\ud559\uad50\uc704\uce58_20260320.csv")).write_text(
         "\n".join(
             [
                 "\ud559\uad50ID,\ud559\uad50\uba85,\ud559\uad50\uae09\uad6c\ubd84,\uc124\ub9bd\uc77c\uc790,\uc124\ub9bd\ud615\ud0dc,\ubcf8\uad50\ubd84\uad50\uad6c\ubd84,\uc6b4\uc601\uc0c1\ud0dc,\uc18c\uc7ac\uc9c0\uc9c0\ubc88\uc8fc\uc18c,\uc18c\uc7ac\uc9c0\ub3c4\ub85c\uba85\uc8fc\uc18c,\uc2dc\ub3c4\uad50\uc721\uccad\ucf54\ub4dc,\uc2dc\ub3c4\uad50\uc721\uccad\uba85,\uad50\uc721\uc9c0\uc6d0\uccad\ucf54\ub4dc,\uad50\uc721\uc9c0\uc6d0\uccad\uba85,\uc0dd\uc131\uc77c\uc790,\ubcc0\uacbd\uc77c\uc790,\uc704\ub3c4,\uacbd\ub3c4,\ub370\uc774\ud130\uae30\uc900\uc77c\uc790",
@@ -142,3 +156,7 @@ def _write_data_files(data_dir: Path) -> None:
         ),
         encoding="utf-8-sig",
     )
+
+
+def _nfd(value: str) -> str:
+    return unicodedata.normalize("NFD", value)
