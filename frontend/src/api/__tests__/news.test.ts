@@ -13,7 +13,7 @@ describe('newsApi', () => {
       data: {
         available: true,
         keyword: '부동산',
-        message: '네이버 뉴스 검색 결과입니다.',
+        message: 'Google 뉴스 RSS 검색 결과입니다.',
         items: []
       }
     })

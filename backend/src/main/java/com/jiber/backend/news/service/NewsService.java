@@ -2,10 +2,9 @@ package com.jiber.backend.news.service;
 
 import com.jiber.backend.common.error.ApiException;
 import com.jiber.backend.common.error.ErrorCode;
-import com.jiber.backend.news.client.NaverNewsApiItem;
-import com.jiber.backend.news.client.NaverNewsClient;
-import com.jiber.backend.news.client.NaverNewsClientException;
-import com.jiber.backend.news.config.NaverNewsProperties;
+import com.jiber.backend.news.client.GoogleNewsRssClient;
+import com.jiber.backend.news.client.GoogleNewsRssClientException;
+import com.jiber.backend.news.client.GoogleNewsRssItem;
 import com.jiber.backend.news.dto.NewsFeedItemResponse;
 import com.jiber.backend.news.dto.NewsFeedResponse;
 import com.jiber.backend.news.dto.NewsSearchRequest;
@@ -14,7 +13,6 @@ import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.HtmlUtils;
@@ -22,59 +20,42 @@ import org.springframework.web.util.HtmlUtils;
 @Service
 public class NewsService {
 
-    private static final String LATEST_SORT = "date";
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
 
-    private final NaverNewsClient naverNewsClient;
-    private final NaverNewsProperties properties;
+    private final GoogleNewsRssClient googleNewsRssClient;
 
-    public NewsService(NaverNewsClient naverNewsClient, NaverNewsProperties properties) {
-        this.naverNewsClient = naverNewsClient;
-        this.properties = properties;
+    public NewsService(GoogleNewsRssClient googleNewsRssClient) {
+        this.googleNewsRssClient = googleNewsRssClient;
     }
 
     public NewsFeedResponse search(NewsSearchRequest request) {
         var keyword = request.effectiveQuery();
         var display = request.effectiveDisplay();
-        if (!properties.hasCredentials()) {
-            return new NewsFeedResponse(
-                    false,
-                    keyword,
-                    "네이버 뉴스 검색 API 키가 설정되지 않아 최신 뉴스를 불러올 수 없습니다.",
-                    List.of()
-            );
-        }
 
         try {
-            var response = naverNewsClient.search(keyword, display, LATEST_SORT);
-            var items = response.safeItems().stream()
+            var items = googleNewsRssClient.search(buildRealEstateQuery(keyword)).stream()
                     .map(this::toFeedItem)
+                    .limit(display)
                     .toList();
-            return new NewsFeedResponse(true, keyword, "네이버 뉴스 검색 결과입니다.", items);
-        } catch (NaverNewsClientException exception) {
-            if (exception.isCredentialError()) {
-                var message = exception.hasEmptyScopeError()
-                        ? "네이버 개발자센터 앱 설정에서 검색 API 권한을 추가해 주세요. 네이버 로그인 권한만으로는 뉴스 검색 API를 사용할 수 없습니다."
-                        : "네이버 뉴스 검색 API 키가 유효하지 않거나 검색 API 권한이 없습니다.";
-                return new NewsFeedResponse(
-                        false,
-                        keyword,
-                        message,
-                        List.of()
-                );
-            }
+            return new NewsFeedResponse(true, keyword, "Google 뉴스 RSS 검색 결과입니다.", items);
+        } catch (GoogleNewsRssClientException exception) {
             throw new ApiException(ErrorCode.NEWS_SEARCH_UNAVAILABLE);
         }
     }
 
-    private NewsFeedItemResponse toFeedItem(NaverNewsApiItem item) {
+    private String buildRealEstateQuery(String keyword) {
+        return keyword.contains("부동산") ? keyword : "%s 부동산".formatted(keyword);
+    }
+
+    private NewsFeedItemResponse toFeedItem(GoogleNewsRssItem item) {
+        var source = cleanText(item.source());
         return new NewsFeedItemResponse(
                 cleanText(item.title()),
                 cleanText(item.description()),
                 item.link(),
-                item.originallink(),
+                item.link(),
                 parsePublishedAt(item.pubDate()),
-                extractSource(item.originallink(), item.link())
+                source.isBlank() ? extractSource(item.link()) : source
         );
     }
 
@@ -99,8 +80,7 @@ public class NewsService {
         }
     }
 
-    private String extractSource(String originalLink, String fallbackLink) {
-        var link = originalLink == null || originalLink.isBlank() ? fallbackLink : originalLink;
+    private String extractSource(String link) {
         if (link == null || link.isBlank()) {
             return "뉴스";
         }

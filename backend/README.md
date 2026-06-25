@@ -99,8 +99,10 @@ Schema preflight가 통과한 뒤 smoke 순서:
 - `DB_ROOT_PASSWORD`
 - `PUBLIC_DATA_SERVICE_KEY`
 - `KAKAO_REST_API_KEY`
-- `NAVER_SEARCH_CLIENT_ID`
-- `NAVER_SEARCH_CLIENT_SECRET`
+- `GOOGLE_NEWS_RSS_BASE_URL`
+- `GOOGLE_NEWS_RSS_HL`
+- `GOOGLE_NEWS_RSS_GL`
+- `GOOGLE_NEWS_RSS_CEID`
 - `PUBLIC_DATA_IMPORT_MONTHS`
 - `PUBLIC_DATA_TARGET_REGIONS`
 - `PUBLIC_DATA_IMPORT_ENABLED`
@@ -133,9 +135,9 @@ Schema preflight가 통과한 뒤 smoke 순서:
 - `MODEL_BASELINE_DATE`
 - `MODEL_FEATURE_SET_VERSION`
 
-### Naver News Search Setup
+### Google News RSS Setup
 
-`GET /api/v1/news`는 네이버 뉴스 검색 API를 호출합니다. `NAVER_SEARCH_CLIENT_ID`, `NAVER_SEARCH_CLIENT_SECRET`이 비어 있으면 backend는 `OAUTH_NAVER_CLIENT_ID`, `OAUTH_NAVER_CLIENT_SECRET`을 fallback으로 사용합니다. 단, 같은 네이버 개발자센터 앱에 검색 API 권한이 추가되어 있어야 합니다. 네이버 로그인만 활성화된 앱은 OAuth 로그인은 성공해도 뉴스 검색 API에서 `errorCode=024`, `Scopes are Empty`로 거절될 수 있습니다.
+`GET /api/v1/news`는 Google News RSS를 호출합니다. API key는 필요하지 않으며 기본 설정은 한국어/한국 지역 RSS입니다. Google News RSS는 공개 RSS endpoint라 공식 SLA가 없고, endpoint 형식이 바뀌면 `GOOGLE_NEWS_RSS_BASE_URL`, `GOOGLE_NEWS_RSS_HL`, `GOOGLE_NEWS_RSS_GL`, `GOOGLE_NEWS_RSS_CEID`로 조정합니다.
 
 ## Phase 1 Skeleton Scope
 

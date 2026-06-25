@@ -59,11 +59,11 @@ onMounted(() => {
 <template>
   <section class="news-heading">
     <div>
-      <p class="eyebrow">NAVER NEWS</p>
+      <p class="eyebrow">GOOGLE NEWS RSS</p>
       <h1>최신 부동산 뉴스</h1>
-      <p>네이버 뉴스 검색 결과를 최신순으로 모아 보여드립니다.</p>
+      <p>Google 뉴스 RSS 검색 결과를 최신순으로 모아 보여드립니다.</p>
     </div>
-    <span class="news-source">네이버 뉴스</span>
+    <span class="news-source">Google 뉴스 RSS</span>
   </section>
 
   <form class="news-search" @submit.prevent="fetchNews()">
@@ -110,9 +110,9 @@ onMounted(() => {
   <div v-else-if="hasItems" class="news-feed">
     <a
       v-for="item in items"
-      :key="`${item.naverLink}-${item.publishedAt}`"
+      :key="`${item.link}-${item.publishedAt}`"
       class="news-card"
-      :href="item.naverLink"
+      :href="item.link"
       target="_blank"
       rel="noopener noreferrer"
     >
@@ -122,7 +122,7 @@ onMounted(() => {
       </div>
       <h2>{{ item.title }}</h2>
       <p>{{ item.summary }}</p>
-      <span class="news-link-label">네이버 뉴스에서 보기</span>
+      <span class="news-link-label">뉴스 원문 보기</span>
     </a>
   </div>
 

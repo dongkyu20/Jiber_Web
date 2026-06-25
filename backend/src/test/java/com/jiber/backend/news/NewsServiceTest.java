@@ -1,16 +1,16 @@
 package com.jiber.backend.news;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.jiber.backend.news.client.NaverNewsApiItem;
-import com.jiber.backend.news.client.NaverNewsApiResponse;
-import com.jiber.backend.news.client.NaverNewsClient;
-import com.jiber.backend.news.client.NaverNewsClientException;
-import com.jiber.backend.news.config.NaverNewsProperties;
+import com.jiber.backend.common.error.ApiException;
+import com.jiber.backend.common.error.ErrorCode;
+import com.jiber.backend.news.client.GoogleNewsRssClient;
+import com.jiber.backend.news.client.GoogleNewsRssClientException;
+import com.jiber.backend.news.client.GoogleNewsRssItem;
 import com.jiber.backend.news.dto.NewsSearchRequest;
 import com.jiber.backend.news.service.NewsService;
 import java.util.List;
@@ -19,78 +19,85 @@ import org.junit.jupiter.api.Test;
 
 class NewsServiceTest {
 
-    private NaverNewsClient naverNewsClient;
+    private GoogleNewsRssClient googleNewsRssClient;
     private NewsService newsService;
 
     @BeforeEach
     void setUp() {
-        naverNewsClient = mock(NaverNewsClient.class);
-        newsService = new NewsService(
-                naverNewsClient,
-                new NaverNewsProperties("client-id", "client-secret", null, null, "https://openapi.naver.com")
-        );
+        googleNewsRssClient = mock(GoogleNewsRssClient.class);
+        newsService = new NewsService(googleNewsRssClient);
     }
 
     @Test
     void searchUsesDefaultRealEstateKeywordAndReturnsSanitizedLatestFeedItems() {
-        when(naverNewsClient.search("부동산", 20, "date"))
-                .thenReturn(new NaverNewsApiResponse(
-                        "Tue, 25 Jun 2026 09:00:00 +0900",
-                        1,
-                        1,
-                        20,
-                        List.of(new NaverNewsApiItem(
-                                "서울 <b>부동산</b> 거래 &quot;회복&quot;",
-                                "https://news.naver.com/article/001/0000000001",
-                                "https://example.com/economy/real-estate",
-                                "서울 아파트 거래량이 <b>증가</b>했습니다.",
-                                "Tue, 25 Jun 2026 08:30:00 +0900"
-                        ))
-                ));
+        when(googleNewsRssClient.search("부동산"))
+                .thenReturn(List.of(new GoogleNewsRssItem(
+                        "서울 <b>부동산</b> 거래 &quot;회복&quot;",
+                        "https://news.google.com/rss/articles/example",
+                        "서울 아파트 거래량이 <b>증가</b>했습니다.",
+                        "Tue, 25 Jun 2026 08:30:00 +0900",
+                        "Example News"
+                )));
 
         var response = newsService.search(new NewsSearchRequest(null, null));
 
         assertThat(response.available()).isTrue();
         assertThat(response.keyword()).isEqualTo("부동산");
+        assertThat(response.message()).isEqualTo("Google 뉴스 RSS 검색 결과입니다.");
         assertThat(response.items()).hasSize(1);
         assertThat(response.items().get(0).title()).isEqualTo("서울 부동산 거래 \"회복\"");
         assertThat(response.items().get(0).summary()).isEqualTo("서울 아파트 거래량이 증가했습니다.");
-        assertThat(response.items().get(0).naverLink()).isEqualTo("https://news.naver.com/article/001/0000000001");
-        assertThat(response.items().get(0).source()).isEqualTo("example.com");
-        verify(naverNewsClient).search("부동산", 20, "date");
+        assertThat(response.items().get(0).link()).isEqualTo("https://news.google.com/rss/articles/example");
+        assertThat(response.items().get(0).source()).isEqualTo("Example News");
+        verify(googleNewsRssClient).search("부동산");
     }
 
     @Test
-    void searchDoesNotCallNaverWhenCredentialsAreMissing() {
-        var serviceWithoutCredentials = new NewsService(
-                naverNewsClient,
-                new NaverNewsProperties("", "", null, null, "https://openapi.naver.com")
-        );
+    void searchAddsRealEstateContextForUserEnteredKeywords() {
+        when(googleNewsRssClient.search("재건축 부동산"))
+                .thenReturn(List.of());
 
-        var response = serviceWithoutCredentials.search(new NewsSearchRequest("아파트", 10));
+        var response = newsService.search(new NewsSearchRequest("재건축", 10));
 
-        assertThat(response.available()).isFalse();
-        assertThat(response.keyword()).isEqualTo("아파트");
+        assertThat(response.available()).isTrue();
+        assertThat(response.keyword()).isEqualTo("재건축");
         assertThat(response.items()).isEmpty();
-        assertThat(response.message()).contains("네이버 뉴스 검색 API 키");
-        verify(naverNewsClient, never()).search("아파트", 10, "date");
+        verify(googleNewsRssClient).search("재건축 부동산");
     }
 
     @Test
-    void searchReturnsUnavailableMessageWhenNaverRejectsCredentials() {
-        when(naverNewsClient.search("부동산", 20, "date"))
-                .thenThrow(new NaverNewsClientException(
-                        "Naver rejected credentials.",
-                        401,
-                        "{\"errorMessage\":\"Scopes are Empty : Authentication failed.\",\"errorCode\":\"024\"}",
-                        null
+    void searchDoesNotDuplicateRealEstateContextWhenKeywordAlreadyContainsIt() {
+        when(googleNewsRssClient.search("서울 부동산"))
+                .thenReturn(List.of());
+
+        newsService.search(new NewsSearchRequest("서울 부동산", 10));
+
+        verify(googleNewsRssClient).search("서울 부동산");
+    }
+
+    @Test
+    void searchLimitsFeedItemsByRequestedDisplaySize() {
+        when(googleNewsRssClient.search("부동산"))
+                .thenReturn(List.of(
+                        new GoogleNewsRssItem("첫 기사", "https://example.com/1", "요약", null, ""),
+                        new GoogleNewsRssItem("둘째 기사", "https://example.com/2", "요약", null, "")
                 ));
 
-        var response = newsService.search(new NewsSearchRequest("부동산", 20));
+        var response = newsService.search(new NewsSearchRequest("부동산", 1));
 
-        assertThat(response.available()).isFalse();
-        assertThat(response.items()).isEmpty();
-        assertThat(response.message()).contains("네이버 개발자센터");
-        assertThat(response.message()).contains("검색 API");
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().get(0).title()).isEqualTo("첫 기사");
+        assertThat(response.items().get(0).source()).isEqualTo("example.com");
+    }
+
+    @Test
+    void searchMapsGoogleRssFailuresToNewsSearchUnavailable() {
+        when(googleNewsRssClient.search("부동산"))
+                .thenThrow(new GoogleNewsRssClientException("RSS failed.", null));
+
+        assertThatThrownBy(() -> newsService.search(new NewsSearchRequest("부동산", 20)))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.NEWS_SEARCH_UNAVAILABLE);
     }
 }
