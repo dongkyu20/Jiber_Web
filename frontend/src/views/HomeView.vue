@@ -93,7 +93,7 @@ const filteredListings = computed(() =>
               <div class="search-sep" />
               <div class="search-field">
                 <label>유형</label>
-                <span>아파트 중심</span>
+                <span>아파트, 빌라, 오피스텔</span>
               </div>
               <div class="search-sep" />
               <div class="search-field">
@@ -112,7 +112,6 @@ const filteredListings = computed(() =>
               <h3 class="badge-name">AI 적정가 · SHAP 설명</h3>
               <p class="badge-desc">최근 실거래 조건 기반 가격예측과 요인 분석</p>
               <div class="badge-row">
-                <span class="badge-price">아파트 지원</span>
                 <RouterLink to="/map" class="badge-link">지도에서 보기 →</RouterLink>
               </div>
             </div>

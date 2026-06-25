@@ -727,8 +727,12 @@ onMounted(fetchProperty)
       />
     </article>
     <article class="info-panel">
-      <h2>SHAP 요인 차트</h2>
-      <ShapChart :values="shapValues" />
+      <h2>가격 요인 차트</h2>
+      <ShapChart
+        :values="shapValues"
+        aria-label="가격 요인 차트"
+        empty-title="아직 표시할 가격 요인이 없습니다."
+      />
     </article>
   </section>
 

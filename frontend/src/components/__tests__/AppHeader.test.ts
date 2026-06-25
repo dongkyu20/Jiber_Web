@@ -14,6 +14,7 @@ function createTestRouter() {
       { path: '/', component: { template: '<main />' } },
       { path: '/map', component: { template: '<main />' } },
       { path: '/new-analysis', component: { template: '<main />' } },
+      { path: '/chat', component: { template: '<main />' } },
       { path: '/community', component: { template: '<main />' } },
       { path: '/news', component: { template: '<main />' } },
       { path: '/favorites', component: { template: '<main />' } },
@@ -75,6 +76,7 @@ describe('AppHeader', () => {
 
     expect(wrapper.text()).toContain('Test User')
     expect(wrapper.find('a[href="/mypage"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/chat"]').exists()).toBe(true)
     expect(buttons).toHaveLength(1)
     expect(wrapper.find('.user-avatar').exists()).toBe(true)
   })

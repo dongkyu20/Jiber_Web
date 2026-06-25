@@ -29,6 +29,7 @@ async function logout() {
     <nav class="main-nav" aria-label="주요 메뉴">
       <RouterLink to="/map">지도 검색</RouterLink>
       <RouterLink to="/new-analysis">신규매물 분석</RouterLink>
+      <RouterLink to="/chat">AI 챗봇</RouterLink>
       <RouterLink to="/community">커뮤니티</RouterLink>
       <RouterLink to="/news">뉴스</RouterLink>
       <RouterLink to="/favorites">관심목록</RouterLink>

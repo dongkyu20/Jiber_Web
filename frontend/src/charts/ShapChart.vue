@@ -11,9 +11,17 @@ import { formatKrw } from '@/utils/format'
 
 echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer])
 
-const props = defineProps<{
-  values: ShapValue[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    values: ShapValue[]
+    ariaLabel?: string
+    emptyTitle?: string
+  }>(),
+  {
+    ariaLabel: 'SHAP 요인 차트',
+    emptyTitle: '아직 표시할 SHAP 요인이 없습니다.'
+  }
+)
 
 const chartEl = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
@@ -75,10 +83,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="hasData" ref="chartEl" class="chart-box" role="img" aria-label="SHAP 요인 차트"></div>
+  <div v-if="hasData" ref="chartEl" class="chart-box" role="img" :aria-label="ariaLabel"></div>
   <EmptyState
     v-else
-    title="아직 표시할 SHAP 요인이 없습니다."
+    :title="emptyTitle"
     description="아파트 조건 분석을 실행하면 주요 영향 요인을 차트로 보여드립니다."
   />
 </template>
