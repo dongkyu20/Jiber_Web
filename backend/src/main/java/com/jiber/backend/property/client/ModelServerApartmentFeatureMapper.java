@@ -11,8 +11,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class ModelServerApartmentFeatureMapper {
 
-    private static final BigDecimal DEFAULT_DISTANCE_TO_STATION_M = new BigDecimal("420");
-
     public ModelServerApartmentInferenceRequest toInternalRequest(PropertyDetailRow property, ValuationRequest request) {
         return toInternalRequest(property, request.exclusiveAreaM2(), request.floor(), request.asOfDate());
     }
@@ -35,7 +33,7 @@ public class ModelServerApartmentFeatureMapper {
                 request.builtYear(),
                 request.asOfDate().getYear(),
                 request.asOfDate().getMonthValue(),
-                request.distanceToStationM() == null ? DEFAULT_DISTANCE_TO_STATION_M : request.distanceToStationM()
+                request.distanceToStationM()
         );
         return new ModelServerApartmentInferenceRequest(0L, request.asOfDate().toString(), features);
     }
@@ -59,7 +57,7 @@ public class ModelServerApartmentFeatureMapper {
                 property.getBuiltYear(),
                 asOfDate.getYear(),
                 asOfDate.getMonthValue(),
-                DEFAULT_DISTANCE_TO_STATION_M
+                null
         );
         return new ModelServerApartmentInferenceRequest(property.getPropertyId(), asOfDate.toString(), features);
     }

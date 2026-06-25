@@ -1,6 +1,7 @@
 import math
 import pickle
 import unicodedata
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -81,12 +82,28 @@ def test_repository_enriches_model_row_from_data_folder(tmp_path: Path) -> None:
     assert row["log_nearest_park_distance_m"] > 0
     assert row["log_park_area_total_m2_radius"] == pytest.approx(math.log1p(12_000))
     assert row["park_exists"] == 1
+    assert row["log_car_intercity_bus_terminal_minutes"] == pytest.approx(math.log1p(12.5))
+    assert row["log_car_airport_minutes"] == pytest.approx(math.log1p(45.0))
+    assert row["log_car_rail_station_minutes"] == pytest.approx(math.log1p(18.0))
+    assert row["log_car_general_hospital_minutes"] == pytest.approx(math.log1p(9.0))
+    assert row["log_transit_intercity_bus_terminal_minutes"] == pytest.approx(math.log1p(25.0))
+    assert row["log_transit_airport_minutes"] == pytest.approx(math.log1p(60.0))
+    assert row["log_transit_rail_station_minutes"] == pytest.approx(math.log1p(30.0))
+    assert row["log_transit_general_hospital_minutes"] == pytest.approx(math.log1p(15.0))
+    assert row["log_nearest_hospital_distance_m"] > 0
+    assert row["log_nearest_pharmacy_distance_m"] > 0
     assert row["district_target_log_price_smooth"] == 20.4
     assert row["district_target_log_price_delta"] == pytest.approx(0.4)
     assert row["district_target_count_log1p"] == pytest.approx(math.log1p(400))
     assert row["legal_dong_target_log_price_smooth"] == 20.7
     assert row["legal_dong_target_log_price_delta"] == pytest.approx(0.7)
     assert row["legal_dong_target_count_log1p"] == pytest.approx(math.log1p(80))
+
+
+def test_repository_uses_aggressive_kapt_matching_in_service_path(tmp_path: Path) -> None:
+    repository = ValuationModelRepository(tmp_path / "artifacts", data_dir=tmp_path / "data")
+
+    assert repository.data_repository.accept_remaining_matches is True
 
 
 def _write_artifact(root: Path, model: FakePredictModel) -> None:
@@ -138,6 +155,15 @@ def _write_data_files(data_dir: Path) -> None:
         ),
         encoding="utf-8-sig",
     )
+    (data_dir / "subway_station_locations.csv").write_text(
+        "\n".join(
+            [
+                "city_code,station_name,line_name,latitude,longitude",
+                "seoul,\uc2e0\ub0b4\uc5ed,\uacbd\ucd98\uc120,37.6154,127.1104",
+            ]
+        ),
+        encoding="utf-8-sig",
+    )
     (data_dir / _nfd("\uc804\uad6d\ub3c4\uc2dc\uacf5\uc6d0\uc815\ubcf4\ud45c\uc900\ub370\uc774\ud130-20260609.xls")).write_text(
         "\n".join(
             [
@@ -156,7 +182,161 @@ def _write_data_files(data_dir: Path) -> None:
         ),
         encoding="utf-8-sig",
     )
+    _write_access_time_xlsx(data_dir / _nfd("01_\ud3c9\uade0\uc811\uadfc\uc2dc\uac04_2023.xlsx"))
+    (data_dir / "\uac74\uac15_\ubcd1\uc6d0_\uc11c\uc6b8\ud2b9\ubcc4\uc2dc.csv").write_text(
+        "\n".join(
+            [
+                "\uad00\ub9ac\ubc88\ud638,\uc0ac\uc5c5\uc7a5\uba85,\uc601\uc5c5\uc0c1\ud0dc\uba85,\uc0c1\uc138\uc601\uc5c5\uc0c1\ud0dc\uba85,\ub3c4\ub85c\uba85\uc8fc\uc18c,\uc88c\ud45c\uc815\ubcf4(X),\uc88c\ud45c\uc815\ubcf4(Y)",
+                f"H1,\uc2e0\ub0b4\ubcd1\uc6d0,\uc601\uc5c5/\uc815\uc0c1,\uc601\uc5c5\uc911,{SEOUL} {JUNGRANG_GU} {SINNAE_DONG},127.1107,37.6157",
+            ]
+        ),
+        encoding="cp949",
+    )
+    (data_dir / "\uac74\uac15_\uc758\uc6d0_\uc11c\uc6b8\ud2b9\ubcc4\uc2dc.csv").write_text(
+        "\n".join(
+            [
+                "\uad00\ub9ac\ubc88\ud638,\uc0ac\uc5c5\uc7a5\uba85,\uc601\uc5c5\uc0c1\ud0dc\uba85,\uc0c1\uc138\uc601\uc5c5\uc0c1\ud0dc\uba85,\ub3c4\ub85c\uba85\uc8fc\uc18c,\uc88c\ud45c\uc815\ubcf4(X),\uc88c\ud45c\uc815\ubcf4(Y)",
+                f"C1,\uc2e0\ub0b4\uc758\uc6d0,\ud3d0\uc5c5,\ud3d0\uc5c5,{SEOUL} {JUNGRANG_GU} {SINNAE_DONG},127.1101,37.6151",
+            ]
+        ),
+        encoding="cp949",
+    )
+    (data_dir / "\uac74\uac15_\uc57d\uad6d_\uc11c\uc6b8\ud2b9\ubcc4\uc2dc.csv").write_text(
+        "\n".join(
+            [
+                "\uad00\ub9ac\ubc88\ud638,\uc0ac\uc5c5\uc7a5\uba85,\uc601\uc5c5\uc0c1\ud0dc\uba85,\uc0c1\uc138\uc601\uc5c5\uc0c1\ud0dc\uba85,\ub3c4\ub85c\uba85\uc8fc\uc18c,\uc88c\ud45c\uc815\ubcf4(X),\uc88c\ud45c\uc815\ubcf4(Y)",
+                f"P1,\uc2e0\ub0b4\uc57d\uad6d,\uc601\uc5c5/\uc815\uc0c1,\uc601\uc5c5\uc911,{SEOUL} {JUNGRANG_GU} {SINNAE_DONG},127.1108,37.6158",
+            ]
+        ),
+        encoding="cp949",
+    )
 
 
 def _nfd(value: str) -> str:
     return unicodedata.normalize("NFD", value)
+
+
+def _write_access_time_xlsx(path: Path) -> None:
+    headers = [
+        "Year",
+        "HDCD",
+        "Region",
+        "HDCD_Lev",
+        "Faci_CD",
+        "Time_Zone",
+        "Mode",
+        "HDCD_SD_NM",
+        "HDCD_SGG_NM",
+        "HDCD_EMD_NM",
+        "Region_NM",
+        "Faci_CA",
+        "Faci_NM",
+        "Time_Zone_NM",
+        "Mode_NM",
+        "\ud3c9\uade0\uc811\uadfc\uc2dc\uac04(\ubd84)",
+    ]
+    metric_rows = [
+        ("\ubc84\uc2a4\ud130\ubbf8\ub110", "\uc2b9\uc6a9\ucc28", 12.5),
+        ("\uacf5\ud56d", "\uc2b9\uc6a9\ucc28", 45.0),
+        ("\ucca0\ub3c4\uc5ed", "\uc2b9\uc6a9\ucc28", 18.0),
+        ("\uc885\ud569\ubcd1\uc6d0", "\uc2b9\uc6a9\ucc28", 9.0),
+        ("\ubc84\uc2a4\ud130\ubbf8\ub110", "\ub300\uc911\uad50\ud1b5/\ub3c4\ubcf4", 25.0),
+        ("\uacf5\ud56d", "\ub300\uc911\uad50\ud1b5/\ub3c4\ubcf4", 60.0),
+        ("\ucca0\ub3c4\uc5ed", "\ub300\uc911\uad50\ud1b5/\ub3c4\ubcf4", 30.0),
+        ("\uc885\ud569\ubcd1\uc6d0", "\ub300\uc911\uad50\ud1b5/\ub3c4\ubcf4", 15.0),
+    ]
+    rows = [
+        ["2023\ub144 \uae30\uc900 \uad50\ud1b5\uc811\uadfc\uc131\uc9c0\ud45c"],
+        [],
+        [],
+        [],
+        headers,
+    ]
+    for facility, mode, minutes in metric_rows:
+        rows.append(
+            [
+                2023,
+                "11260106",
+                "11260106",
+                4,
+                "99",
+                "0_AllDay",
+                "1",
+                SEOUL,
+                JUNGRANG_GU,
+                SINNAE_DONG,
+                SINNAE_DONG,
+                "\ud14c\uc2a4\ud2b8",
+                facility,
+                "\uc77c\ud3c9\uade0(06-20\uc2dc)",
+                mode,
+                minutes,
+            ]
+        )
+    sheet_xml = _sheet_xml(rows)
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>""",
+        )
+        archive.writestr(
+            "_rels/.rels",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>""",
+        )
+        archive.writestr(
+            "xl/workbook.xml",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="\ud3c9\uade0\uc811\uadfc\uc2dc\uac04" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>""",
+        )
+        archive.writestr(
+            "xl/_rels/workbook.xml.rels",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>""",
+        )
+        archive.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+
+
+def _sheet_xml(rows: list[list[object]]) -> str:
+    row_xml = []
+    for row_index, row in enumerate(rows, start=1):
+        cell_xml = []
+        for column_index, value in enumerate(row, start=1):
+            if value is None or value == "":
+                continue
+            ref = f"{_column_name(column_index)}{row_index}"
+            if isinstance(value, (int, float)):
+                cell_xml.append(f'<c r="{ref}"><v>{value}</v></c>')
+            else:
+                escaped = str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                cell_xml.append(f'<c r="{ref}" t="inlineStr"><is><t>{escaped}</t></is></c>')
+        row_xml.append(f'<row r="{row_index}">{"".join(cell_xml)}</row>')
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f'<sheetData>{"".join(row_xml)}</sheetData>'
+        '</worksheet>'
+    )
+
+
+def _column_name(index: int) -> str:
+    letters = ""
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        letters = chr(65 + remainder) + letters
+    return letters

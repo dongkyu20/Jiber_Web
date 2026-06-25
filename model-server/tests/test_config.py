@@ -1,6 +1,19 @@
 from app.core.config import get_settings
 
 
+def test_settings_default_valuation_data_dir_matches_repo_layout(monkeypatch) -> None:
+    monkeypatch.delenv("JIBER_DOTENV_PATH", raising=False)
+    monkeypatch.delenv("VALUATION_DATA_DIR", raising=False)
+    get_settings.cache_clear()
+
+    try:
+        settings = get_settings()
+    finally:
+        get_settings.cache_clear()
+
+    assert settings.valuation_data_dir == "../data/valuation"
+
+
 def test_settings_load_parent_dotenv_when_environment_unset(tmp_path, monkeypatch) -> None:
     workspace = tmp_path / "workspace"
     service_dir = workspace / "model-server"

@@ -36,7 +36,7 @@ Draft request:
     "builtYear": 2010,
     "dealYear": 2026,
     "dealMonth": 6,
-    "distanceToStationM": 420
+    "distanceToStationM": null
   }
 }
 ```
