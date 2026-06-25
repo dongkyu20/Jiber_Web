@@ -12,6 +12,7 @@ public record ModelServerApartmentFeatures(
         Integer householdCount,
         BigDecimal exclusiveAreaM2,
         Integer floor,
+        Integer topFloor,
         Integer builtYear,
         Integer dealYear,
         Integer dealMonth,

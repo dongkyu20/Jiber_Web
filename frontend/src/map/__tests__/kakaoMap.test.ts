@@ -139,7 +139,8 @@ describe('kakaoMap utilities', () => {
           ...property(1001, 37.5, 127.03),
           name: '경희궁롯데캐슬',
           recentYearAverageDealAmount: 1100000000,
-          recentYearAverageJeonseDepositAmount: 780000000
+          recentYearAverageJeonseDepositAmount: 780000000,
+          priceFilterDimmed: true
         }
       ],
       selectedPropertyId: 1001,
@@ -157,6 +158,7 @@ describe('kakaoMap utilities', () => {
     })
     expect(createdOverlays[0].content.className).toContain('map-property-marker')
     expect(createdOverlays[0].content.className).toContain('is-selected')
+    expect(createdOverlays[0].content.className).toContain('is-price-dimmed')
     expect(createdOverlays[0].content.textContent).toContain('경희궁롯데캐슬')
     expect(createdOverlays[0].content.textContent).toContain('매매 평균 11억원')
     expect(createdOverlays[0].content.textContent).toContain('전세 평균 7.8억원')
@@ -576,6 +578,65 @@ describe('kakaoMap utilities', () => {
     const content = clusterMarker.setContent.mock.calls[0][0] as HTMLElement
     expect(content.className).toContain('map-property-cluster')
     expect(content.className).not.toContain('price-')
+  })
+
+  it('dims Kakao property cluster badges when every clustered property is outside the active price range', () => {
+    const clusteredHandlers: Array<(clusters: unknown[]) => void> = []
+    const createdMarkers: Array<{ setMap: ReturnType<typeof vi.fn> }> = []
+    const dimmedClusterMarker = { setContent: vi.fn() }
+    const mixedClusterMarker = { setContent: vi.fn() }
+    const addMarkers = vi.fn()
+    const map = { id: 'map' }
+    const kakaoMaps = {
+      LatLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
+      Size: vi.fn((width: number, height: number) => ({ width, height })),
+      Point: vi.fn((x: number, y: number) => ({ x, y })),
+      MarkerImage: vi.fn((src: string) => ({ src })),
+      Marker: vi.fn(() => {
+        const marker = { setMap: vi.fn() }
+        createdMarkers.push(marker)
+        return marker
+      }),
+      MarkerClusterer: vi.fn(() => ({
+        addMarkers,
+        clear: vi.fn()
+      })),
+      event: {
+        addListener: vi.fn((_target: unknown, eventName: string, handler: (clusters: unknown[]) => void) => {
+          if (eventName === 'clustered') {
+            clusteredHandlers.push(handler)
+          }
+        })
+      }
+    }
+
+    syncKakaoPropertyClusters({
+      kakaoMaps,
+      map,
+      previousClusterer: null,
+      items: [
+        { ...property(1001, 37.5, 127.03), priceFilterDimmed: true },
+        { ...property(1002, 37.51, 127.04), priceFilterDimmed: true },
+        { ...property(1003, 37.52, 127.05), priceFilterDimmed: true },
+        { ...property(1004, 37.53, 127.06), priceFilterDimmed: false }
+      ]
+    })
+
+    clusteredHandlers[0]([
+      {
+        getMarkers: () => [createdMarkers[0], createdMarkers[1]],
+        getClusterMarker: () => dimmedClusterMarker
+      },
+      {
+        getMarkers: () => [createdMarkers[2], createdMarkers[3]],
+        getClusterMarker: () => mixedClusterMarker
+      }
+    ])
+
+    expect((dimmedClusterMarker.setContent.mock.calls[0][0] as HTMLElement).className).toContain('is-price-dimmed')
+    expect((mixedClusterMarker.setContent.mock.calls[0][0] as HTMLElement).className).not.toContain(
+      'is-price-dimmed'
+    )
   })
 
   it('colors Kakao property cluster badges by relative average price when enabled', () => {

@@ -33,6 +33,7 @@ Draft request:
     "legalDong": "예시동",
     "exclusiveAreaM2": 84.95,
     "floor": 15,
+    "topFloor": 30,
     "builtYear": 2010,
     "dealYear": 2026,
     "dealMonth": 6,
@@ -40,6 +41,8 @@ Draft request:
   }
 }
 ```
+
+`features.topFloor` is optional. When present and greater than or equal to `features.floor`, the model-server uses it to calculate relative-floor features for 신규매물 analysis.
 
 Draft response:
 

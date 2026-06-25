@@ -6,6 +6,10 @@ import type { LatLngPoint, MapViewport } from '@/map/kakaoMap'
 
 export interface MapSearchSnapshot {
   selectedPropertyTypes: PropertyType[]
+  salePriceMin: number
+  salePriceMax: number
+  jeonsePriceMin: number
+  jeonsePriceMax: number
   zoomLevel: number
   currentViewport: MapViewport
   searchKeyword: string

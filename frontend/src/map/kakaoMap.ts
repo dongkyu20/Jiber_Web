@@ -370,7 +370,8 @@ export function administrativePriceTone(
 function propertyClusterBadgeContent(
   count: number,
   onClick?: () => void,
-  priceTone?: AdministrativePriceTone | null
+  priceTone?: AdministrativePriceTone | null,
+  dimmed = false
 ): HTMLElement {
   const formattedCount = count.toLocaleString('ko-KR')
   const markerButton = document.createElement('button')
@@ -378,6 +379,9 @@ function propertyClusterBadgeContent(
   markerButton.className = 'map-property-cluster'
   if (priceTone) {
     markerButton.classList.add('is-price-layered', priceTone)
+  }
+  if (dimmed) {
+    markerButton.classList.add('is-price-dimmed')
   }
   markerButton.setAttribute('aria-label', `부동산 클러스터 ${formattedCount}건`)
 
@@ -635,7 +639,8 @@ function propertyMarkerContent(
   markerButton.className = [
     'map-property-marker',
     selected ? 'is-selected' : '',
-    minimized ? 'is-minimized' : ''
+    minimized ? 'is-minimized' : '',
+    item.priceFilterDimmed ? 'is-price-dimmed' : ''
   ]
     .filter(Boolean)
     .join(' ')
@@ -778,6 +783,14 @@ function propertyClusterPriceTone(
   return priceToneForValue(value, values)
 }
 
+function propertyClusterDimmed(
+  cluster: KakaoClusterLike,
+  markerDimmedValues: WeakSet<KakaoMarkerLike>
+): boolean {
+  const markers = cluster.getMarkers()
+  return markers.length > 0 && markers.every((marker) => markerDimmedValues.has(marker))
+}
+
 export function syncKakaoMarkers(options: {
   kakaoMaps: KakaoMapsApi
   map: KakaoMapLike
@@ -794,7 +807,8 @@ export function syncKakaoMarkers(options: {
       position: new options.kakaoMaps.LatLng(item.lat, item.lng),
       title: `property-${item.propertyId}`,
       image: createMarkerImage(options.kakaoMaps, options.selectedPropertyId === item.propertyId),
-      clickable: true
+      clickable: true,
+      opacity: item.priceFilterDimmed ? 0.35 : 1
     })
 
     options.kakaoMaps.event.addListener(marker, 'click', () => options.onClick(item.propertyId))
@@ -866,6 +880,7 @@ export function syncKakaoPropertyClusters(options: {
   }
 
   const markerPriceValues = new WeakMap<KakaoMarkerLike, number>()
+  const markerDimmedValues = new WeakSet<KakaoMarkerLike>()
   const markers = options.items.map((item) => {
     const marker = new options.kakaoMaps.Marker({
       position: new options.kakaoMaps.LatLng(item.lat, item.lng),
@@ -878,6 +893,9 @@ export function syncKakaoPropertyClusters(options: {
     const priceValue = propertyAveragePrice(item)
     if (priceValue !== null) {
       markerPriceValues.set(marker, priceValue)
+    }
+    if (item.priceFilterDimmed) {
+      markerDimmedValues.add(marker)
     }
 
     return marker
@@ -908,7 +926,8 @@ export function syncKakaoPropertyClusters(options: {
           propertyClusterBadgeContent(
             kakaoCluster.getMarkers().length,
             () => options.onClusterClick?.(kakaoCluster),
-            priceTone
+            priceTone,
+            propertyClusterDimmed(kakaoCluster, markerDimmedValues)
           )
         )
     })

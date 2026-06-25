@@ -21,6 +21,7 @@ public record NewApartmentAnalysisRequest(
         @PositiveOrZero Integer householdCount,
         @NotNull @DecimalMin("0.01") BigDecimal exclusiveAreaM2,
         @NotNull Integer floor,
+        @Min(1) Integer topFloor,
         @NotNull @Min(1900) @Max(2100) Integer builtYear,
         @NotNull LocalDate asOfDate,
         @PositiveOrZero BigDecimal distanceToStationM

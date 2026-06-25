@@ -14,6 +14,7 @@ class ApartmentFeatures(BaseModel):
     householdCount: Optional[int] = Field(default=None, ge=0)
     exclusiveAreaM2: Optional[float] = Field(default=None, ge=0)
     floor: Optional[int] = None
+    topFloor: Optional[int] = Field(default=None, ge=1)
     builtYear: Optional[int] = None
     dealYear: Optional[int] = None
     dealMonth: Optional[int] = Field(default=None, ge=1, le=12)

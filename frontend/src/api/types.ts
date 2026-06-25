@@ -170,6 +170,7 @@ export interface PropertyMapItem {
   recentTransactionCount: number
   recentYearAverageDealAmount?: number | null
   recentYearAverageJeonseDepositAmount?: number | null
+  priceFilterDimmed?: boolean
   aiAvailable: boolean
 }
 
@@ -200,6 +201,10 @@ export interface MapSearchParams extends Bounds {
   transactionTypes?: TransactionType[]
   minDealAmount?: number
   maxDealAmount?: number
+  minSaleAmount?: number
+  maxSaleAmount?: number
+  minJeonseDepositAmount?: number
+  maxJeonseDepositAmount?: number
   minAreaM2?: number
   maxAreaM2?: number
   dealYearFrom?: number
@@ -213,6 +218,10 @@ export interface PropertyMapResponse {
   filters: {
     propertyTypes: PropertyType[]
     transactionTypes: TransactionType[]
+    minSaleAmount?: number | null
+    maxSaleAmount?: number | null
+    minJeonseDepositAmount?: number | null
+    maxJeonseDepositAmount?: number | null
     zoomLevel: number
   }
 }
@@ -233,6 +242,10 @@ export interface PropertySearchParams {
   transactionTypes?: TransactionType[]
   minDealAmount?: number
   maxDealAmount?: number
+  minSaleAmount?: number
+  maxSaleAmount?: number
+  minJeonseDepositAmount?: number
+  maxJeonseDepositAmount?: number
   minAreaM2?: number
   maxAreaM2?: number
   dealYearFrom?: number
@@ -352,9 +365,21 @@ export interface NewApartmentAnalysisRequest {
   householdCount?: number | null
   exclusiveAreaM2: number
   floor: number
+  topFloor?: number | null
   builtYear: number
   asOfDate: string
   distanceToStationM?: number | null
+}
+
+export interface NewApartmentAddressCandidate {
+  fullAddress: string
+  roadAddress?: string | null
+  jibunAddress?: string | null
+  sido: string
+  sigungu: string
+  legalDong: string
+  latitude: number
+  longitude: number
 }
 
 export interface NewApartmentAnalysisResponse {

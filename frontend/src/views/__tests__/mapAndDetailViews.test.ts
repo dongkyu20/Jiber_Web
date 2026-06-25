@@ -114,6 +114,21 @@ const seedMapItem: PropertyMapItem = {
   aiAvailable: true
 }
 
+const outOfPriceRangeMapItem: PropertyMapItem = {
+  ...seedMapItem,
+  propertyId: 1005,
+  name: '범위 밖 고가아파트',
+  lat: 37.5018,
+  lng: 127.0376,
+  latestTransaction: {
+    transactionType: 'SALE',
+    dealAmount: 3_250_000_000,
+    dealDate: '2026-05-24'
+  },
+  recentYearAverageDealAmount: 3_250_000_000,
+  recentYearAverageJeonseDepositAmount: null
+}
+
 const seedAdministrativeCluster: AdministrativeCluster = {
   clusterId: 'legal-dong-1168010100',
   level: 'LEGAL_DONG',
@@ -519,6 +534,53 @@ describe('MapView keyword search', () => {
     )
   })
 
+  it('applies sale and jeonse price ranges as client-side dimming instead of filtering API results out', async () => {
+    propertyApiMock.getMapProperties
+      .mockResolvedValueOnce(mapResponse([]))
+      .mockResolvedValueOnce(mapResponse([seedMapItem, outOfPriceRangeMapItem]))
+    propertyApiMock.searchProperties.mockResolvedValueOnce(searchResponse([importedSearchItem]))
+    const { wrapper } = await mountMapView()
+
+    expect(wrapper.find('#zoom-level').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('지도 확대 단계')
+    expect(wrapper.text()).toContain('매매가')
+    expect(wrapper.text()).toContain('전세가')
+
+    await wrapper.get('[data-test="sale-price-min"]').setValue(500_000_000)
+    await wrapper.get('[data-test="sale-price-max"]').setValue(2_000_000_000)
+    await wrapper.get('[data-test="jeonse-price-min"]').setValue(300_000_000)
+    await wrapper.get('[data-test="jeonse-price-max"]').setValue(1_200_000_000)
+    await wrapper.get('.search-area-btn').trigger('click')
+    await flushPromises()
+
+    const mapSearchParams = propertyApiMock.getMapProperties.mock.calls.at(-1)?.[0]
+    expect(mapSearchParams).not.toHaveProperty('minSaleAmount')
+    expect(mapSearchParams).not.toHaveProperty('maxSaleAmount')
+    expect(mapSearchParams).not.toHaveProperty('minJeonseDepositAmount')
+    expect(mapSearchParams).not.toHaveProperty('maxJeonseDepositAmount')
+
+    const panelItems = wrapper.findComponent(KakaoMapPanel).props('items') as PropertyMapItem[]
+    expect(panelItems.find((item) => item.propertyId === seedMapItem.propertyId)?.priceFilterDimmed).toBe(false)
+    expect(panelItems.find((item) => item.propertyId === outOfPriceRangeMapItem.propertyId)?.priceFilterDimmed).toBe(
+      true
+    )
+    expect(wrapper.find('#property-result-1001').classes()).not.toContain('is-price-dimmed')
+    expect(wrapper.find('#property-result-1005').classes()).toContain('is-price-dimmed')
+    expect(wrapper.find('#property-result-1005').text()).toContain('가격 범위 밖')
+
+    await wrapper.get('[data-test="map-search-keyword"]').setValue('무악동')
+    await wrapper.get('[data-test="map-search-form"]').trigger('submit')
+    await flushPromises()
+
+    const keywordSearchParams = propertyApiMock.searchProperties.mock.calls[0][0]
+    expect(keywordSearchParams).toEqual(expect.objectContaining({ keyword: '무악동' }))
+    expect(keywordSearchParams).not.toHaveProperty('minSaleAmount')
+    expect(keywordSearchParams).not.toHaveProperty('maxSaleAmount')
+    expect(keywordSearchParams).not.toHaveProperty('minJeonseDepositAmount')
+    expect(keywordSearchParams).not.toHaveProperty('maxJeonseDepositAmount')
+    expect(wrapper.find('#property-result-1001').classes()).not.toContain('is-price-dimmed')
+  })
+
   it('restores map filters and previous results without refetching when the map view remounts', async () => {
     propertyApiMock.getMapProperties.mockResolvedValueOnce(mapResponse([seedMapItem]))
     const pinia = createPinia()
@@ -756,7 +818,7 @@ describe('MapView keyword search', () => {
   })
 
   it('uses the active keyword as the area favorite label and selected result as center', async () => {
-    propertyApiMock.searchProperties.mockResolvedValueOnce(searchResponse([importedSearchItem]))
+    propertyApiMock.searchProperties.mockResolvedValue(searchResponse([importedSearchItem]))
     const { wrapper } = await mountMapView({ authenticated: true })
 
     await wrapper.get('[data-test="map-search-keyword"]').setValue('무악동')
@@ -794,6 +856,19 @@ describe('MapView keyword search', () => {
 })
 
 describe('PropertyDetailView transaction summary', () => {
+  it('renders the summary, AI, transaction, and factor chart sections as spaced detail cards', async () => {
+    const wrapper = await mountPropertyDetailView()
+    const detailCards = wrapper.findAll('.property-detail-card')
+
+    expect(detailCards).toHaveLength(4)
+    expect(detailCards.map((card) => card.find('h2').text())).toEqual([
+      '단지 요약',
+      'AI 분석',
+      '거래 내역',
+      '가격 요인 차트'
+    ])
+  })
+
   it('shows the latest transaction type and recent transaction count in Korean', async () => {
     const wrapper = await mountPropertyDetailView()
 

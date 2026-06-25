@@ -1,6 +1,7 @@
 import { apiClient, compactParams, toListQueryValue } from './client'
 import type {
   MapSearchParams,
+  NewApartmentAddressCandidate,
   NewApartmentAnalysisRequest,
   NewApartmentAnalysisResponse,
   PagedResponse,
@@ -62,6 +63,13 @@ export const propertyApi = {
 
   async analyzeNewApartment(payload: NewApartmentAnalysisRequest): Promise<NewApartmentAnalysisResponse> {
     const { data } = await apiClient.post<NewApartmentAnalysisResponse>('/properties/new-analysis', payload)
+    return data
+  },
+
+  async searchNewApartmentAddresses(query: string): Promise<NewApartmentAddressCandidate[]> {
+    const { data } = await apiClient.get<NewApartmentAddressCandidate[]>('/properties/new-analysis/address-search', {
+      params: { query: query.trim() }
+    })
     return data
   }
 }

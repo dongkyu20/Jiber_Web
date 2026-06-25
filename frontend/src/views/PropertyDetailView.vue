@@ -514,7 +514,7 @@ onMounted(fetchProperty)
   <p v-if="errorMessage" class="inline-error">{{ errorMessage }}</p>
 
   <section v-if="property" class="detail-grid">
-    <article class="info-panel">
+    <article class="info-panel property-detail-card">
       <h2>단지 요약</h2>
       <dl class="summary-list">
         <div>
@@ -565,7 +565,7 @@ onMounted(fetchProperty)
       </div>
     </article>
 
-    <article class="info-panel">
+    <article class="info-panel property-detail-card">
       <h2>AI 분석</h2>
       <p v-if="!authStore.isAuthenticated" class="muted">추정가와 SHAP 요인은 로그인 후 확인할 수 있습니다.</p>
       <p v-else-if="!canRequestAi" class="muted">{{ aiUnavailableMessage }}</p>
@@ -593,7 +593,7 @@ onMounted(fetchProperty)
   </section>
 
   <section v-if="property" class="chart-grid">
-    <article class="info-panel transaction-history-panel">
+    <article class="info-panel property-detail-card transaction-history-panel">
       <h2>거래 내역</h2>
       <div class="transaction-toolbar">
         <fieldset class="transaction-type-filter">
@@ -726,7 +726,7 @@ onMounted(fetchProperty)
         description="거래 유형 선택을 바꾸거나 실거래 데이터가 연결된 뒤 다시 확인해 주세요."
       />
     </article>
-    <article class="info-panel">
+    <article class="info-panel property-detail-card">
       <h2>가격 요인 차트</h2>
       <ShapChart
         :values="shapValues"

@@ -67,6 +67,10 @@ class PropertyServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
                 1,
                 10,
                 "latestDealDate,desc"
@@ -143,6 +147,7 @@ class PropertyServiceTest {
                 null,
                 new BigDecimal("84.95"),
                 15,
+                30,
                 2010,
                 LocalDate.of(2026, 6, 12),
                 null
@@ -154,6 +159,7 @@ class PropertyServiceTest {
         assertThat(valuationClient.newValuationRequest.latitude()).isEqualByComparingTo("37.5123456");
         assertThat(valuationClient.newValuationRequest.longitude()).isEqualByComparingTo("127.0567890");
         assertThat(valuationClient.newValuationRequest.householdCount()).isEqualTo(1200);
+        assertThat(valuationClient.newValuationRequest.topFloor()).isEqualTo(30);
         assertThat(valuationClient.newShapRequest).isEqualTo(valuationClient.newValuationRequest);
     }
 
@@ -176,6 +182,7 @@ class PropertyServiceTest {
                 null,
                 new BigDecimal("84.95"),
                 15,
+                null,
                 2010,
                 LocalDate.of(2026, 6, 12),
                 null
@@ -428,6 +435,10 @@ class PropertyServiceTest {
                 zoomLevel,
                 List.of(PropertyType.APARTMENT),
                 List.of(TransactionType.SALE),
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

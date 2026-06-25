@@ -93,7 +93,15 @@ public class PropertyService {
                         .toList(),
                 administrativeClusters(request, recentSince),
                 new BoundsResponse(request.swLat(), request.swLng(), request.neLat(), request.neLng()),
-                new MapFilterResponse(request.propertyTypes(), request.transactionTypes(), request.zoomLevel())
+                new MapFilterResponse(
+                        request.propertyTypes(),
+                        request.transactionTypes(),
+                        request.minSaleAmount(),
+                        request.maxSaleAmount(),
+                        request.minJeonseDepositAmount(),
+                        request.maxJeonseDepositAmount(),
+                        request.zoomLevel()
+                )
         );
     }
 
@@ -193,6 +201,7 @@ public class PropertyService {
                 firstNonNull(request.householdCount(), valueOrNull(matchedProperty, PropertyDetailRow::getHouseholdCount), valueOrNull(areaCentroid, PropertyDetailRow::getHouseholdCount)),
                 request.exclusiveAreaM2(),
                 request.floor(),
+                request.topFloor(),
                 request.builtYear(),
                 request.asOfDate(),
                 request.distanceToStationM()

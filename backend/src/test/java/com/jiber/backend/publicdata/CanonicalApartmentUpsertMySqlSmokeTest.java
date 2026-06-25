@@ -297,6 +297,10 @@ class CanonicalApartmentUpsertMySqlSmokeTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
                 null
         ), recentSince);
         return rows.stream().anyMatch(row -> apartmentName.equals(row.getName()));

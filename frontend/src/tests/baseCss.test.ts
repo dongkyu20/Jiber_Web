@@ -78,3 +78,27 @@ describe('base map marker styles', () => {
     expect(expandedDetail).toContain('transform: translateX(-50%)')
   })
 })
+
+describe('property detail card styles', () => {
+  it('keeps summary, AI, transaction, and chart cards readable with internal spacing', () => {
+    const detailCard = cssRule('.property-detail-card')
+    const detailCardHeading = cssRule('.property-detail-card h2')
+    const detailParagraphs = cssRule(
+      '.property-detail-card .muted,\n.property-detail-card .helper-text,\n.property-detail-card .inline-error'
+    )
+    const summaryRow = cssRule('.property-detail-card .summary-list div')
+    const transactionTableWrap = cssRule('.transaction-history-panel .transaction-table-wrap')
+
+    expect(detailCard).toContain('display: grid')
+    expect(detailCard).toContain('gap: 16px')
+    expect(detailCard).toContain('padding: 22px')
+    expect(detailCardHeading).toContain('margin: 0')
+    expect(detailParagraphs).toContain('line-height: 1.72')
+    expect(summaryRow).toContain('align-items: flex-start')
+    expect(summaryRow).toContain('padding-bottom: 12px')
+    expect(transactionTableWrap).toContain('margin-top: 0')
+    expect(baseCss).toMatch(
+      /@media \(max-width: 560px\)[\s\S]*?\.property-detail-card \.summary-list div\s*\{[^}]*flex-direction: column/
+    )
+  })
+})

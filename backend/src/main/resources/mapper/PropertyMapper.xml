@@ -3,6 +3,49 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.jiber.backend.property.mapper.PropertyMapper">
+    <sql id="LegacyAmountFilters">
+        <if test="request.minDealAmount != null">
+            AND COALESCE(t.deal_amount_krw, t.deposit_amount_krw, 0) &gt;= #{request.minDealAmount}
+        </if>
+        <if test="request.maxDealAmount != null">
+            AND COALESCE(t.deal_amount_krw, t.deposit_amount_krw, 0) &lt;= #{request.maxDealAmount}
+        </if>
+    </sql>
+
+    <sql id="TypedAmountFilters">
+        <if test="request.minSaleAmount != null
+                or request.maxSaleAmount != null
+                or request.minJeonseDepositAmount != null
+                or request.maxJeonseDepositAmount != null">
+            <trim prefix="AND (" suffix=")" suffixOverrides="OR">
+                <if test="request.minSaleAmount != null or request.maxSaleAmount != null">
+                    (
+                        t.transaction_type = 'SALE'
+                        AND t.deal_amount_krw IS NOT NULL
+                        <if test="request.minSaleAmount != null">
+                            AND t.deal_amount_krw &gt;= #{request.minSaleAmount}
+                        </if>
+                        <if test="request.maxSaleAmount != null">
+                            AND t.deal_amount_krw &lt;= #{request.maxSaleAmount}
+                        </if>
+                    ) OR
+                </if>
+                <if test="request.minJeonseDepositAmount != null or request.maxJeonseDepositAmount != null">
+                    (
+                        t.transaction_type = 'JEONSE'
+                        AND t.deposit_amount_krw IS NOT NULL
+                        <if test="request.minJeonseDepositAmount != null">
+                            AND t.deposit_amount_krw &gt;= #{request.minJeonseDepositAmount}
+                        </if>
+                        <if test="request.maxJeonseDepositAmount != null">
+                            AND t.deposit_amount_krw &lt;= #{request.maxJeonseDepositAmount}
+                        </if>
+                    ) OR
+                </if>
+            </trim>
+        </if>
+    </sql>
+
     <sql id="TransactionFilters">
         <if test="request.transactionTypes != null and request.transactionTypes.size() &gt; 0">
             AND t.transaction_type IN
@@ -10,12 +53,8 @@
                 #{transactionType}
             </foreach>
         </if>
-        <if test="request.minDealAmount != null">
-            AND COALESCE(t.deal_amount_krw, t.deposit_amount_krw, 0) &gt;= #{request.minDealAmount}
-        </if>
-        <if test="request.maxDealAmount != null">
-            AND COALESCE(t.deal_amount_krw, t.deposit_amount_krw, 0) &lt;= #{request.maxDealAmount}
-        </if>
+        <include refid="LegacyAmountFilters"/>
+        <include refid="TypedAmountFilters"/>
         <if test="request.minAreaM2 != null">
             AND t.exclusive_area_m2 &gt;= #{request.minAreaM2}
         </if>
@@ -37,12 +76,8 @@
 
     <sql id="RecentAverageFilters">
         AND t.deal_date &gt;= #{recentSince}
-        <if test="request.minDealAmount != null">
-            AND COALESCE(t.deal_amount_krw, t.deposit_amount_krw, 0) &gt;= #{request.minDealAmount}
-        </if>
-        <if test="request.maxDealAmount != null">
-            AND COALESCE(t.deal_amount_krw, t.deposit_amount_krw, 0) &lt;= #{request.maxDealAmount}
-        </if>
+        <include refid="LegacyAmountFilters"/>
+        <include refid="TypedAmountFilters"/>
         <if test="request.minAreaM2 != null">
             AND t.exclusive_area_m2 &gt;= #{request.minAreaM2}
         </if>
@@ -61,6 +96,10 @@
         <if test="(request.transactionTypes != null and request.transactionTypes.size() &gt; 0)
                 or request.minDealAmount != null
                 or request.maxDealAmount != null
+                or request.minSaleAmount != null
+                or request.maxSaleAmount != null
+                or request.minJeonseDepositAmount != null
+                or request.maxJeonseDepositAmount != null
                 or request.minAreaM2 != null
                 or request.maxAreaM2 != null
                 or request.dealYearFrom != null

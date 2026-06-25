@@ -26,6 +26,10 @@ class PropertyRequestValidationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
                 null
         );
 
@@ -58,6 +62,10 @@ class PropertyRequestValidationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
                 0,
                 20,
                 null
@@ -67,6 +75,36 @@ class PropertyRequestValidationTest {
                 .isInstanceOfSatisfying(ApiException.class, exception -> {
                     assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
                     assertThat(exception.getDetails()).extracting("field").contains("bounds", "center");
+                });
+    }
+
+    @Test
+    void mapRequestRejectsInvalidTypedPriceRanges() {
+        var request = new MapSearchRequest(
+                new BigDecimal("37.40"),
+                new BigDecimal("126.90"),
+                new BigDecimal("37.60"),
+                new BigDecimal("127.20"),
+                5,
+                List.of(PropertyType.APARTMENT),
+                List.of(TransactionType.SALE, TransactionType.JEONSE),
+                null,
+                null,
+                2_000_000_000L,
+                1_000_000_000L,
+                1_200_000_000L,
+                700_000_000L,
+                null,
+                null,
+                null,
+                null
+        );
+
+        assertThatThrownBy(request::validateRanges)
+                .isInstanceOfSatisfying(ApiException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+                    assertThat(exception.getDetails()).extracting("field")
+                            .contains("minSaleAmount", "minJeonseDepositAmount");
                 });
     }
 }

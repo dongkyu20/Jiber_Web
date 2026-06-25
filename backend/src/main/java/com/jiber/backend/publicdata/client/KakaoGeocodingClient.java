@@ -6,6 +6,7 @@ import com.jiber.backend.publicdata.dto.*;
 import com.jiber.backend.publicdata.mapper.*;
 import com.jiber.backend.publicdata.service.*;
 
+import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -49,6 +50,26 @@ public class KakaoGeocodingClient {
                     GeocodingStatus.ERROR,
                     SecretRedactor.redact("KAKAO_REQUEST_FAILED", properties.kakao().restApiKey())
             );
+        }
+    }
+
+    public List<AddressSearchCandidate> searchAddressCandidates(String query) {
+        var normalizedQuery = query == null ? "" : query.trim();
+        if (!StringUtils.hasText(properties.kakao().restApiKey()) || !StringUtils.hasText(normalizedQuery)) {
+            return List.of();
+        }
+        try {
+            var body = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/v2/local/search/address.json")
+                            .queryParam("query", normalizedQuery)
+                            .build())
+                    .header(HttpHeaders.AUTHORIZATION, "KakaoAK " + properties.kakao().restApiKey())
+                    .retrieve()
+                    .body(String.class);
+            return parser.parseCandidates(normalizedQuery, body);
+        } catch (RestClientException exception) {
+            return List.of();
         }
     }
 

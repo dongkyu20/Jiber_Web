@@ -249,6 +249,8 @@ Draft request:
 }
 ```
 
+`topFloor` is optional for backward compatibility, but the frontend should provide it for 신규매물 분석 so the model can derive relative-floor features from `floor / topFloor` instead of assuming the current floor is the building top floor.
+
 Draft response:
 
 ```json
@@ -315,6 +317,40 @@ Unsupported non-apartment properties return `VALUATION_UNSUPPORTED_PROPERTY_TYPE
 
 ## New Apartment Analysis API
 
+`GET /api/v1/properties/new-analysis/address-search`
+
+This endpoint supports the frontend 신규매물 분석 form after a user selects an exact address in Kakao Postcode service. The frontend sends the selected road or parcel address to Spring Boot, and Spring Boot calls Kakao Local address search server-side with the backend Kakao REST key to supplement coordinates. The frontend must not call Kakao REST geocoding directly and must not submit an arbitrary typed address to `POST /properties/new-analysis` without a Kakao Postcode selection.
+
+Query parameters:
+
+| Name | Required | Description |
+| --- | --- | --- |
+| `query` | yes | Selected road or parcel address from Kakao Postcode service. Minimum length is 2 characters. |
+
+Draft response:
+
+```json
+[
+  {
+    "fullAddress": "서울특별시 강남구 테헤란로 123",
+    "roadAddress": "서울특별시 강남구 테헤란로 123",
+    "jibunAddress": "서울특별시 강남구 삼성동 123",
+    "sido": "서울특별시",
+    "sigungu": "강남구",
+    "legalDong": "삼성동",
+    "latitude": 37.5123,
+    "longitude": 127.0567
+  }
+]
+```
+
+Rules:
+
+- `USER` or `ADMIN` is required because this endpoint is used inside the protected 신규매물 분석 flow.
+- The frontend opens Kakao Postcode service for address selection. This service provides exact address fields but not latitude/longitude.
+- If the Kakao REST key is missing or Kakao returns no usable address candidates, the backend returns an empty list and the frontend shows a Korean empty state.
+- The frontend uses the selected Kakao Postcode address and any backend-supplemented coordinates for the subsequent `POST /properties/new-analysis` payload.
+
 `POST /api/v1/properties/new-analysis`
 
 This externally exposed Spring backend API requires `USER` or `ADMIN`. It is for user-entered apartment candidates that do not yet exist as a persisted property row. The backend maps the submitted features to the existing internal model-server apartment valuation and SHAP contracts, and returns both outputs in one response. It does not persist the submitted candidate.
@@ -332,6 +368,7 @@ Draft request:
   "householdCount": 1200,
   "exclusiveAreaM2": 84.95,
   "floor": 15,
+  "topFloor": 30,
   "builtYear": 2010,
   "asOfDate": "2026-06-25",
   "distanceToStationM": null

@@ -16,6 +16,17 @@ from app.schemas.apartment import ApartmentFeatures
 FACILITY_RADIUS_M = 1000.0
 EARTH_RADIUS_M = 6_371_000.0
 CSV_ENCODINGS = ("utf-8-sig", "cp949", "euc-kr", "utf-8")
+SUBWAY_LOCATION_FILES = (
+    "seoul_busan_subway_station_locations.csv",
+    "subway_station_locations.csv",
+)
+NATIONAL_SUBWAY_ADDRESS_FILES = (
+    "국가철도공단_서울경기도_지하철_주소데이터_20250630.csv",
+    "국가철도공단_부산_지하철_주소데이터_20241021.csv",
+)
+NATIONAL_RAIL_STATION_INFO_FILE = "국가철도공단_철도역 정보_20250711.csv"
+STATION_NAME_REMOVE_RE = re.compile(r"[\s·ㆍ\-_()\[\]{}（）]+")
+STATION_PARENTHESES_RE = re.compile(r"\([^)]*\)|（[^）]*）|\[[^\]]*\]")
 ACCESS_TIME_FIELD_BY_FACILITY_MODE = {
     ("버스터미널", "승용차"): "car_intercity_bus_terminal_minutes",
     ("공항", "승용차"): "car_airport_minutes",
@@ -106,12 +117,16 @@ class LocalValuationDataRepository:
     def features_for(self, features: ApartmentFeatures, city_code: str) -> dict[str, Any]:
         row: dict[str, Any] = {}
         floor = _integer(features.floor)
+        user_top_floor = _integer(features.topFloor)
 
         complex_record = self._find_complex_floor(features, city_code)
         kapt_record = self._find_kapt(features, city_code)
         academy_record = self._find_academy(features, city_code)
 
-        estimated_max_floor, max_floor_source = self._estimated_max_floor_context(floor, complex_record)
+        if user_top_floor is not None and (floor is None or user_top_floor >= floor):
+            estimated_max_floor, max_floor_source = user_top_floor, "user_input"
+        else:
+            estimated_max_floor, max_floor_source = self._estimated_max_floor_context(floor, complex_record)
         if estimated_max_floor is not None:
             row["estimated_max_floor"] = estimated_max_floor
             row["max_floor_source"] = max_floor_source
@@ -653,9 +668,18 @@ class LocalValuationDataRepository:
     def _rail_station_points(self, city_code: str) -> list[GeoPoint]:
         if self._rail_points is None:
             self._rail_points = []
-            for filename in ("seoul_busan_subway_station_locations.csv", "subway_station_locations.csv"):
+            for filename in SUBWAY_LOCATION_FILES:
                 path = _resolve_data_path(self.data_dir, filename)
                 self._rail_points.extend(_located_subway_points_from_csv(path))
+            station_points = _rail_station_coordinate_lookup(
+                _resolve_data_path(self.data_dir, NATIONAL_RAIL_STATION_INFO_FILE)
+            )
+            for filename in NATIONAL_SUBWAY_ADDRESS_FILES:
+                path = _resolve_data_path(self.data_dir, filename)
+                service_area = "busan" if "부산" in filename else "seoul"
+                self._rail_points.extend(
+                    _national_subway_address_points_from_csv(path, station_points, service_area)
+                )
         return _filter_city_points(self._rail_points, city_code)
 
     def _park_points_for_city(self, city_code: str) -> list[GeoPoint]:
@@ -1008,6 +1032,77 @@ def _located_subway_points_from_csv(path: Path) -> list[GeoPoint]:
             )
         points.append(GeoPoint(latitude=latitude, longitude=longitude, kind=city_code))
     return points
+
+
+def _rail_station_coordinate_lookup(path: Path) -> dict[str, GeoPoint]:
+    points: dict[str, GeoPoint] = {}
+    for row in _read_csv_dicts(path):
+        latitude = _first_number(row.get("위도좌표"), row.get("위도"), row.get("latitude"), row.get("lat"))
+        longitude = _first_number(row.get("경도좌표"), row.get("경도"), row.get("longitude"), row.get("lon"), row.get("lng"))
+        if latitude is None or longitude is None:
+            continue
+        if not (33 <= latitude <= 39 and 124 <= longitude <= 132):
+            continue
+        point = GeoPoint(
+            latitude=latitude,
+            longitude=longitude,
+            kind=_city_code_from_text(_clean_text(row.get("주소"))),
+        )
+        for key in _station_name_keys(row.get("역이름")):
+            points.setdefault(key, point)
+    return points
+
+
+def _national_subway_address_points_from_csv(
+    path: Path,
+    station_points: dict[str, GeoPoint],
+    service_area: str,
+) -> list[GeoPoint]:
+    points = []
+    for row in _read_csv_dicts(path):
+        station_point = next(
+            (
+                station_points[key]
+                for key in _station_name_keys(row.get("역명"))
+                if key in station_points
+            ),
+            None,
+        )
+        if station_point is None:
+            continue
+        address_city_code = _city_code_from_text(
+            " ".join(
+                [
+                    _clean_text(row.get("도로명주소")),
+                    _clean_text(row.get("지번주소")),
+                ]
+            )
+        )
+        points.append(
+            GeoPoint(
+                latitude=station_point.latitude,
+                longitude=station_point.longitude,
+                kind=address_city_code or service_area or station_point.kind,
+            )
+        )
+    return points
+
+
+def _station_name_keys(value: Any) -> set[str]:
+    raw_name = _clean_text(value)
+    if not raw_name:
+        return set()
+    names = {raw_name, STATION_PARENTHESES_RE.sub("", raw_name).strip()}
+    keys = {_normalize_station_name(name) for name in names}
+    return {key for key in keys if key}
+
+
+def _normalize_station_name(value: Any) -> str:
+    name = STATION_PARENTHESES_RE.sub("", str(value or "").strip().lower())
+    name = STATION_NAME_REMOVE_RE.sub("", name)
+    if name.endswith("역"):
+        name = name[:-1]
+    return name
 
 
 def _is_open_healthcare(row: dict[str, Any]) -> bool:
