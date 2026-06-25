@@ -1208,9 +1208,10 @@ watch([
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(200,160,100,0.2) transparent;
+  scrollbar-width: none;
 }
+
+.map-left::-webkit-scrollbar { display: none; }
 
 .map-search-form { padding: 14px 14px 0; flex-shrink: 0; }
 
