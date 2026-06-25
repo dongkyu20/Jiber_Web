@@ -53,6 +53,19 @@ class PropertyTransactionSourceMigrationScriptTest {
     }
 
     @Test
+    void nonApartmentPublicDataMigrationIsIdempotentForFreshSchema() throws IOException {
+        String migration = read("../db/006_public_data_non_apartment_import.sql");
+
+        assertThat(migration).contains("CREATE PROCEDURE jiber_public_data_006_migrate()");
+        assertThat(migration).contains("information_schema.COLUMNS");
+        assertThat(migration).contains("COLUMN_NAME = 'property_type'");
+        assertThat(migration).contains("IF property_type_column_count = 0 THEN");
+        assertThat(migration).contains("information_schema.STATISTICS");
+        assertThat(migration).contains("INDEX_NAME = 'idx_public_data_raw_property_type'");
+        assertThat(migration).contains("IF property_type_index_count = 0 THEN");
+    }
+
+    @Test
     void backendReadmeDocumentsMigrationOrderAndSourceIdStrategy() throws IOException {
         String readme = read("README.md");
 

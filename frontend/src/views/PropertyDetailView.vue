@@ -574,6 +574,9 @@ onMounted(fetchProperty)
         <span v-if="aiInputSummary">{{ aiInputSummary }}</span>
         <span v-else>매매 거래내역을 선택해 주세요.</span>
       </p>
+      <p v-if="aiLoading" class="helper-text" data-test="ai-loading-message">
+        가격 예측을 계산하는 중입니다. 보통 몇 초 안에 표시됩니다.
+      </p>
       <p v-if="aiMessage" class="helper-text">{{ aiMessage }}</p>
       <p v-if="valuation?.estimatedPrice" class="estimate-text">
         추정가 {{ formatKrw(valuation.estimatedPrice) }}
@@ -673,9 +676,9 @@ onMounted(fetchProperty)
               :tabindex="isUsableAiTransaction(transaction) ? 0 : undefined"
               :title="isUsableAiTransaction(transaction) ? '이 매매 거래 기준으로 추정가와 요인 분석 보기' : undefined"
               data-test="transaction-row"
-              @click="isUsableAiTransaction(transaction) ? requestAiExplanation(transaction) : undefined"
-              @keydown.enter.prevent="isUsableAiTransaction(transaction) ? requestAiExplanation(transaction) : undefined"
-              @keydown.space.prevent="isUsableAiTransaction(transaction) ? requestAiExplanation(transaction) : undefined"
+              @click="requestAiExplanation(transaction)"
+              @keydown.enter.prevent="requestAiExplanation(transaction)"
+              @keydown.space.prevent="requestAiExplanation(transaction)"
             >
               <td>{{ formatDate(transaction.dealDate) }}</td>
               <td>
